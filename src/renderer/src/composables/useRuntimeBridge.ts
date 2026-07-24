@@ -111,10 +111,14 @@ export function useRuntimeBridge() {
   const fileActionPending = ref<string | null>(null)
   const fileActionError = ref<string | null>(null)
   const fileActionNotice = ref<string | null>(null)
+  const globalConfigRevision = ref(0)
   let unsubscribeRuntime: (() => void) | undefined
+  let unsubscribeGlobal: (() => void) | undefined
   let unsubscribeSession: (() => void) | undefined
   let interactionGeneration = 0
   let sessionOpenGeneration = 0
+  let workspaceTreeGeneration = 0
+  let loadedSessionPageCount = 0
   let workspaceGeneration = 0
   let directoryGeneration = 0
   let previewGeneration = 0
@@ -128,6 +132,7 @@ export function useRuntimeBridge() {
   let warningsGeneration = 0
   let agentTranscriptGeneration = 0
   let operationalTimer: number | undefined
+  let workspaceRefreshTimer: number | undefined
   let requestedSessionId: string | null = null
   const awaitingPromptCycleAt = new Map<string, number>()
   const localPromptQueue = computed(() => {
@@ -183,26 +188,69 @@ export function useRuntimeBridge() {
         void flushLocalPromptQueue(state.sessionId)
       }
     })
+    if (typeof window.kimiAgent.onKimiGlobalStateChanged === 'function') {
+      unsubscribeGlobal = window.kimiAgent.onKimiGlobalStateChanged((event) => {
+        if (event.scope === 'navigation') {
+          scheduleWorkspaceTreeRefresh()
+          return
+        }
+        globalConfigRevision.value += 1
+        const sessionId = requestedSessionId
+        if (sessionId !== null) {
+          void loadSessionControls(sessionId)
+          void loadSessionSkills(sessionId)
+        }
+      })
+    }
     if (runtime.value.status === 'running') await refreshWorkspaceTree()
   }
 
   const refreshWorkspaceTree = async (): Promise<void> => {
     if (window.kimiAgent === undefined || runtime.value.status !== 'running') return
+    const generation = ++workspaceTreeGeneration
     try {
       if (typeof window.kimiAgent.getWorkspaceTreePage === 'function') {
-        const snapshot = await window.kimiAgent.getWorkspaceTreePage()
-        workspaceTree.value = snapshot.workspaces
+        let snapshot = await window.kimiAgent.getWorkspaceTreePage()
+        if (generation !== workspaceTreeGeneration) return
+        let workspaces = snapshot.workspaces
+        let reloadedPageCount = 1
+        const pagesToReload = Math.max(1, loadedSessionPageCount)
+        while (
+          reloadedPageCount < pagesToReload &&
+          snapshot.hasMoreSessions &&
+          snapshot.nextBeforeId !== null
+        ) {
+          snapshot = await window.kimiAgent.getWorkspaceTreePage(snapshot.nextBeforeId)
+          if (generation !== workspaceTreeGeneration) return
+          workspaces = mergeWorkspacePages(workspaces, snapshot.workspaces)
+          reloadedPageCount += 1
+        }
+        workspaceTree.value = workspaces
         sessionPageHasMore.value = snapshot.hasMoreSessions
         sessionPageBeforeId.value = snapshot.nextBeforeId
+        loadedSessionPageCount = reloadedPageCount
       } else {
-        workspaceTree.value = await window.kimiAgent.getWorkspaceTree()
+        const tree = await window.kimiAgent.getWorkspaceTree()
+        if (generation !== workspaceTreeGeneration) return
+        workspaceTree.value = tree
         sessionPageHasMore.value = false
         sessionPageBeforeId.value = null
+        loadedSessionPageCount = 0
       }
-      workspaceError.value = null
+      if (generation === workspaceTreeGeneration) workspaceError.value = null
     } catch (error) {
-      workspaceError.value = error instanceof Error ? error.message : String(error)
+      if (generation === workspaceTreeGeneration) {
+        workspaceError.value = error instanceof Error ? error.message : String(error)
+      }
     }
+  }
+
+  const scheduleWorkspaceTreeRefresh = (): void => {
+    if (workspaceRefreshTimer !== undefined || runtime.value.status !== 'running') return
+    workspaceRefreshTimer = window.setTimeout(() => {
+      workspaceRefreshTimer = undefined
+      void refreshWorkspaceTree()
+    }, 240)
   }
 
   const loadMoreSessions = async (): Promise<void> => {
@@ -215,15 +263,18 @@ export function useRuntimeBridge() {
       beforeId === null ||
       sessionPagePending.value
     ) return
+    const treeGeneration = workspaceTreeGeneration
     sessionPagePending.value = true
     sessionPageError.value = null
     try {
       const snapshot = await api.getWorkspaceTreePage(beforeId)
+      if (treeGeneration !== workspaceTreeGeneration) return
       workspaceTree.value = mergeWorkspacePages(workspaceTree.value ?? [], snapshot.workspaces)
       sessionPageHasMore.value = snapshot.hasMoreSessions
       sessionPageBeforeId.value = snapshot.nextBeforeId
+      loadedSessionPageCount += 1
     } catch (error) {
-      sessionPageError.value = errorMessage(error)
+      if (treeGeneration === workspaceTreeGeneration) sessionPageError.value = errorMessage(error)
     } finally {
       sessionPagePending.value = false
     }
@@ -341,6 +392,21 @@ export function useRuntimeBridge() {
         ? await window.kimiAgent.stopRuntime()
         : await window.kimiAgent.startRuntime('managed')
       if (runtime.value.status === 'running') await refreshWorkspaceTree()
+    } finally {
+      pending.value = false
+    }
+  }
+
+  const connectExternalRuntime = async (origin: string, token: string): Promise<boolean> => {
+    if (window.kimiAgent === undefined || pending.value || runtime.value.status === 'running') return false
+    pending.value = true
+    try {
+      runtime.value = await window.kimiAgent.connectExternalRuntime({ origin, token })
+      if (runtime.value.status === 'running') {
+        await refreshWorkspaceTree()
+        return true
+      }
+      return false
     } finally {
       pending.value = false
     }
@@ -1166,8 +1232,10 @@ export function useRuntimeBridge() {
   })
   onBeforeUnmount(() => {
     unsubscribeRuntime?.()
+    unsubscribeGlobal?.()
     unsubscribeSession?.()
     if (operationalTimer !== undefined) window.clearInterval(operationalTimer)
+    if (workspaceRefreshTimer !== undefined) window.clearTimeout(workspaceRefreshTimer)
   })
 
   return {
@@ -1236,6 +1304,7 @@ export function useRuntimeBridge() {
     fileActionPending,
     fileActionError,
     fileActionNotice,
+    globalConfigRevision,
     refreshWorkspaceTree,
     loadMoreSessions,
     loadSessionChildren,
@@ -1283,7 +1352,8 @@ export function useRuntimeBridge() {
     revealWorkspaceFile,
     loadFileDiff,
     refreshWorkspaceContext,
-    toggle
+    toggle,
+    connectExternalRuntime
   }
 }
 

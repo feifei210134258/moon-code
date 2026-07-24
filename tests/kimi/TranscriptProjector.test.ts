@@ -826,6 +826,26 @@ describe('TranscriptProjector', () => {
     expect(tool).toEqual(expect.objectContaining({ description: expectedDescription }))
   })
 
+  it('preserves a bounded diff display for the dedicated Tool Diff view', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+    projector.project(frame('tool.call.started', {
+      turnId: 2,
+      toolCallId: 'tool-diff',
+      name: 'Edit',
+      display: {
+        kind: 'diff', path: 'src/App.vue', before: '<h1>Old</h1>', after: '<h1>New</h1>', hunks: 1
+      }
+    }))
+
+    const tool = projector.getProjection('session-1').messages
+      .flatMap((message) => message.content)
+      .find((part) => part.type === 'tool' && part.toolCallId === 'tool-diff')
+    expect(tool).toEqual(expect.objectContaining({
+      toolDiff: { path: 'src/App.vue', before: '<h1>Old</h1>', after: '<h1>New</h1>', hunks: 1 }
+    }))
+  })
+
   it('does not count pinned known-noop tool protocol events as unknown', () => {
     const projector = new TranscriptProjector()
     projector.seedSnapshot('session-1', snapshot())

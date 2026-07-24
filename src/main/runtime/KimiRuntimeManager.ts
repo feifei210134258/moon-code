@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import type { Readable } from 'node:stream'
-import type { RuntimePublicState } from '../../shared/contracts.js'
+import type { RuntimeExternalConnectionInput, RuntimePublicState } from '../../shared/contracts.js'
 import { KimiRestClient } from '../kimi/KimiRestClient.js'
 import { KimiWsClient } from '../../../packages/kimi-adapter/src/transport/KimiWsClient.js'
 import { discoverRuntimes, resolveManagedKimiEntry } from './discovery.js'
@@ -147,6 +147,40 @@ export class KimiRuntimeManager extends EventEmitter {
       })
       return this.state
     }
+  }
+
+  async connectExternal(input: RuntimeExternalConnectionInput): Promise<RuntimePublicState> {
+    if (this.#state.status === 'running') return this.state
+    if (this.#state.status === 'starting' || this.#state.status === 'stopping') {
+      throw new Error(`Kimi runtime is ${this.#state.status}`)
+    }
+    this.#setState({
+      status: 'starting', mode: 'external', version: null, serverId: null, origin: null, error: null
+    })
+    try {
+      const origin = input.origin.replace(/\/$/, '')
+      const health = await fetch(`${origin}/api/v1/healthz`)
+      if (!health.ok) throw new Error(`Kimi health check failed with HTTP ${health.status}`)
+      const meta = await new KimiRestClient({ origin, token: input.token }).getMeta()
+      this.#connection = {
+        origin,
+        token: input.token,
+        serverId: meta.server_id,
+        version: meta.server_version,
+        backend: meta.backend ?? 'v1'
+      }
+      this.#setState({
+        status: 'running', mode: 'external', version: meta.server_version,
+        serverId: meta.server_id, origin, error: null
+      })
+    } catch {
+      this.#connection = null
+      this.#setState({
+        status: 'error', mode: 'external', version: null, serverId: null, origin: null,
+        error: 'Unable to connect to the protected Kimi Runtime.'
+      })
+    }
+    return this.state
   }
 
   async stop(): Promise<RuntimePublicState> {

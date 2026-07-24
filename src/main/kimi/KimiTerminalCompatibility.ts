@@ -65,7 +65,7 @@ export class KimiTerminalCompatibility extends EventEmitter {
       throw new Error(`A Kimi Session can have at most ${MAX_COMPAT_TERMINALS_PER_SESSION} terminals`)
     }
     if (this.#records.size >= MAX_COMPAT_TERMINALS_TOTAL) {
-      throw new Error(`Kimi Agent can have at most ${MAX_COMPAT_TERMINALS_TOTAL} terminals`)
+      throw new Error(`Moon Code can have at most ${MAX_COMPAT_TERMINALS_TOTAL} terminals`)
     }
     const resolvedCwd = await realpath(cwd)
     const shell = defaultShell()

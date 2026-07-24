@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { PhPause, PhPlay, PhStop } from '@phosphor-icons/vue'
 import type { KimiSessionGoal } from '@shared/contracts'
+import { rendererLocale } from '../i18n/rendererLocale'
 
 defineProps<{
   goal: KimiSessionGoal
@@ -25,7 +26,7 @@ function statusLabel(status: KimiSessionGoal['status']): string {
     </div>
     <div class="goal-strip-metrics">
       <span>{{ goal.turnsUsed }} turns</span>
-      <span>{{ goal.tokensUsed.toLocaleString() }} tokens</span>
+      <span>{{ goal.tokensUsed.toLocaleString(rendererLocale()) }} tokens</span>
       <span v-if="goal.budget.remainingTurns !== null">余 {{ goal.budget.remainingTurns }} turns</span>
     </div>
     <div class="goal-strip-actions">

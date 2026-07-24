@@ -2,7 +2,7 @@ import type { BrowserNetworkDetails, BrowserViewState } from '@shared/contracts'
 
 export const browserFixtureState: BrowserViewState = {
   url: 'preview://workspace-1/dist/index.html',
-  title: 'Kimi Agent Preview',
+  title: 'Moon Code Preview',
   loading: false,
   canGoBack: true,
   canGoForward: false,

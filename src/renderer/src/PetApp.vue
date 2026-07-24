@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
     @contextmenu.prevent
   >
     <div class="pet-tooltip" role="status">
-      <strong>{{ state?.title ?? 'Kimi Agent' }}</strong>
+      <strong>{{ state?.title ?? 'Moon Code' }}</strong>
       <span>{{ state?.workspaceName ?? '正在连接' }}</span>
       <small>{{ statusLabel }}<template v-if="elapsed"> · {{ elapsed }}</template></small>
     </div>

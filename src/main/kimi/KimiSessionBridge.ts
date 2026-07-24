@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import {
   SessionSyncController,
+  type GlobalSyncEvent,
   type SessionSyncView
 } from '../../../packages/kimi-adapter/src/sync/SessionSyncController.js'
 import type { KimiWsClient } from '../../../packages/kimi-adapter/src/transport/KimiWsClient.js'
@@ -17,6 +18,7 @@ import type {
   KimiSideChatPromptInput,
   KimiSideChatView,
   KimiAgentTranscript,
+  KimiGlobalStateEvent,
   KimiUndoDraft,
   KimiPromptQueueItem,
   KimiSessionGoal,
@@ -590,6 +592,9 @@ export class KimiSessionBridge extends EventEmitter {
       socket
     })
     controller.on('state-changed', (state: SessionSyncView) => this.emit('state-changed', state))
+    controller.on('global-event', (event: GlobalSyncEvent) => {
+      this.emit('global-state-changed', mapGlobalSyncEvent(event))
+    })
     socket.on('terminal-output', (output: TerminalOutputEvent) => this.emit('terminal-output', output))
     socket.on('terminal-exit', (exit: TerminalExitEvent) => {
       this.#terminalAttachments.delete(terminalKey(exit.sessionId, exit.terminalId))
@@ -629,6 +634,10 @@ export class KimiSessionBridge extends EventEmitter {
       }
     }))
   }
+}
+
+function mapGlobalSyncEvent(event: GlobalSyncEvent): KimiGlobalStateEvent {
+  return { scope: event.scope, eventType: event.eventType }
 }
 
 function projectFileEntry(entry: {

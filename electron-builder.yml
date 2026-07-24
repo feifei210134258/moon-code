@@ -1,5 +1,6 @@
 appId: com.kimi.agent.desktop
-productName: Kimi Agent
+productName: Moon Code
+icon: resources/icon.icns
 asar: true
 npmRebuild: true
 electronDist: node_modules/electron/dist

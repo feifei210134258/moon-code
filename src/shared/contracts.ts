@@ -2,8 +2,10 @@ export const ipcChannels = {
   appBootstrap: 'app:bootstrap',
   runtimeDiscover: 'runtime:discover',
   runtimeStart: 'runtime:start',
+  runtimeConnectExternal: 'runtime:connect-external',
   runtimeStop: 'runtime:stop',
   runtimeStateChanged: 'runtime:state-changed',
+  globalStateChanged: 'global:state-changed',
   workspaceTree: 'workspace:tree',
   workspaceTreePage: 'workspace:tree-page',
   workspaceAdd: 'workspace:add',
@@ -120,11 +122,16 @@ export interface RuntimeCandidate {
 
 export interface RuntimePublicState {
   status: RuntimeStatus
-  mode: 'managed' | 'system' | null
+  mode: 'managed' | 'system' | 'external' | null
   version: string | null
   serverId: string | null
   origin: string | null
   error: string | null
+}
+
+export interface RuntimeExternalConnectionInput {
+  origin: string
+  token: string
 }
 
 export interface RuntimeDiscovery {
@@ -197,6 +204,12 @@ export type SessionTranscriptPart =
       outputPreview?: string
       outputStream?: 'stdout' | 'stderr' | 'mixed'
       progress?: number
+      toolDiff?: {
+        path: string
+        before: string
+        after: string
+        hunks: number | null
+      }
     }
   | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
   | {
@@ -312,6 +325,9 @@ export interface KimiUsagePreferences {
   warningThreshold: number
   criticalThreshold: number
   systemNotifications: boolean
+  turnNotifications?: boolean
+  notificationSound?: boolean
+  locale?: 'zh-CN' | 'en-US'
 }
 
 export interface KimiUsageState {
@@ -718,6 +734,16 @@ export interface KimiSettingsSnapshot {
   }
 }
 
+/**
+ * A safe invalidation notice for Kimi Server state shared by every client.
+ * The Renderer refetches its own view through existing typed IPC instead of
+ * receiving config contents (which can include redacted provider metadata).
+ */
+export interface KimiGlobalStateEvent {
+  scope: 'navigation' | 'config'
+  eventType: string
+}
+
 export interface KimiPreferencesPatch {
   telemetry?: boolean
   defaultPermissionMode?: 'manual' | 'auto' | 'yolo'
@@ -967,6 +993,7 @@ export interface KimiAgentDesktopApi {
   getBootstrapState(): Promise<AppBootstrapState>
   discoverRuntime(): Promise<RuntimeDiscovery>
   startRuntime(mode?: 'managed' | 'system'): Promise<RuntimePublicState>
+  connectExternalRuntime(input: RuntimeExternalConnectionInput): Promise<RuntimePublicState>
   stopRuntime(): Promise<RuntimePublicState>
   getWorkspaceTree(): Promise<WorkspaceNavigationItem[]>
   getWorkspaceTreePage(beforeId?: string): Promise<WorkspaceNavigationSnapshot>
@@ -1076,6 +1103,7 @@ export interface KimiAgentDesktopApi {
   updateKimiUsagePreferences(preferences: KimiUsagePreferences): Promise<KimiUsageState>
   markPetSessionViewed(sessionId: string): Promise<void>
   onRuntimeStateChanged(listener: (state: RuntimePublicState) => void): () => void
+  onKimiGlobalStateChanged(listener: (event: KimiGlobalStateEvent) => void): () => void
   onSessionStateChanged(listener: (state: SessionViewState) => void): () => void
   onTerminalOutput(listener: (event: TerminalOutputEvent) => void): () => void
   onTerminalExit(listener: (event: TerminalExitEvent) => void): () => void

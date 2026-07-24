@@ -7,6 +7,7 @@ import { KimiCapabilitiesBridge } from './kimi/KimiCapabilitiesBridge.js'
 import { KimiBrowserManager } from './browser/KimiBrowserManager.js'
 import { KimiUsageService } from './kimi/KimiUsageService.js'
 import { UsagePreferencesStore } from './kimi/UsagePreferencesStore.js'
+import { KimiNotificationService } from './kimi/KimiNotificationService.js'
 import { KimiPetService } from './pet/KimiPetService.js'
 import { KimiPetWindowManager } from './pet/KimiPetWindowManager.js'
 import { PetPositionStore } from './pet/PetPositionStore.js'
@@ -24,18 +25,21 @@ const settings = new KimiSettingsBridge(runtime)
 const capabilities = new KimiCapabilitiesBridge(runtime)
 const browser = new KimiBrowserManager(runtime, () => mainWindow)
 const pets = new KimiPetService(runtime)
+const notifications = new KimiNotificationService({
+  isSupported: () => Notification.isSupported(),
+  show: ({ title, body }) => new Notification({ title, body }).show(),
+  beep: () => shell.beep()
+})
 const usage = new KimiUsageService(runtime, {
   preferencesStore: new UsagePreferencesStore(() => join(app.getPath('userData'), 'usage-preferences.json')),
   onUnauthorized: () => {
     void settings.getSnapshot().catch(() => undefined)
   },
   notifyThreshold: ({ window, threshold }) => {
-    if (!Notification.isSupported()) return
-    const percent = Math.round(threshold * 100)
-    new Notification({
-      title: `Kimi 套餐用量已达 ${percent}%`,
-      body: `${window.label}已使用 ${Math.round((window.ratio ?? threshold) * 100)}%${window.resetHint === null ? '' : ` · ${window.resetHint}`}`
-    }).show()
+    notifications.notifyUsageThreshold({ window, threshold }, usage.state.preferences)
+  },
+  notifyTurnCompletion: (notice) => {
+    notifications.notifyTurnCompletion(notice, usage.state.preferences)
   }
 })
 let quitting = false
@@ -52,7 +56,7 @@ function createMainWindow(): BrowserWindow {
     minWidth: 920,
     minHeight: 680,
     show: false,
-    title: 'Kimi Agent',
+    title: 'Moon Code',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     trafficLightPosition: { x: 18, y: 18 },
     backgroundColor: '#F7FAFC',

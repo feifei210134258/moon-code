@@ -182,6 +182,23 @@ describe('KimiUsageService', () => {
     })).rejects.toThrow('Invalid usage thresholds')
     service.close()
   })
+
+  it('only forwards turn completion notices when the local preference is enabled', async () => {
+    const getOAuthUsage = vi.fn(async () => ({ kind: 'ok', summary: null, limits: [], extra_usage: null }))
+    const { runtime } = fakeRuntime(getOAuthUsage)
+    const notifyTurnCompletion = vi.fn()
+    const service = new KimiUsageService(runtime, { notifyTurnCompletion })
+
+    service.notifyTurnCompleted({ sessionId: 'session-1', title: 'Implement P0', failed: false })
+    expect(notifyTurnCompletion).toHaveBeenCalledWith({ sessionId: 'session-1', title: 'Implement P0', failed: false })
+    await service.updatePreferences({
+      infoThreshold: 0.5, warningThreshold: 0.8, criticalThreshold: 0.95,
+      systemNotifications: true, turnNotifications: false, notificationSound: true, locale: 'zh-CN'
+    })
+    service.notifyTurnCompleted({ sessionId: 'session-1', title: 'Ignore this', failed: true })
+    expect(notifyTurnCompletion).toHaveBeenCalledOnce()
+    service.close()
+  })
 })
 
 function fakeRuntime(getOAuthUsage: (...args: any[]) => Promise<any>): {

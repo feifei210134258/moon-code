@@ -36,6 +36,7 @@ const props = defineProps<{
   activeSessionId: string
   activeWorkspaceId: string
   usage: KimiUsageState
+  configRevision?: number | undefined
 }>()
 
 const emit = defineEmits<{ close: []; sessionRestored: [sessionId: string] }>()
@@ -154,7 +155,7 @@ async function restoreSession(sessionId: string): Promise<void> {
 function archivedTime(value: string | null): string {
   if (value === null) return '时间未知'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '时间未知' : date.toLocaleString('zh-CN')
+  return Number.isNaN(date.getTime()) ? '时间未知' : date.toLocaleString(props.usage.preferences.locale ?? 'zh-CN')
 }
 
 async function restartMcpServer(serverId: string): Promise<void> {
@@ -277,7 +278,7 @@ function thresholdFromEvent(event: Event): number {
 }
 
 function usageUpdatedLabel(value: string | null): string {
-  return value === null ? '尚无成功数据' : new Date(value).toLocaleString('zh-CN')
+  return value === null ? '尚无成功数据' : new Date(value).toLocaleString(props.usage.preferences.locale ?? 'zh-CN')
 }
 
 async function startOAuthLogin(): Promise<void> {
@@ -399,6 +400,15 @@ watch(
   }
 )
 
+watch(
+  () => props.configRevision,
+  () => {
+    if (!props.open || actionPending.value !== null) return
+    void loadSettings()
+    void loadCapabilityTab()
+  }
+)
+
 onBeforeUnmount(clearOAuthPoll)
 
 function errorMessage(reason: unknown): string {
@@ -409,7 +419,7 @@ function errorMessage(reason: unknown): string {
 <template>
   <Teleport to="body">
     <div v-if="open" class="settings-backdrop" @click.self="emit('close')" @keydown="onDialogKeydown">
-      <section class="settings-panel glass-panel" role="dialog" aria-modal="true" aria-label="Kimi Agent 设置">
+      <section class="settings-panel glass-panel" role="dialog" aria-modal="true" aria-label="Moon Code 设置">
         <header class="settings-header">
           <div><PhGearSix :size="19" /><strong>设置</strong></div>
           <button type="button" aria-label="关闭设置" @click="emit('close')"><PhX :size="17" /></button>
@@ -621,6 +631,12 @@ function errorMessage(reason: unknown): string {
                 <label class="preference-row"><span><strong>系统通知</strong><small>同一 reset 周期每个阈值只提醒一次</small></span>
                   <input type="checkbox" :checked="usage.preferences.systemNotifications" :disabled="actionPending !== null" @change="updateUsagePreference({ systemNotifications: ($event.target as HTMLInputElement).checked })" />
                 </label>
+                <label class="preference-row"><span><strong>任务完成通知</strong><small>主 Turn 完成或失败时发送系统通知</small></span>
+                  <input type="checkbox" :checked="usage.preferences.turnNotifications !== false" :disabled="actionPending !== null" @change="updateUsagePreference({ turnNotifications: ($event.target as HTMLInputElement).checked })" />
+                </label>
+                <label class="preference-row"><span><strong>通知声音</strong><small>系统通知同时播放系统提示音</small></span>
+                  <input type="checkbox" :checked="usage.preferences.notificationSound !== false" :disabled="actionPending !== null" @change="updateUsagePreference({ notificationSound: ($event.target as HTMLInputElement).checked })" />
+                </label>
                 <p class="compatibility-note">前台 30 秒、后台 60 秒轮询；Prompt 结束、窗口聚焦、网络恢复与登录完成时立即刷新。</p>
               </section>
 
@@ -649,7 +665,12 @@ function errorMessage(reason: unknown): string {
               </section>
 
               <section v-else class="settings-section">
-                <div class="settings-title"><div><h2>通用</h2><p>这些值通过 Kimi `/config` 的 merge 语义更新。</p></div></div>
+                <div class="settings-title"><div><h2>通用</h2><p>Kimi 配置和仅本机的产品偏好会明确分开保存。</p></div></div>
+                <label class="preference-row"><span><strong>界面语言</strong><small>影响系统通知、日期/数字格式与界面语言标记</small></span>
+                  <select :value="usage.preferences.locale ?? 'zh-CN'" :disabled="actionPending !== null" @change="updateUsagePreference({ locale: ($event.target as HTMLSelectElement).value as 'zh-CN' | 'en-US' })">
+                    <option value="zh-CN">简体中文</option><option value="en-US">English</option>
+                  </select>
+                </label>
                 <label class="preference-row"><span><strong>默认 Permission</strong><small>新 Session 的权限模式</small></span>
                   <select :value="snapshot.preferences.defaultPermissionMode ?? 'manual'" :disabled="actionPending !== null" @change="updatePreference({ defaultPermissionMode: ($event.target as HTMLSelectElement).value as 'manual' | 'auto' | 'yolo' })">
                     <option value="manual">Manual</option><option value="auto">Auto</option><option value="yolo">Yolo</option>

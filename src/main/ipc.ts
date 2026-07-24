@@ -16,6 +16,7 @@ import {
   type KimiMcpServer,
   type KimiAttachmentBlob,
   type KimiAttachmentPickResult,
+  type KimiGlobalStateEvent,
   type KimiSessionRuntimeStatus,
   type KimiSideChatView,
   type KimiAgentTranscript,
@@ -120,6 +121,7 @@ import {
   validateBrowserViewport,
   validateBrowserWorkspaceScope
 } from './security/browserInputs.js'
+import { validateRuntimeExternalConnection } from './security/runtimeInputs.js'
 
 export function registerIpc(
   runtime: KimiRuntimeManager,
@@ -163,6 +165,10 @@ export function registerIpc(
       throw new TypeError('Invalid Kimi runtime mode')
     }
     return runtime.start(mode)
+  })
+  ipcMain.handle(ipcChannels.runtimeConnectExternal, (event, input?: unknown) => {
+    assertTrustedSender(event)
+    return runtime.connectExternal(validateRuntimeExternalConnection(input))
   })
   ipcMain.handle(ipcChannels.runtimeStop, async (event) => {
     assertTrustedSender(event)
@@ -947,10 +953,23 @@ export function registerIpc(
   sessions.on('state-changed', (state: SessionViewState) => {
     const wasActive = mainTurnBySession.get(state.sessionId) === true
     mainTurnBySession.set(state.sessionId, state.mainTurnActive)
-    if (wasActive && !state.mainTurnActive) void usage.refresh()
+    if (wasActive && !state.mainTurnActive) {
+      void usage.refresh()
+      usage.notifyTurnCompleted({
+        sessionId: state.sessionId,
+        title: state.title || '未命名任务',
+        failed: state.error !== null
+      })
+    }
     const window = getMainWindow()
     if (window !== null && !window.isDestroyed()) {
       window.webContents.send(ipcChannels.sessionStateChanged, state)
+    }
+  })
+  sessions.on('global-state-changed', (state: KimiGlobalStateEvent) => {
+    const window = getMainWindow()
+    if (window !== null && !window.isDestroyed()) {
+      window.webContents.send(ipcChannels.globalStateChanged, state)
     }
   })
   sessions.on('terminal-output', (output: TerminalOutputEvent) => {

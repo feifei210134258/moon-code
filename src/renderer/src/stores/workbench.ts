@@ -6,16 +6,17 @@ import type {
   WorkspaceNavigationItem
 } from '@shared/contracts'
 import type { ChatTurn, ExtensionTab, ProjectItem } from '../types'
+import { rendererLocale } from '../i18n/rendererLocale'
 
 const initialProjects: ProjectItem[] = [
   {
     id: 'kimi-agent',
-    name: 'Kimi-agent',
+    name: 'moon-code',
     expanded: true,
     sessions: [
       {
         id: 'explore-client',
-        title: '探索 Kimi Agent 客户端方案',
+        title: '探索 Moon Code 客户端方案',
         relativeTime: '2m',
         tone: 'running'
       }
@@ -284,7 +285,8 @@ function projectPart(
         ...(part.inputPreview === undefined ? {} : { inputPreview: part.inputPreview }),
         ...(part.outputPreview === undefined ? {} : { outputPreview: part.outputPreview }),
         ...(part.outputStream === undefined ? {} : { outputStream: part.outputStream }),
-        ...(part.progress === undefined ? {} : { progress: part.progress })
+        ...(part.progress === undefined ? {} : { progress: part.progress }),
+        ...(part.toolDiff === undefined ? {} : { toolDiff: part.toolDiff })
       }
     })
     return
@@ -320,7 +322,7 @@ function compactActivityText(value: string): string {
 function formatMessageTime(value: string): string {
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) return ''
-  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  return new Date(timestamp).toLocaleTimeString(rendererLocale(), { hour: '2-digit', minute: '2-digit' })
 }
 
 function formatRelativeTime(value: string | null): string | undefined {

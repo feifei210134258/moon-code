@@ -6,12 +6,14 @@ import ProjectSidebar from './components/ProjectSidebar.vue'
 import ConversationPane from './components/ConversationPane.vue'
 import ExtensionsPanel from './components/ExtensionsPanel.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
+import RuntimeConnectDialog from './components/RuntimeConnectDialog.vue'
 import { useRuntimeBridge } from './composables/useRuntimeBridge'
 import { useBrowserBridge } from './composables/useBrowserBridge'
 import { useUsageBridge } from './composables/useUsageBridge'
 import { activityFixtureTurns, approvalFixture, questionFixture, sessionWarningFixture } from './dev/interactionFixtures'
 import { useWorkbenchStore } from './stores/workbench'
 import { workspaceFileDestination } from './utils/fileRouting'
+import { setRendererLocale } from './i18n/rendererLocale'
 import type {
   BrowserAnnotationSubmitInput,
   KimiAgentTranscript,
@@ -46,6 +48,7 @@ const runtimeBridge = useRuntimeBridge()
 const browserBridge = useBrowserBridge()
 const usageBridge = useUsageBridge()
 const settingsOpen = ref(showSettingsFixture)
+const runtimeConnectOpen = ref(false)
 const showInteractionFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('interaction-fixture')
 const showActivityFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('activity-fixture')
 const showBrowserFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('browser-fixture')
@@ -75,6 +78,13 @@ const visibleQuestions = computed(() => activeSessionView.value?.pendingQuestion
 ))
 const visibleTurns = computed(() => showActivityFixture ? activityFixtureTurns : turns.value)
 const visibleWarnings = computed(() => showActivityFixture ? sessionWarningFixture : runtimeBridge.sessionWarnings.value)
+watch(
+  () => usageBridge.state.value.preferences.locale,
+  (locale) => {
+    setRendererLocale(locale ?? 'zh-CN')
+  },
+  { immediate: true }
+)
 const composerEnabled = computed(() => showOperationalFixture || (
   runtimeBridge.runtime.value.status === 'running' &&
   activeSessionId.value.length > 0 &&
@@ -165,6 +175,18 @@ function submitBrowserAnnotation(input: BrowserAnnotationSubmitInput): void {
 function openSettings(): void {
   usageOpen.value = false
   settingsOpen.value = true
+}
+
+function toggleRuntime(): void {
+  if (runtimeBridge.runtime.value.status === 'running') {
+    void runtimeBridge.toggle()
+    return
+  }
+  runtimeConnectOpen.value = true
+}
+
+async function connectExternalRuntime(origin: string, token: string): Promise<void> {
+  if (await runtimeBridge.connectExternalRuntime(origin, token)) runtimeConnectOpen.value = false
 }
 
 async function addWorkspace(): Promise<void> {
@@ -482,7 +504,7 @@ onBeforeUnmount(() => {
       :usage="usageBridge.state.value"
       :session-usage="usageSessionFixture ?? activeSessionView?.usage ?? null"
       :usage-open="usageOpen"
-      @toggle-runtime="runtimeBridge.toggle"
+      @toggle-runtime="toggleRuntime"
       @open-settings="openSettings"
       @toggle-usage="usageOpen = !usageOpen"
       @refresh-usage="usageBridge.refresh"
@@ -683,8 +705,17 @@ onBeforeUnmount(() => {
       :active-session-id="activeSessionId"
       :active-workspace-id="activeWorkspaceId"
       :usage="usageBridge.state.value"
+      :config-revision="runtimeBridge.globalConfigRevision.value"
       @close="settingsOpen = false"
       @session-restored="selectRestoredSession"
+    />
+    <RuntimeConnectDialog
+      :open="runtimeConnectOpen"
+      :pending="runtimeBridge.pending.value"
+      :error="runtimeBridge.runtime.value.status === 'error' ? runtimeBridge.runtime.value.error : null"
+      @close="runtimeConnectOpen = false"
+      @start-managed="runtimeBridge.toggle"
+      @connect-external="connectExternalRuntime"
     />
   </div>
 </template>

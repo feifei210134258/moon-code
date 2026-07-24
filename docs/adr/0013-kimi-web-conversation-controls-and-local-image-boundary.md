@@ -49,4 +49,4 @@ Compact 支持可选 `instruction`，Undo 使用 `{ count }`。客户端需要�
 - `kimiSessionBridge.test.ts` 覆盖 action 后 resync、Undo Draft 和受限图片读取。
 - `SessionSyncController.test.ts`、`TranscriptProjector.test.ts` 覆盖 marker 和 Cron origin。
 - `conversationControls.test.ts`、`markdownBlock.test.ts` 覆盖 UI 操作和 Renderer 边界。
-- 仍需在真实 Kimi Code `0.29.0` Session 上执行 Compact/Undo/marker 回归，再将相关 P0 行标为“完成”。
+- `KIMI_RUNTIME_CONVERSATION_INTEGRATION=1` 会创建并归档一个测试 Session，真实验证 Workspace Markdown 图片读取、Compact 和 Undo；该测试仅在显式开启时运行。

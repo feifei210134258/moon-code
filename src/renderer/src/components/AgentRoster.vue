@@ -2,6 +2,7 @@
 import { PhCaretDown, PhCaretRight, PhCirclesThreePlus } from '@phosphor-icons/vue'
 import { computed, ref } from 'vue'
 import type { SessionAgentView } from '@shared/contracts'
+import { rendererLocale } from '../i18n/rendererLocale'
 
 const props = defineProps<{ agents: SessionAgentView[] }>()
 const emit = defineEmits<{ open: [agent: SessionAgentView] }>()
@@ -28,7 +29,7 @@ function usageLabel(agent: SessionAgentView): string | null {
     + agent.usage.outputTokens
     + agent.usage.cacheReadTokens
     + agent.usage.cacheCreationTokens
-  return total > 0 ? `${total.toLocaleString()} tokens` : null
+  return total > 0 ? `${total.toLocaleString(rendererLocale())} tokens` : null
 }
 </script>
 

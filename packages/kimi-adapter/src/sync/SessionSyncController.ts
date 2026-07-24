@@ -124,6 +124,16 @@ export interface SessionUsageView {
   turnCount: number | null
 }
 
+/**
+ * Kimi Server broadcasts these events to every open Session subscription.
+ * They invalidate cross-session navigation or global configuration, but never
+ * carry config data across the desktop IPC boundary.
+ */
+export interface GlobalSyncEvent {
+  scope: 'navigation' | 'config'
+  eventType: string
+}
+
 interface SyncRestClient {
   getSessionSnapshot: KimiRestClient['getSessionSnapshot']
   getSessionTranscript?: KimiRestClient['getSessionTranscript']
@@ -173,6 +183,10 @@ export class SessionSyncController extends EventEmitter {
   readonly #onSessionEvent = (frame: SessionEventFrame): void => this.#handleSessionEvent(frame)
   readonly #onResyncRequired = (detail: unknown): void => {
     const sessionId = recordString(detail, 'sessionId')
+    if (sessionId === '__global__') {
+      this.#emitGlobalResync()
+      return
+    }
     if (sessionId !== null) void this.#resync(sessionId)
   }
   readonly #onClose = (): void => {
@@ -443,7 +457,10 @@ export class SessionSyncController extends EventEmitter {
   }
 
   #handleSessionEvent(frame: SessionEventFrame): void {
+    const globalEvent = globalSyncEvent(frame)
+    if (globalEvent !== null) this.emit('global-event', globalEvent)
     const sessionId = frame.session_id
+    if (sessionId === '__global__') return
     if (sessionId === undefined || sessionId !== this.#activeSessionId || this.#resyncing.has(sessionId)) return
     const state = this.#states.get(sessionId)
     if (state === undefined) return
@@ -669,6 +686,7 @@ export class SessionSyncController extends EventEmitter {
       await this.#socket.connect({ subscriptions: [sessionId], cursors: { [sessionId]: cursor } })
       this.#connected = true
       this.#reconnectAttempts = 0
+      this.#emitGlobalResync()
       if (state !== undefined) {
         state.phase = 'ready'
         state.error = null
@@ -730,6 +748,29 @@ export class SessionSyncController extends EventEmitter {
   #emitState(state: SessionSyncView): void {
     this.emit('state-changed', cloneView(state))
   }
+
+  #emitGlobalResync(): void {
+    this.emit('global-event', { scope: 'navigation', eventType: 'resync' } satisfies GlobalSyncEvent)
+    this.emit('global-event', { scope: 'config', eventType: 'resync' } satisfies GlobalSyncEvent)
+  }
+}
+
+function globalSyncEvent(frame: SessionEventFrame): GlobalSyncEvent | null {
+  if (
+    frame.type === 'event.workspace.created' ||
+    frame.type === 'event.workspace.updated' ||
+    frame.type === 'event.workspace.deleted' ||
+    frame.type === 'event.session.created' ||
+    frame.type === 'event.session.updated' ||
+    frame.type === 'event.session.deleted' ||
+    frame.type === 'event.session.work_changed' ||
+    frame.type === 'event.session.status_changed' ||
+    frame.type === 'session.meta.updated'
+  ) return { scope: 'navigation', eventType: frame.type }
+  if (frame.type === 'event.config.changed' || frame.type === 'event.model_catalog.changed') {
+    return { scope: 'config', eventType: frame.type }
+  }
+  return null
 }
 
 function emptyView(sessionId: string): SessionSyncView {

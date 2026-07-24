@@ -158,14 +158,14 @@ Skills、Tools 和 MCP 由 `KimiCapabilitiesBridge` 通过正式 REST route 投�
 | ------------------------------------------ | ----------------------- | ------------------------------------------- |
 | Workspace / Session / Message / Transcript | Kimi Code               | 只存内存 view/cache，可随时从 snapshot 重建 |
 | Prompt Queue / Approval / Question / Task  | Kimi Code               | 只存运行时映射和 cursor                     |
-| Session Terminal（0.29 v2 兼容）           | Kimi Agent Desktop PTY   | 仅进程内 metadata/有界输出；Runtime 停止即回收 |
+| Session Terminal（0.29 v2 兼容）           | Moon Code PTY            | 仅进程内 metadata/有界输出；Runtime 停止即回收 |
 | Model / Provider / OAuth / Config          | Kimi Code               | 只存 UI 最后选择；不复制 secret             |
 | Skills / Tools / MCP / Agent roster        | Kimi Code               | 只存可从 REST/snapshot/event 重建的内存投影  |
 | Kimi Server bearer token                   | Kimi Code Server        | 首选仅内存，必要时 Keychain                 |
-| Window/panel/pet position                  | Kimi Agent Desktop      | App support preferences                     |
+| Window/panel/pet position                  | Moon Code               | App support preferences                     |
 | Browser cookie/local storage               | Chromium partition      | Workspace 隔离，可清理                      |
-| Browser history/bookmark                   | Kimi Agent Desktop      | 可选、非 Session 数据                       |
-| 未发送 Prompt/批注草稿                     | Kimi Agent Desktop      | Session ID 作用域、加版本、发送后可清理     |
+| Browser history/bookmark                   | Moon Code               | 可选、非 Session 数据                       |
+| 未发送 Prompt/批注草稿                     | Moon Code               | Session ID 作用域、加版本、发送后可清理     |
 | 已发送批注截图                             | Kimi Session attachment | 客户端不额外复制，临时文件按策略清理        |
 | 套餐用量                                   | Kimi `/oauth/usage`     | 只保留当前值、时间和本进程阈值去重          |
 

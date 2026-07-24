@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { PhCirclesThreePlus, PhSpinnerGap, PhX } from '@phosphor-icons/vue'
 import type { KimiAgentTranscript, SessionAgentUsage, SessionAgentView, SessionTranscriptMessage } from '@shared/contracts'
+import { rendererLocale } from '../i18n/rendererLocale'
 
 defineProps<{
   agent: SessionAgentView | null
@@ -29,7 +30,7 @@ function usageLabel(agent: SessionAgentView, transcript: KimiAgentTranscript | n
   const usage = effectiveUsage(agent, transcript)
   if (usage === null) return null
   const total = usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheCreationTokens
-  return total > 0 ? `${total.toLocaleString()} tokens` : null
+  return total > 0 ? `${total.toLocaleString(rendererLocale())} tokens` : null
 }
 
 function usageDetails(agent: SessionAgentView, transcript: KimiAgentTranscript | null): string[] {
@@ -37,10 +38,10 @@ function usageDetails(agent: SessionAgentView, transcript: KimiAgentTranscript |
   if (usage === null) return []
   const cache = usage.cacheReadTokens + usage.cacheCreationTokens
   return [
-    `输入 ${usage.inputTokens.toLocaleString()}`,
-    `输出 ${usage.outputTokens.toLocaleString()}`,
-    ...(cache > 0 ? [`缓存 ${cache.toLocaleString()}`] : []),
-    ...(usage.contextTokens === null ? [] : [`Context ${usage.contextTokens.toLocaleString()}`])
+    `输入 ${usage.inputTokens.toLocaleString(rendererLocale())}`,
+    `输出 ${usage.outputTokens.toLocaleString(rendererLocale())}`,
+    ...(cache > 0 ? [`缓存 ${cache.toLocaleString(rendererLocale())}`] : []),
+    ...(usage.contextTokens === null ? [] : [`Context ${usage.contextTokens.toLocaleString(rendererLocale())}`])
   ]
 }
 
@@ -53,7 +54,7 @@ function statusLabel(status: SessionAgentView['status']): string {
 </script>
 
 <template>
-  <aside v-if="agent" class="agent-detail-panel glass-panel" aria-label="Kimi Agent 详情">
+  <aside v-if="agent" class="agent-detail-panel glass-panel" aria-label="Moon Code Agent 详情">
     <header>
       <span><PhCirclesThreePlus :size="17" />{{ agent.name }}</span>
       <small>{{ statusLabel(agent.status) }}</small>

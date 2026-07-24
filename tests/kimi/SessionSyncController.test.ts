@@ -56,6 +56,42 @@ function makeSnapshot(seq: number, assistantText = 'Hello'): SessionSnapshot {
 }
 
 describe('SessionSyncController', () => {
+  it('forwards Kimi global Workspace, Session, and Config invalidations without mixing them into a Transcript', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+    const events: Array<{ scope: string; eventType: string }> = []
+    controller.on('global-event', (event) => events.push(event))
+
+    socket.emit('session-event', {
+      type: 'event.workspace.updated', seq: 1, epoch: 'global-1', session_id: '__global__',
+      timestamp: '2026-07-24T01:00:00.000Z',
+      payload: { workspace: { id: 'workspace-1', name: 'Renamed project' } }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'event.config.changed', seq: 2, epoch: 'global-1', session_id: '__global__',
+      timestamp: '2026-07-24T01:00:01.000Z', payload: { changed_fields: ['default_model'] }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'event.session.work_changed', seq: 11, epoch: 'epoch-1', session_id: 'session-other',
+      timestamp: '2026-07-24T01:00:02.000Z', payload: { busy: true, main_turn_active: true }
+    } satisfies SessionEventFrame)
+    socket.emit('resync-required', { sessionId: '__global__', reason: 'buffer_overflow' })
+
+    expect(events).toEqual([
+      { scope: 'navigation', eventType: 'event.workspace.updated' },
+      { scope: 'config', eventType: 'event.config.changed' },
+      { scope: 'navigation', eventType: 'event.session.work_changed' },
+      { scope: 'navigation', eventType: 'resync' },
+      { scope: 'config', eventType: 'resync' }
+    ])
+    expect(controller.getState('session-1')?.messages).toHaveLength(1)
+    controller.close()
+  })
+
   it('projects authoritative transcript markers alongside the snapshot', async () => {
     const controller = new SessionSyncController({
       rest: {

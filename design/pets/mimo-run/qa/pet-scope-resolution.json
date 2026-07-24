@@ -1,0 +1,16 @@
+{
+  "decision": "use-provisional-visuals",
+  "core_acceptance": [
+    "pet projects bounded session status",
+    "click opens or restores the main application",
+    "click targets the exact bound session and relevant interaction or latest turn",
+    "asset load failure retains a local fallback character"
+  ],
+  "deferred_visual_polish": [
+    "strict blind classification of every look direction",
+    "final hatch-pet package installation",
+    "additional row regeneration for cosmetic direction cues"
+  ],
+  "known_warning": "The provisional Row 10 keeps coherent scale and identity, but 180 down was ambiguous in a strict unlabeled blind review.",
+  "reason": "User explicitly prioritized session navigation and app opening over pet style and non-core animation polish on 2026-07-23."
+}

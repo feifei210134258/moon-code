@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "registered_row": "qa/look-row-9-registered.png",
+  "registration": "qa/look-row-9-registration.json",
+  "edge_check": "passed during deterministic registration",
+  "continuity": "passed labeled normal-size ordered review",
+  "warnings": [
+    "112.5 has a subtle downward cue and relies on the ordered transition from 090 toward 135"
+  ],
+  "directions": [
+    { "direction": "000", "expected": "up", "verdict": "pass", "reason": "both complete eye globes aim visibly upward; body remains planted" },
+    { "direction": "022.5", "expected": "up-right", "verdict": "pass", "reason": "upward eyes retain a small screen-right shift" },
+    { "direction": "045", "expected": "up-right", "verdict": "pass", "reason": "eyes and face advance right while retaining the upward axis" },
+    { "direction": "067.5", "expected": "up-right", "verdict": "pass", "reason": "clear rightward gaze with remaining upward cue" },
+    { "direction": "090", "expected": "right", "verdict": "pass", "reason": "eyes and face aim unmistakably toward screen-right" },
+    { "direction": "112.5", "expected": "down-right", "verdict": "warning", "reason": "rightward axis is clear; downward axis is subtle but progression toward 135 is continuous" },
+    { "direction": "135", "expected": "down-right", "verdict": "pass", "reason": "lowered eyes and small face pitch retain a rightward component" },
+    { "direction": "157.5", "expected": "down-right", "verdict": "pass", "reason": "strong downward gaze with a small right component, one coherent step before 180" }
+  ]
+}

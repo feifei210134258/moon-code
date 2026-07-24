@@ -28,6 +28,12 @@ export interface ChatActivity {
   outputPreview?: string
   outputStream?: 'stdout' | 'stderr' | 'mixed'
   progress?: number
+  toolDiff?: {
+    path: string
+    before: string
+    after: string
+    hunks: number | null
+  }
 }
 
 export type ChatBlock =

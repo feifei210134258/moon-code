@@ -6,7 +6,7 @@
 
 ## 背景
 
-Kimi Agent Desktop 需要覆盖官方 Web 的 Skills、Tools、MCP 和 Subagent 体验，但不能为了界面方便复制一套能力目录或 Agent 状态库。锁定版 v2 已提供正式 REST route、snapshot roster 和实时 lifecycle event；这些接口的作用域和恢复语义并不完全相同，必须明确客户端边界。
+Moon Code 需要覆盖官方 Web 的 Skills、Tools、MCP 和 Subagent 体验，但不能为了界面方便复制一套能力目录或 Agent 状态库。锁定版 v2 已提供正式 REST route、snapshot roster 和实时 lifecycle event；这些接口的作用域和恢复语义并不完全相同，必须明确客户端边界。
 
 ## 决策
 

@@ -24,9 +24,16 @@ export interface UsageThresholdNotice {
   threshold: number
 }
 
+export interface TurnCompletionNotice {
+  sessionId: string
+  title: string
+  failed: boolean
+}
+
 export class KimiUsageService extends EventEmitter {
   readonly #runtime: KimiRuntimeManager
   readonly #notifyThreshold: (notice: UsageThresholdNotice) => void
+  readonly #notifyTurnCompletion: (notice: TurnCompletionNotice) => void
   readonly #onUnauthorized: () => void
   readonly #preferencesStore: UsagePreferencesStore | null
   readonly #cache = new Map<string, KimiUsageState>()
@@ -44,6 +51,7 @@ export class KimiUsageService extends EventEmitter {
     runtime: KimiRuntimeManager,
     options: {
       notifyThreshold?: (notice: UsageThresholdNotice) => void
+      notifyTurnCompletion?: (notice: TurnCompletionNotice) => void
       onUnauthorized?: () => void
       preferencesStore?: UsagePreferencesStore
     } = {}
@@ -51,6 +59,7 @@ export class KimiUsageService extends EventEmitter {
     super()
     this.#runtime = runtime
     this.#notifyThreshold = options.notifyThreshold ?? (() => undefined)
+    this.#notifyTurnCompletion = options.notifyTurnCompletion ?? (() => undefined)
     this.#onUnauthorized = options.onUnauthorized ?? (() => undefined)
     this.#preferencesStore = options.preferencesStore ?? null
   }
@@ -107,6 +116,11 @@ export class KimiUsageService extends EventEmitter {
     this.#notified.clear()
     this.#emitState()
     return this.state
+  }
+
+  notifyTurnCompleted(notice: TurnCompletionNotice): void {
+    if (this.#closed || this.#state.preferences.turnNotifications === false) return
+    this.#notifyTurnCompletion({ ...notice })
   }
 
   close(): void {

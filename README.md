@@ -1,12 +1,12 @@
-# Kimi Agent Desktop
+# Moon Code
 
-Kimi Agent Desktop 是一个以 Kimi Code 为唯一 Agent 内核的本地桌面客户端。
+Moon Code 是一个以 Kimi Code 为唯一 Agent 内核的本地桌面客户端。
 
 “Codex 风格”只描述 UI、任务工作台和桌宠交互；项目不使用 Codex 协议。主接入计划使用 Kimi Code 官方 `kimi web` REST/WebSocket，并保持 Kimi Workspace、Session 和 Transcript 为唯一事实源。
 
 ## 当前状态
 
-项目已进入 Foundation 实现阶段：主工作台视觉基线、Electron + Vue 工程、托管 Kimi 运行时、typed IPC，以及 0.29.0 REST/WebSocket 契约适配层均已落地。Spike A/B 仍在继续验证，当前版本还不是可替代官方 Web 的 Beta。
+P0 功能已基本完成：主工作台、Electron + Vue 工程、托管 Kimi 运行时、typed IPC，以及 Kimi Code `0.29.0` REST/WebSocket 契约适配层均已落地。当前可作为未签名的 macOS 本地工具使用；正式公开分发前仍需签名、公证及耐久性验证。
 
 已确认的首版方向：
 
@@ -32,7 +32,11 @@ Kimi Agent Desktop 是一个以 Kimi Code 为唯一 Agent 内核的本地桌面�
 - Browser 已接入 Main 管理的隔离 WebContentsView：HTML 文件通过受限发布根的 loopback Workspace Preview 打开，192-bit capability 只由 Main 注入请求头、不会进入页面 URL；同时支持地址栏、前进后退、刷新停止、localhost discovery、常用/自定义视口、Console、Network 安全预览和视口/整页截图，详见 [ADR 0007](./docs/adr/0007-browser-webcontentsview-preview-boundary.md)。
 - Usage 已使用官方 `/oauth/usage` 实现 Main single-flight 准实时轮询：顶部与 `⌘⇧U` 弹层分区展示套餐窗口、Extra Usage、Session token 和 Context；支持 30/60 秒调度、焦点/网络/Prompt 结束即时刷新、失败保留与退避，设置页可调整 50%/80%/95% 阈值和系统通知，详见 [ADR 0008](./docs/adr/0008-usage-authority-polling-boundary.md)。
 - Pet 已接入独立多 Session REST/WS 状态服务、透明置顶窗口、Waiting/Failed 优先级、完成与未读转换、最多 5 个及 `+N` 折叠提示、拖拽吸边和点击回到准确 Session。Pet 使用独立最小 preload，不能直接审批或调用主窗口能力，详见 [ADR 0009](./docs/adr/0009-pet-multi-session-window-boundary.md)。当前角色仍是 Spike 占位美术，正式动画 atlas 尚待接入。
-- 当前有 193 个可运行的单元/组件用例与一项 opt-in 真实 Kimi Runtime 集成测试覆盖主链路；生产构建、依赖审计和 arm64 `.app` 内的 native PTY/Browser smoke 均纳入门禁。签名、公证与发布安装包仍属于 Beta 发布阶段。
+- 当前有 293 个可运行的单元/组件用例与两项 opt-in 真实 Kimi Runtime 集成测试覆盖主链路；生产构建以及 arm64 `.app` 内的 native PTY/Browser/Pet smoke 均纳入门禁。未签名的 DMG/ZIP 已可构建；签名、公证与发布安装包仍属于公开 Beta 发布阶段。
+
+## 最小运行与未签名分发
+
+源码运行、打包命令、首次打开未签名应用以及验证步骤见 [最小运行与分发说明](./docs/08-minimum-run-and-distribution.md)。
 
 ## 文档
 

@@ -2,6 +2,7 @@
 import { PhCaretDown, PhChatCircleText, PhListBullets, PhSpinnerGap } from '@phosphor-icons/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import type { ChatTurn } from '../types'
+import { rendererLocale } from '../i18n/rendererLocale'
 import type {
   ApprovalRequestView,
   KimiModelCatalogItem,
@@ -177,6 +178,25 @@ function markerLabel(marker: SessionTranscriptMarker): string {
   return /compact|history/i.test(marker.marker) ? '上下文已压缩' : marker.marker
 }
 
+function compactTokenSummary(marker: SessionTranscriptMarker): string | null {
+  if (!/compact|history/i.test(marker.marker) || marker.payload === null || typeof marker.payload !== 'object') return null
+  const payload = marker.payload as Record<string, unknown>
+  const result = payload.result !== null && typeof payload.result === 'object'
+    ? payload.result as Record<string, unknown>
+    : payload
+  const before = result.tokensBefore
+  const after = result.tokensAfter
+  if (
+    typeof before !== 'number' || !Number.isFinite(before) || before < 0 ||
+    typeof after !== 'number' || !Number.isFinite(after) || after < 0
+  ) return null
+  return `${formatTokenCount(before)} → ${formatTokenCount(after)} tokens`
+}
+
+function formatTokenCount(value: number): string {
+  return new Intl.NumberFormat(rendererLocale(), { maximumFractionDigits: 0 }).format(value)
+}
+
 function requestCompact(): void {
   const instruction = compactInstruction.value.trim()
   if (instruction.length === 0) emit('compact')
@@ -288,7 +308,9 @@ watch(
     <div ref="transcriptScroll" class="transcript-scroll" tabindex="-1" @scroll="onTranscriptScroll">
       <div v-if="markers.length > 0" class="transcript-marker-list" aria-label="Kimi 会话标记">
         <div v-for="marker in markers" :key="marker.markerId" class="transcript-marker">
-          <span>{{ markerLabel(marker) }}</span><time v-if="marker.at">{{ marker.at }}</time>
+          <span>{{ markerLabel(marker) }}</span>
+          <small v-if="compactTokenSummary(marker)">{{ compactTokenSummary(marker) }}</small>
+          <time v-if="marker.at">{{ marker.at }}</time>
         </div>
       </div>
       <div v-if="turns.length === 0" class="transcript-empty">

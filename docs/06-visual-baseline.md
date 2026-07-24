@@ -1,4 +1,4 @@
-# Kimi Agent Desktop 视觉基线
+# Moon Code 视觉基线
 
 > 版本：v0.1（已确认）
 > 确认日期：2026-07-23
@@ -51,7 +51,7 @@
 
 顶部导航只承载全局上下文：
 
-- 应用标识 `Kimi Agent`。
+- 应用标识 `Moon Code`。
 - 当前项目/Workspace、Git branch（可用时）。
 - 当前 Session 运行状态。
 - Context 使用量。

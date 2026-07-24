@@ -43,6 +43,60 @@ afterEach(() => {
 })
 
 describe('useRuntimeBridge session races', () => {
+  it('coalesces cross-client navigation refreshes and exposes a Config revision without receiving config data', async () => {
+    vi.useFakeTimers()
+    let globalListener!: (event: { scope: 'navigation' | 'config'; eventType: string }) => void
+    const getWorkspaceTreePage = vi.fn()
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Before', root: '/tmp/project', sessions: [] }],
+        hasMoreSessions: false, nextBeforeId: null
+      })
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Updated elsewhere', root: '/tmp/project', sessions: [] }],
+        hasMoreSessions: false, nextBeforeId: null
+      })
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:1234', error: null },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTreePage,
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      onKimiGlobalStateChanged: vi.fn((listener: (event: { scope: 'navigation' | 'config'; eventType: string }) => void) => {
+        globalListener = listener
+        return () => {}
+      })
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    expect(bridge.workspaceTree.value?.[0]?.name).toBe('Before')
+
+    globalListener({ scope: 'navigation', eventType: 'event.workspace.updated' })
+    globalListener({ scope: 'navigation', eventType: 'event.session.work_changed' })
+    await vi.advanceTimersByTimeAsync(240)
+    await flushPromises()
+    expect(getWorkspaceTreePage).toHaveBeenCalledTimes(2)
+    expect(bridge.workspaceTree.value?.[0]?.name).toBe('Updated elsewhere')
+
+    globalListener({ scope: 'config', eventType: 'event.config.changed' })
+    expect(bridge.globalConfigRevision.value).toBe(1)
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
   it('matches Kimi Web by keeping active-turn follow-ups local, reorderable, and flushing one at a time', async () => {
     let stateListener!: (state: SessionViewState) => void
     const active = { ...sessionState('session-queue'), busy: true, mainTurnActive: true, activePromptStatus: 'running' as const }
@@ -446,6 +500,63 @@ describe('useRuntimeBridge session races', () => {
       'session-new', 'session-old'
     ])
     expect(bridge.sessionPageHasMore.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('reloads every previously loaded navigation page after a cross-client invalidation', async () => {
+    const session = (id: string) => ({
+      id, title: id, updatedAt: null, busy: false, pendingInteraction: 'none' as const,
+      lastTurnReason: null, lastPrompt: null, parentSessionId: null
+    })
+    const getWorkspaceTreePage = vi.fn()
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Project', root: '/tmp/project', sessions: [session('session-new')] }],
+        hasMoreSessions: true, nextBeforeId: 'session-new'
+      })
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Project', root: '/tmp/project', sessions: [session('session-old')] }],
+        hasMoreSessions: false, nextBeforeId: 'session-old'
+      })
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Project renamed elsewhere', root: '/tmp/project', sessions: [session('session-new')] }],
+        hasMoreSessions: true, nextBeforeId: 'session-new'
+      })
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Project renamed elsewhere', root: '/tmp/project', sessions: [session('session-old')] }],
+        hasMoreSessions: false, nextBeforeId: 'session-old'
+      })
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:1234', error: null },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTreePage,
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.loadMoreSessions()
+
+    await bridge.refreshWorkspaceTree()
+
+    expect(getWorkspaceTreePage).toHaveBeenLastCalledWith('session-new')
+    expect(bridge.workspaceTree.value?.[0]).toMatchObject({ name: 'Project renamed elsewhere' })
+    expect(bridge.workspaceTree.value?.[0]?.sessions.map((item) => item.id)).toEqual([
+      'session-new', 'session-old'
+    ])
     wrapper.unmount()
   })
 })

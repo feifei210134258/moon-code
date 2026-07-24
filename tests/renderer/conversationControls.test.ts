@@ -43,7 +43,8 @@ function mountConversation() {
       warnings: [],
       warningsError: null,
       markers: [{
-        markerId: 'marker-1', marker: 'history_compacted', payload: {}, at: '2026-07-24T10:00:00Z'
+        markerId: 'marker-1', marker: 'history_compacted',
+        payload: { result: { tokensBefore: 48_000, tokensAfter: 12_500 } }, at: '2026-07-24T10:00:00Z'
       }],
       conversationActionPending: null,
       conversationActionError: null
@@ -55,6 +56,7 @@ describe('Conversation controls', () => {
   it('provides TOC navigation and projects authoritative transcript markers', async () => {
     const wrapper = mountConversation()
     expect(wrapper.text()).toContain('上下文已压缩')
+    expect(wrapper.text()).toContain('48,000 → 12,500 tokens')
     await wrapper.get('.conversation-tool-button[aria-expanded="false"]').trigger('click')
     expect(wrapper.get('.conversation-toc').text()).toContain('实现 Compact、Undo 和会话目录')
   })

@@ -3,6 +3,7 @@ import {
   ipcChannels,
   type BrowserViewState,
   type KimiAgentDesktopApi,
+  type KimiGlobalStateEvent,
   type KimiUsageState,
   type PetOpenSessionIntent,
   type RuntimePublicState,
@@ -15,6 +16,7 @@ const api: KimiAgentDesktopApi = {
   getBootstrapState: () => ipcRenderer.invoke(ipcChannels.appBootstrap),
   discoverRuntime: () => ipcRenderer.invoke(ipcChannels.runtimeDiscover),
   startRuntime: (mode) => ipcRenderer.invoke(ipcChannels.runtimeStart, mode),
+  connectExternalRuntime: (input) => ipcRenderer.invoke(ipcChannels.runtimeConnectExternal, input),
   stopRuntime: () => ipcRenderer.invoke(ipcChannels.runtimeStop),
   getWorkspaceTree: () => ipcRenderer.invoke(ipcChannels.workspaceTree),
   getWorkspaceTreePage: (beforeId) => ipcRenderer.invoke(ipcChannels.workspaceTreePage, beforeId),
@@ -127,6 +129,11 @@ const api: KimiAgentDesktopApi = {
     const handler = (_event: Electron.IpcRendererEvent, state: RuntimePublicState): void => listener(state)
     ipcRenderer.on(ipcChannels.runtimeStateChanged, handler)
     return () => ipcRenderer.removeListener(ipcChannels.runtimeStateChanged, handler)
+  },
+  onKimiGlobalStateChanged: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: KimiGlobalStateEvent): void => listener(state)
+    ipcRenderer.on(ipcChannels.globalStateChanged, handler)
+    return () => ipcRenderer.removeListener(ipcChannels.globalStateChanged, handler)
   },
   onSessionStateChanged: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, state: SessionViewState): void => listener(state)

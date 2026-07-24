@@ -23,6 +23,12 @@ export type TranscriptPart =
       outputPreview?: string
       outputStream?: 'stdout' | 'stderr' | 'mixed'
       progress?: number
+      toolDiff?: {
+        path: string
+        before: string
+        after: string
+        hunks: number | null
+      }
     }
   | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
   | {
@@ -298,7 +304,8 @@ export class TranscriptProjector {
             toolName,
             state: 'running',
             ...optionalString('description', description),
-            ...optionalPreview('inputPreview', payload.args ?? payload.input)
+            ...optionalPreview('inputPreview', payload.args ?? payload.input),
+            ...optionalToolDiff(presentation)
           })
         } else {
           existing.toolName = toolName
@@ -306,6 +313,8 @@ export class TranscriptProjector {
           if (description !== undefined) existing.description = description
           const input = previewValue(payload.args ?? payload.input)
           if (input !== undefined) existing.inputPreview = input
+          const diff = toolDiffPresentation(presentation)
+          if (diff !== undefined) existing.toolDiff = diff
         }
         return changed()
       }
@@ -500,6 +509,7 @@ export class TranscriptProjector {
         ...optionalString('description', previewLabel(tool.description) ?? presentationDescription(presentation)),
         ...optionalPreview('inputPreview', tool.args),
         ...optionalPreview('outputPreview', tool.last_progress?.text),
+        ...optionalToolDiff(presentation),
         ...(tool.last_progress?.percent === undefined ? {} : { progress: clampPercent(tool.last_progress.percent) }),
         ...(progressStream(tool.last_progress?.kind) === undefined
           ? {}
@@ -1358,7 +1368,13 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value))
 }
 
-function toolPresentation(value: unknown): { summary?: string; detail?: string } | null {
+type ToolPresentation = {
+  summary?: string
+  detail?: string
+  diff?: { path: string; before: string; after: string; hunks: number | null }
+}
+
+function toolPresentation(value: unknown): ToolPresentation | null {
   const display = recordValue(value)
   if (display === null) return null
   const kind = stringValue(display.kind)
@@ -1372,7 +1388,16 @@ function toolPresentation(value: unknown): { summary?: string; detail?: string }
   }
   if (kind === 'diff') {
     const hunks = numberValue(display.hunks)
-    return compactPresentation(previewLabel(display.path), hunks === null ? undefined : `${hunks} hunks`)
+    const presentation = compactPresentation(previewLabel(display.path), hunks === null ? undefined : `${hunks} hunks`)
+    const path = previewLabel(display.path)
+    const before = previewValue(display.before)
+    const after = previewValue(display.after)
+    return {
+      ...presentation,
+      ...(path === undefined || before === undefined || after === undefined
+        ? {}
+        : { diff: { path, before, after, hunks } })
+    }
   }
   if (kind === 'search') return compactPresentation(previewLabel(display.query), previewLabel(display.scope))
   if (kind === 'url_fetch') return compactPresentation(previewLabel(display.url), previewLabel(display.method, 80))
@@ -1415,7 +1440,13 @@ function compactPresentation(
   }
 }
 
-function presentationDescription(presentation: { summary?: string; detail?: string } | null): string | undefined {
+function toolDiffPresentation(
+  presentation: ToolPresentation | null
+): { path: string; before: string; after: string; hunks: number | null } | undefined {
+  return presentation?.diff
+}
+
+function presentationDescription(presentation: ToolPresentation | null): string | undefined {
   if (presentation === null) return undefined
   return [presentation.summary, presentation.detail].filter((value): value is string => value !== undefined).join(' · ')
 }
@@ -1426,6 +1457,13 @@ function optionalPreview<Key extends 'inputPreview' | 'outputPreview'>(
 ): Record<Key, string> | Record<string, never> {
   const preview = previewValue(value)
   return preview === undefined ? {} : { [key]: preview } as Record<Key, string>
+}
+
+function optionalToolDiff(
+  presentation: ToolPresentation | null
+): { toolDiff: NonNullable<ToolPart['toolDiff']> } | Record<string, never> {
+  const diff = toolDiffPresentation(presentation)
+  return diff === undefined ? {} : { toolDiff: diff }
 }
 
 function appendPreview(current: string | undefined, next: string): string {

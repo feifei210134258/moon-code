@@ -13,7 +13,8 @@ const expanded = ref(props.activity.status === 'error')
 const hasDetails = computed(() =>
   (props.activity.detail?.length ?? 0) > 0 ||
   (props.activity.inputPreview?.length ?? 0) > 0 ||
-  (props.activity.outputPreview?.length ?? 0) > 0
+  (props.activity.outputPreview?.length ?? 0) > 0 ||
+  props.activity.toolDiff !== undefined
 )
 const statusLabel = computed(() =>
   props.activity.status === 'running' ? '运行中' : props.activity.status === 'error' ? '失败' : '完成'
@@ -74,6 +75,17 @@ function toggle(): void {
           <span v-if="activity.outputStream">{{ activity.outputStream === 'mixed' ? 'stdout + stderr' : activity.outputStream }}</span>
         </header>
         <pre :class="{ 'is-stderr': activity.outputStream === 'stderr' }">{{ activity.outputPreview }}</pre>
+      </section>
+      <section v-if="activity.toolDiff" class="tool-diff-panel" :aria-label="`工具 Diff：${activity.toolDiff.path}`">
+        <header>
+          <span>工具 Diff</span>
+          <code>{{ activity.toolDiff.path }}</code>
+          <small v-if="activity.toolDiff.hunks !== null">{{ activity.toolDiff.hunks }} hunks</small>
+        </header>
+        <div class="tool-diff-columns">
+          <section><h4>变更前</h4><pre>{{ activity.toolDiff.before }}</pre></section>
+          <section><h4>变更后</h4><pre>{{ activity.toolDiff.after }}</pre></section>
+        </div>
       </section>
     </div>
   </div>

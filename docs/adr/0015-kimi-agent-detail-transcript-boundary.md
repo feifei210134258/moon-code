@@ -1,4 +1,4 @@
-# ADR-0015：Kimi Agent 详情与独立 Transcript 边界
+# ADR-0015：Moon Code Agent 详情与独立 Transcript 边界
 
 状态：Accepted
 日期：2026-07-24

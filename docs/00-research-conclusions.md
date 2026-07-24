@@ -101,7 +101,7 @@ Vibe Kanban 和 Crystal 的 Worktree 设计适合并行实验，但 Worktree 清
                              ↑
               WeSight / AionUi / AgentAPI
                              │
-  任务/看板 ← Vibe Kanban ───┼─── Kimi Agent Desktop → 对话/工作台
+  任务/看板 ← Vibe Kanban ───┼─── Moon Code → 对话/工作台
                              │            ★
                   Crystal / Opcode        │
                              ↓            │

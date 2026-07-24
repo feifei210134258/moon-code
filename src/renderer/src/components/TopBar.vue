@@ -10,6 +10,7 @@ import {
   PhUserCircle
 } from '@phosphor-icons/vue'
 import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary } from '@shared/contracts'
+import { rendererLocale } from '../i18n/rendererLocale'
 
 const props = defineProps<{
   runtimeLabel: string
@@ -59,19 +60,19 @@ function usageTone(value: number | null): string | null {
 }
 
 function compactNumber(value: number): string {
-  return new Intl.NumberFormat('zh-CN', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
+  return new Intl.NumberFormat(rendererLocale(), { notation: 'compact', maximumFractionDigits: 1 }).format(value)
 }
 
 function money(cents: number, currency: string): string {
   try {
-    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency }).format(cents / 100)
+    return new Intl.NumberFormat(rendererLocale(), { style: 'currency', currency }).format(cents / 100)
   } catch {
     return `${currency} ${(cents / 100).toFixed(2)}`
   }
 }
 
 function usd(value: number): string {
-  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'USD' }).format(value)
+  return new Intl.NumberFormat(rendererLocale(), { style: 'currency', currency: 'USD' }).format(value)
 }
 
 function updatedLabel(value: string | null): string {
@@ -85,7 +86,7 @@ function updatedLabel(value: string | null): string {
 <template>
   <header class="topbar">
     <div class="brand-lockup">
-      <span class="brand-name">Kimi Agent</span>
+      <span class="brand-name">Moon Code</span>
     </div>
 
     <div class="topbar-context">

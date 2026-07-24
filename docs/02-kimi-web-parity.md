@@ -24,7 +24,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Auth readiness       | `/auth`                            | P0       | 未登录、无 Provider、默认模型缺失分别提示 |
 | 断线重连             | WS reconnect                       | P0       | 退避、网络恢复立即重连                    |
 | Snapshot/resync      | `/sessions/{id}/snapshot`          | P0       | gap/epoch 变化后原子重建                  |
-| 多客户端同步         | 全局 session/workspace/config 事件 | P0       | 其他 Kimi 客户端产生的变化可见            |
+| 多客户端同步         | 全局 session/workspace/config 事件 | P0       | Workspace、Session 导航和 Config 可见；模型目录受上游广播限制 |
 | Graceful shutdown    | `/shutdown`                        | P0 内部  | 只用于客户端自己托管的 loopback Server    |
 
 ## 3. Workspace 与 Session
@@ -72,7 +72,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Cron notice               | `CronNotice`                       | P0       | 保留触发来源和时间                               |
 | 声音与系统通知            | Web composables                    | P0       | 可单独关闭；桌宠状态同步                         |
 
-实现状态：Attachment 已按固定 `0.29.0` 契约接入 `/files` 上传和 file-source/file-content Prompt；历史文件与媒体由 Main 添加 Bearer 后以 Blob 预览。Assistant 文本已支持 GFM、代码高亮、KaTeX、Mermaid 和 Workspace 文件路径点击，边界见 [ADR 0012](./adr/0012-attachment-media-and-markdown-boundary.md)。本地图片使用 Main 的 Session FS 受限读取（cwd 内、10 MiB、base64 二进制、未截断），远程 Markdown 图片默认不自动请求。Conversation TOC、Compact、Undo、Cron notice 与 transcript marker 已接入，边界见 [ADR 0013](./adr/0013-kimi-web-conversation-controls-and-local-image-boundary.md)；其中 Compact 的真实会话回归和 token 统计展示仍待补齐。
+实现状态：Attachment 已按固定 `0.29.0` 契约接入 `/files` 上传和 file-source/file-content Prompt；历史文件与媒体由 Main 添加 Bearer 后以 Blob 预览。Assistant 文本已支持 GFM、代码高亮、KaTeX、Mermaid 和 Workspace 文件路径点击，边界见 [ADR 0012](./adr/0012-attachment-media-and-markdown-boundary.md)。本地图片使用 Main 的 Session FS 受限读取（cwd 内、10 MiB、base64 二进制、未截断），远程 Markdown 图片默认不自动请求；托管 Runtime 集成测试已读取真实 Workspace 图片。Conversation TOC、Compact、Undo、Cron notice 与 transcript marker 已接入；Compact marker 会在上游 payload 提供时展示 `tokensBefore → tokensAfter`，真实托管 Session 已回归 Compact/Undo，边界见 [ADR 0013](./adr/0013-kimi-web-conversation-controls-and-local-image-boundary.md)。
 
 ## 5. Agent、任务和运行模式
 
@@ -94,7 +94,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | MCP 状态              | `/mcp/servers`                   | P0       | 列表、状态、重启                                 |
 | Tools 列表            | `/tools`                         | P0       | 用于诊断和能力展示                               |
 
-实现状态：Session `/status`、真实 Model picker、模型能力相关 Thinking effort、Permission、Plan 与 Swarm 已接入；普通文本和浏览器批注 Prompt 均携带当前控制字段。Prompt Queue 已按官方边界区分可编辑/重排的本地 Draft 和 Kimi 已接收队列，见 [ADR 0011](./adr/0011-prompt-queue-local-draft-boundary.md)。`/tasks`、Goal 创建/读取/控制也已接入。Composer 的 `@` 入口会经 Kimi Session FS 搜索当前 Workspace，支持空查询、200 ms 防抖、键盘选择和路径插入；它只把路径作为普通 Prompt 文本的一部分，不伪造 Kimi 未声明的结构化 mention 协议。Transcript 的 authoritative `todos` 会投影到 Changes 下半部的“计划”，并从已识别的 `todo_list` tool display 实时更新；后续 resync 以 Server 结果覆盖本地视图。BTW Side Chat 以官方 Web `:btw` 创建的 agent 为目标，通过同一 Session 的 `agent_id` Prompt 独立流式呈现，不污染主 Transcript，边界见 [ADR 0014](./adr/0014-kimi-web-btw-side-chat-boundary.md)。Agent roster 可打开只读 Detail Panel，按 Kimi `agent_id` Transcript 展示状态、独立输出和详细用量，且伪造 Agent ID 会在 Main 的 REST 调用前被拒绝，见 [ADR 0015](./adr/0015-kimi-agent-detail-transcript-boundary.md)。Workspace 添加/重命名/移除，以及 Session 搜索/分页/创建/改名/归档/恢复/Fork/Children/Export/warnings 已形成真实 Kimi 生命周期链路。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
+实现状态：Session `/status`、真实 Model picker、模型能力相关 Thinking effort、Permission、Plan 与 Swarm 已接入；普通文本和浏览器批注 Prompt 均携带当前控制字段。Prompt Queue 已按官方边界区分可编辑/重排的本地 Draft 和 Kimi 已接收队列，见 [ADR 0011](./adr/0011-prompt-queue-local-draft-boundary.md)。`/tasks`、Goal 创建/读取/控制也已接入。Composer 的 `@` 入口会经 Kimi Session FS 搜索当前 Workspace，支持空查询、200 ms 防抖、键盘选择和路径插入；它只把路径作为普通 Prompt 文本的一部分，不伪造 Kimi 未声明的结构化 mention 协议，见 [ADR 0016](./adr/0016-kimi-web-file-mention-boundary.md)。Transcript 的 authoritative `todos` 会投影到 Changes 下半部的“计划”，并从已识别的 `todo_list` tool display 实时更新；后续 resync 以 Server 结果覆盖本地视图。BTW Side Chat 以官方 Web `:btw` 创建的 agent 为目标，通过同一 Session 的 `agent_id` Prompt 独立流式呈现，不污染主 Transcript，边界见 [ADR 0014](./adr/0014-kimi-web-btw-side-chat-boundary.md)。Agent roster 可打开只读 Detail Panel，按 Kimi `agent_id` Transcript 展示状态、独立输出和详细用量，且伪造 Agent ID 会在 Main 的 REST 调用前被拒绝，见 [ADR 0015](./adr/0015-kimi-agent-detail-transcript-boundary.md)。Workspace 添加/重命名/移除，以及 Session 搜索/分页/创建/改名/归档/恢复/Fork/Children/Export/warnings 已形成真实 Kimi 生命周期链路。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
 
 ## 6. 文件、Git、Diff 与终端
 
@@ -114,7 +114,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Terminal list/create/get/close | `/terminals`        | P0       | Session 绑定，多 Terminal      |
 | Terminal stream/resize/input   | WS terminal frames  | P0       | PTY 只做终端，不作为 Kimi 协议 |
 
-实现状态：文件区已使用 Kimi Session FS 的 `search`、`grep`、下载、`open`、`open-in` 和 `reveal`；搜索到的目录进入目录，HTML 文件仍统一路由到内置浏览器。下载内容只在 Main 通过原生保存对话框写入用户选择的位置，Renderer 不直接取得本机写入权限。Terminal 已提供中栏底部抽屉、多标签、创建/关闭、ANSI、输入、Resize、输出 replay、Session 切换 Detach 与 `⌘J`。Kimi `0.29.0` v2 服务端会静默丢弃已声明的 Terminal WS 帧，当前托管版本按 [ADR 0004](./adr/0004-kimi-v2-terminal-compatibility.md) 使用 Session cwd 约束的 Main PTY 兼容层；Agent 与 Transcript 路径没有降级。
+实现状态：文件区已使用 Kimi Session FS 的 `search`、`grep`、下载、`open`、`open-in` 和 `reveal`；搜索到的目录进入目录，HTML 文件仍统一路由到内置浏览器。下载内容只在 Main 通过原生保存对话框写入用户选择的位置，Renderer 不直接取得本机写入权限。Tool event 的官方 `display.kind === "diff"` 在 Transcript 中保留经过预算和去敏的 before/after，并在 Tool Diff 专用视图中呈现，不与 Workspace Git Diff 混合。Terminal 已提供中栏底部抽屉、多标签、创建/关闭、ANSI、输入、Resize、输出 replay、Session 切换 Detach 与 `⌘J`。Kimi `0.29.0` v2 服务端会静默丢弃已声明的 Terminal WS 帧，当前托管版本按 [ADR 0004](./adr/0004-kimi-v2-terminal-compatibility.md) 使用 Session cwd 约束的 Main PTY 兼容层；Agent 与 Transcript 路径没有降级。
 
 ## 7. Provider、Config 和设置
 
@@ -132,7 +132,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Telemetry 开关        | Settings           | P0       | 尊重 Kimi 官方设置，不增加默认追踪        |
 | Archived sessions     | Settings           | P0       | 浏览和恢复                                |
 
-实现状态：Model/Provider/Auth/Config 已接入真实 Runtime，覆盖目录读取、默认模型、单个/全部/OAuth 模型刷新、Provider 添加、device-code 登录/轮询/取消/登出，以及 telemetry、默认 Permission/Plan、Skill merge 白名单设置。Kimi `0.29.0` v2 没有 Provider 删除 REST 路由，客户端按 [ADR 0005](./adr/0005-kimi-v2-provider-mutation-boundary.md) 禁止用遮盖凭据后的 Config 全量回写模拟删除；该项等待上游补齐。
+实现状态：Model/Provider/Auth/Config 已接入真实 Runtime，覆盖目录读取、默认模型、单个/全部/OAuth 模型刷新、Provider 添加、device-code 登录/轮询/取消/登出，以及 telemetry、默认 Permission/Plan、Skill merge 白名单设置。运行时弹窗可启动托管 Kimi 或连接用户声明的受 Bearer 保护外部 Server；token 只短暂进入 Main 内存，并经 health/meta 验证后使用。已打开 Session 收到 Kimi 全局 Workspace、Session 或 Config WebSocket 广播后，会以受控 REST 重读左栏与 Settings，且全局重连/gap 同样会收敛；边界见 [ADR 0017](./adr/0017-kimi-global-state-invalidation-boundary.md)。设置页保存 zh-CN/en-US locale、任务完成通知和通知声音；locale 会切换静态产品 UI、原生通知、日期/数字格式和页面语言语义，而不会翻译 Kimi 返回的对话、工具输出或文件内容。Kimi `0.29.0` v2 没有 Provider 删除 REST 路由，客户端按 [ADR 0005](./adr/0005-kimi-v2-provider-mutation-boundary.md) 禁止用遮盖凭据后的 Config 全量回写模拟删除；该项等待上游补齐。
 
 ## 8. 在官方基线上的新增能力
 

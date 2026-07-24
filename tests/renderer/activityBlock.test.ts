@@ -72,4 +72,23 @@ describe('ActivityBlock', () => {
 
     expect(wrapper.get('.activity-details').text()).toContain('permission denied')
   })
+
+  it('renders a bounded Tool Diff separately from the current Workspace Diff', async () => {
+    const wrapper = mount(ActivityBlock, {
+      props: {
+        activity: {
+          id: 'tool-diff-1', kind: 'tool', label: 'Edit', description: 'src/App.vue', status: 'done',
+          toolDiff: {
+            path: 'src/App.vue', before: '<h1>Old</h1>', after: '<h1>New</h1>', hunks: 1
+          }
+        }
+      }
+    })
+
+    await wrapper.get('.activity-row').trigger('click')
+    expect(wrapper.get('.tool-diff-panel').text()).toContain('工具 Diff')
+    expect(wrapper.get('.tool-diff-panel').text()).toContain('src/App.vue')
+    expect(wrapper.get('.tool-diff-columns').text()).toContain('<h1>Old</h1>')
+    expect(wrapper.get('.tool-diff-columns').text()).toContain('<h1>New</h1>')
+  })
 })

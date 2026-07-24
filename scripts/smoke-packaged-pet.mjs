@@ -5,10 +5,10 @@ import { join, resolve } from 'node:path'
 const marker = 'KIMI_PACKAGED_PET_OK'
 const appPath = resolve(process.argv[2] ?? defaultAppPath())
 const executable = process.platform === 'darwin'
-  ? join(appPath, 'Contents', 'MacOS', 'Kimi Agent')
+  ? join(appPath, 'Contents', 'MacOS', 'Moon Code')
   : appPath
 
-if (!existsSync(executable)) throw new Error(`Packaged Kimi Agent executable is missing: ${executable}`)
+if (!existsSync(executable)) throw new Error(`Packaged Moon Code executable is missing: ${executable}`)
 
 const child = spawn(executable, ['--smoke-pet'], {
   cwd: process.cwd(),
@@ -41,5 +41,5 @@ process.stdout.write(`${marker}\n`)
 
 function defaultAppPath() {
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
-  return join('release', `mac-${arch}`, 'Kimi Agent.app')
+  return join('release', `mac-${arch}`, 'Moon Code.app')
 }

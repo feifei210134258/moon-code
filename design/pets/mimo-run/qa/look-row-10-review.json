@@ -1,0 +1,60 @@
+{
+  "ok": true,
+  "source_row": "decoded/look-row-10.png",
+  "final_atlas": "final/spritesheet-extended.webp",
+  "edge_check": "passed during deterministic extended-atlas assembly",
+  "continuity": "passed labeled normal-size ordered review",
+  "warnings": [
+    "157.5 to 180 and 337.5 to 000 are metric outliers, but the normal-size ordered loop shows no visible snap, scale pop, identity break, or registration jump"
+  ],
+  "directions": [
+    {
+      "direction": "180",
+      "expected": "down",
+      "verdict": "pass",
+      "reason": "both complete eye globes and eyelids aim unmistakably downward while the torso remains planted"
+    },
+    {
+      "direction": "202.5",
+      "expected": "down-left",
+      "verdict": "pass",
+      "reason": "lowered eyes retain a small screen-left shift and begin a continuous turn away from 180"
+    },
+    {
+      "direction": "225",
+      "expected": "down-left",
+      "verdict": "pass",
+      "reason": "eye and face placement move further screen-left while preserving the downward cue"
+    },
+    {
+      "direction": "247.5",
+      "expected": "down-left",
+      "verdict": "pass",
+      "reason": "the face is clearly left-biased with a remaining lowered-eye cue one step before 270"
+    },
+    {
+      "direction": "270",
+      "expected": "left",
+      "verdict": "pass",
+      "reason": "eye globes, nose, and visible face surface aim unmistakably toward screen-left"
+    },
+    {
+      "direction": "292.5",
+      "expected": "up-left",
+      "verdict": "pass",
+      "reason": "screen-left face bias remains clear as the complete eye globes begin to rise"
+    },
+    {
+      "direction": "315",
+      "expected": "up-left",
+      "verdict": "pass",
+      "reason": "raised eyes and face position carry both the upward and screen-left axes"
+    },
+    {
+      "direction": "337.5",
+      "expected": "up-left",
+      "verdict": "pass",
+      "reason": "strong upward gaze retains a small screen-left component and lands coherently one step before 000"
+    }
+  ]
+}

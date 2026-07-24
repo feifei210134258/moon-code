@@ -1,8 +1,8 @@
-# Kimi Agent Desktop 产品需求文档
+# Moon Code 产品需求文档
 
 ## 1. 产品定义
 
-Kimi Agent Desktop 是 Kimi Code 的本地桌面工作台。它保留 Kimi Code Web 的全部用户能力，在此基础上提供更高密度的 Codex 风格桌面 UI、开发浏览器、HTML 画面反馈、桌宠多 Session 状态以及套餐用量监控。
+Moon Code 是 Kimi Code 的本地桌面工作台。它保留 Kimi Code Web 的全部用户能力，在此基础上提供更高密度的 Codex 风格桌面 UI、开发浏览器、HTML 画面反馈、桌宠多 Session 状态以及套餐用量监控。
 
 “Codex 风格”只描述视觉布局和交互模型：Workspace/Session 导航、Turn 式对话、Changes 面板、任务状态和桌宠。运行内核、Session、Prompt、审批、工具及协议均来自 Kimi Code。
 

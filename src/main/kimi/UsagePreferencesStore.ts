@@ -6,7 +6,10 @@ export const DEFAULT_USAGE_PREFERENCES: KimiUsagePreferences = {
   infoThreshold: 0.5,
   warningThreshold: 0.8,
   criticalThreshold: 0.95,
-  systemNotifications: true
+  systemNotifications: true,
+  turnNotifications: true,
+  notificationSound: true,
+  locale: 'zh-CN'
 }
 
 export class UsagePreferencesStore {
@@ -45,7 +48,26 @@ export function validateUsagePreferences(value: unknown): KimiUsagePreferences {
     !(infoThreshold < warningThreshold && warningThreshold < criticalThreshold)
   ) throw new TypeError('Invalid usage thresholds')
   if (typeof record.systemNotifications !== 'boolean') throw new TypeError('Invalid usage notification preference')
-  return { infoThreshold, warningThreshold, criticalThreshold, systemNotifications: record.systemNotifications }
+  const turnNotifications = record.turnNotifications === undefined
+    ? DEFAULT_USAGE_PREFERENCES.turnNotifications!
+    : record.turnNotifications
+  const notificationSound = record.notificationSound === undefined
+    ? DEFAULT_USAGE_PREFERENCES.notificationSound!
+    : record.notificationSound
+  const locale = record.locale === undefined ? DEFAULT_USAGE_PREFERENCES.locale! : record.locale
+  if (typeof turnNotifications !== 'boolean' || typeof notificationSound !== 'boolean') {
+    throw new TypeError('Invalid Kimi turn notification preference')
+  }
+  if (locale !== 'zh-CN' && locale !== 'en-US') throw new TypeError('Invalid Kimi locale preference')
+  return {
+    infoThreshold,
+    warningThreshold,
+    criticalThreshold,
+    systemNotifications: record.systemNotifications,
+    turnNotifications,
+    notificationSound,
+    locale
+  }
 }
 
 function threshold(value: unknown): number | null {

@@ -52,6 +52,34 @@ afterEach(() => {
 })
 
 describe('SettingsPanel', () => {
+  it('reloads the visible settings from Kimi after a cross-client Config invalidation', async () => {
+    const updated = {
+      ...snapshot,
+      preferences: { ...snapshot.preferences, defaultModel: 'kimi-fast' }
+    }
+    const api = {
+      getKimiSettings: vi.fn()
+        .mockResolvedValueOnce(snapshot)
+        .mockResolvedValueOnce(updated)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: {
+        open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1',
+        usage, configRevision: 0
+      },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.setProps({ configRevision: 1 })
+    await flushPromises()
+
+    expect(api.getKimiSettings).toHaveBeenCalledTimes(2)
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    expect(wrapper.findAll('.model-row')[1]!.classes()).toContain('is-selected')
+    wrapper.unmount()
+  })
+
   it('loads Kimi-owned settings and updates the default model', async () => {
     const updated = {
       ...snapshot,
@@ -227,6 +255,32 @@ describe('SettingsPanel', () => {
       systemNotifications: true
     })
     expect(wrapper.text()).toContain('用量阈值已保存在本机')
+    wrapper.unmount()
+  })
+
+  it('keeps Language, turn notifications, and notification sound as local product preferences', async () => {
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      updateKimiUsagePreferences: vi.fn(async (preferences) => ({ ...usage, preferences }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('.settings-nav button')[5]!.trigger('click')
+    const notificationToggles = wrapper.findAll('.preference-row input[type="checkbox"]')
+    await notificationToggles[1]!.setValue(false)
+    await notificationToggles[2]!.setValue(false)
+    await wrapper.findAll('.settings-nav button')[7]!.trigger('click')
+    await wrapper.get('.preference-row select').setValue('en-US')
+    await flushPromises()
+
+    expect(api.updateKimiUsagePreferences).toHaveBeenCalledWith(expect.objectContaining({ turnNotifications: false }))
+    expect(api.updateKimiUsagePreferences).toHaveBeenCalledWith(expect.objectContaining({ notificationSound: false }))
+    expect(api.updateKimiUsagePreferences).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en-US' }))
     wrapper.unmount()
   })
 

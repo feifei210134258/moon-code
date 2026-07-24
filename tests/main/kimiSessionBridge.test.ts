@@ -160,6 +160,30 @@ class FakeRuntime extends EventEmitter {
 }
 
 describe('KimiSessionBridge terminals', () => {
+  it('relays Kimi global navigation and config invalidations without exposing config payloads', async () => {
+    const socket = new FakeSocket()
+    const runtime = new FakeRuntime(socket)
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    const events: unknown[] = []
+    bridge.on('global-state-changed', (event) => events.push(event))
+
+    socket.emit('session-event', {
+      type: 'event.workspace.created', seq: 1, epoch: 'global-1', session_id: '__global__',
+      timestamp: '2026-07-24T01:00:00.000Z', payload: { workspace: { id: 'workspace-2' } }
+    })
+    socket.emit('session-event', {
+      type: 'event.config.changed', seq: 2, epoch: 'global-1', session_id: '__global__',
+      timestamp: '2026-07-24T01:00:01.000Z', payload: { config: { raw: { api_key: 'never-forwarded' } } }
+    })
+
+    expect(events).toEqual([
+      { scope: 'navigation', eventType: 'event.workspace.created' },
+      { scope: 'config', eventType: 'event.config.changed' }
+    ])
+    await bridge.close()
+  })
+
   it('only reads transcripts for authoritative subagents in the active Kimi Session', async () => {
     const runtime = new FakeRuntime(new FakeSocket())
     runtime.snapshotSubagents = [{

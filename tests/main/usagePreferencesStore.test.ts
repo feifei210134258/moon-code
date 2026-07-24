@@ -17,7 +17,10 @@ describe('UsagePreferencesStore', () => {
       infoThreshold: 0.45,
       warningThreshold: 0.75,
       criticalThreshold: 0.9,
-      systemNotifications: false
+      systemNotifications: false,
+      turnNotifications: false,
+      notificationSound: false,
+      locale: 'en-US' as const
     }
     await store.save(preferences)
     await expect(store.load()).resolves.toEqual(preferences)
@@ -32,5 +35,11 @@ describe('UsagePreferencesStore', () => {
     const path = join(root, 'usage.json')
     await writeFile(path, '{bad json')
     await expect(new UsagePreferencesStore(path).load()).resolves.toEqual(DEFAULT_USAGE_PREFERENCES)
+  })
+
+  it('migrates existing threshold-only preferences to safe notification and locale defaults', () => {
+    expect(validateUsagePreferences({
+      infoThreshold: 0.5, warningThreshold: 0.8, criticalThreshold: 0.95, systemNotifications: true
+    })).toEqual(DEFAULT_USAGE_PREFERENCES)
   })
 })
