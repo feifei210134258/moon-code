@@ -64,6 +64,19 @@ const thinkingOptions = computed(() => {
   if (efforts.length > 0) return efforts
   return [props.controls?.thinking || 'off']
 })
+const slashQuery = computed(() => {
+  const match = /^\/([^\s]*)$/.exec(value.value)
+  return match?.[1]?.toLocaleLowerCase() ?? null
+})
+const filteredSkills = computed(() => {
+  const query = slashQuery.value
+  if (query === null || query.length === 0) return props.skills
+  return props.skills.filter((skill) => {
+    const name = skill.name.toLocaleLowerCase()
+    const description = skill.description.toLocaleLowerCase()
+    return name.includes(query) || description.includes(query)
+  })
+})
 
 function submit(): void {
   if (
@@ -125,6 +138,17 @@ function toggleCommands(): void {
     optionsOpen.value = false
     closeMention()
   }
+}
+
+function onComposerInput(): void {
+  if (slashQuery.value !== null && props.disabled !== true) {
+    commandOpen.value = true
+    optionsOpen.value = false
+    closeMention()
+    return
+  }
+  commandOpen.value = false
+  queueMentionSearch()
 }
 
 function chooseSkill(skill: KimiSkill): void {
@@ -254,6 +278,26 @@ function mentionIcon(item: WorkspaceFileSearchItem) {
   return item.kind === 'directory' ? PhFolderOpen : PhFile
 }
 
+function thinkingLabel(effort: string): string {
+  return {
+    off: '关闭',
+    low: '低',
+    medium: '中',
+    high: '高',
+    xhigh: '超高',
+    max: '最高'
+  }[effort.trim().toLocaleLowerCase()] ?? effort
+}
+
+function skillSourceLabel(source: KimiSkill['source']): string {
+  return {
+    project: '项目',
+    user: '个人',
+    extra: '扩展',
+    builtin: '内置'
+  }[source]
+}
+
 defineExpose({ loadDraft })
 
 function onKeydown(event: KeyboardEvent): void {
@@ -300,18 +344,21 @@ onBeforeUnmount(closeMention)
       <div v-if="attachmentPending" class="composer-attachment-chip is-loading"><PhSpinnerGap class="spin" :size="15" /><span>正在上传到 Kimi…</span></div>
     </div>
     <div v-if="attachmentError" class="composer-attachment-error" role="alert">{{ attachmentError }}</div>
-    <textarea
-      ref="input"
-      v-model="value"
-      rows="1"
-      :placeholder="disabled ? disabledReason : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
-      :disabled="disabled"
-      aria-label="输入任务"
-      aria-autocomplete="list"
-      @keydown="onKeydown"
-      @input="queueMentionSearch"
-    />
-    <div v-if="goalMode" class="goal-mode-banner"><strong>Goal</strong><span>下一条消息会创建 Kimi Goal 并立即开始执行</span></div>
+    <div class="composer-input-area">
+      <slot name="session-actions" />
+      <textarea
+        ref="input"
+        v-model="value"
+        rows="1"
+        :placeholder="disabled ? disabledReason : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
+        :disabled="disabled"
+        aria-label="输入任务"
+        aria-autocomplete="list"
+        @keydown="onKeydown"
+        @input="onComposerInput"
+      />
+    </div>
+    <div v-if="goalMode" class="goal-mode-banner"><strong>目标</strong><span>下一条消息会创建持续目标并立即开始执行</span></div>
     <div class="composer-actions">
       <div class="composer-primary-tools">
         <button type="button" aria-label="添加附件" :disabled="disabled || attachmentPending" @click="pickAttachments"><PhPaperclip :size="19" /></button>
@@ -330,7 +377,7 @@ onBeforeUnmount(closeMention)
           :disabled="disabled"
           @click="toggleCommands"
         >/</button>
-        <button type="button" aria-label="打开终端" title="Terminal · ⌘J" :disabled="disabled" @click="emit('toggleTerminal')">
+        <button type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="disabled" @click="emit('toggleTerminal')">
           <PhTerminalWindow :size="19" />
         </button>
       </div>
@@ -374,60 +421,61 @@ onBeforeUnmount(closeMention)
 
     <div v-if="optionsOpen" class="composer-popover" aria-label="Kimi 会话控制">
       <label>
-        <span>Model</span>
+        <span>模型</span>
         <select :value="controls?.model" :disabled="disabled || controls === null" @change="updateModel">
           <option v-for="model in models" :key="model.id" :value="model.id">{{ model.displayName }}</option>
         </select>
       </label>
       <label>
-        <span>Thinking</span>
+        <span>思考强度</span>
         <select :value="controls?.thinking" :disabled="disabled || controls === null" @change="updateThinking">
-          <option v-for="effort in thinkingOptions" :key="effort" :value="effort">{{ effort }}</option>
+          <option v-for="effort in thinkingOptions" :key="effort" :value="effort">{{ thinkingLabel(effort) }}</option>
         </select>
       </label>
       <label>
-        <span>Permission</span>
+        <span>权限模式</span>
         <select :value="controls?.permissionMode" :disabled="disabled || controls === null" @change="updatePermission">
-          <option value="manual">Manual</option>
-          <option value="auto">Auto</option>
-          <option value="yolo">YOLO</option>
+          <option value="manual">手动确认</option>
+          <option value="auto">自动确认</option>
+          <option value="yolo">完全自动</option>
         </select>
       </label>
       <label class="composer-toggle-row">
-        <span><strong>Plan</strong><small>独立规划模式</small></span>
+        <span><strong>规划模式</strong><small>独立规划后再执行</small></span>
         <input type="checkbox" :checked="controls?.planMode" :disabled="disabled || controls === null" @change="updateBoolean('planMode', $event)">
       </label>
       <label class="composer-toggle-row is-goal">
-        <span><strong>Goal</strong><small>将下一条消息设为持续目标</small></span>
+        <span><strong>目标模式</strong><small>将下一条消息设为持续目标</small></span>
         <input type="checkbox" :checked="goalMode" :disabled="disabled" @change="emit('updateGoalMode', ($event.target as HTMLInputElement).checked)">
       </label>
       <label class="composer-toggle-row">
-        <span><strong>Swarm</strong><small>多 Agent 协作</small></span>
+        <span><strong>协作模式</strong><small>多 Agent 协作</small></span>
         <input type="checkbox" :checked="controls?.swarmMode" :disabled="disabled || controls === null" @change="updateBoolean('swarmMode', $event)">
       </label>
     </div>
 
-    <div v-if="commandOpen" class="command-popover" role="listbox" aria-label="Kimi Skills">
-      <header><strong>Skills</strong><span>输入参数后按 Enter 激活</span></header>
-      <div v-if="skillsPending" class="command-empty">正在读取 Kimi Skills…</div>
-      <div v-else-if="skills.length === 0" class="command-empty">当前 Session 没有可用 Skill</div>
+    <div v-if="commandOpen" class="command-popover" role="listbox" aria-label="Kimi 技能">
+      <header><strong>技能</strong><span>输入参数后按回车激活</span></header>
+      <div v-if="skillsPending" class="command-empty">正在读取 Kimi 技能…</div>
+      <div v-else-if="skills.length === 0" class="command-empty">当前会话没有可用技能</div>
+      <div v-else-if="filteredSkills.length === 0" class="command-empty">没有匹配的技能</div>
       <template v-else>
         <button
-          v-for="skill in skills"
+          v-for="skill in filteredSkills"
           :key="skill.name"
           type="button"
           role="option"
           @click="chooseSkill(skill)"
         >
           <span><strong>/{{ skill.name }}</strong><small>{{ skill.description || '无描述' }}</small></span>
-          <em>{{ skill.source }}</em>
+          <em>{{ skillSourceLabel(skill.source) }}</em>
         </button>
       </template>
     </div>
 
     <div v-if="mentionOpen" class="mention-popover" role="listbox" aria-label="项目文件引用">
       <header><strong>项目文件</strong><span>选择后插入路径</span></header>
-      <div v-if="mentionLoading" class="command-empty"><PhSpinnerGap class="spin" :size="15" />正在搜索 Kimi Workspace…</div>
+      <div v-if="mentionLoading" class="command-empty"><PhSpinnerGap class="spin" :size="15" />正在搜索 Kimi 工作区…</div>
       <div v-else-if="mentionItems.length === 0" class="command-empty">没有匹配的文件</div>
       <template v-else>
         <div

@@ -4,10 +4,8 @@ import {
   PhCaretDown,
   PhFolderSimple,
   PhGitBranch,
-  PhMagnifyingGlass,
   PhSidebarSimple,
-  PhArrowClockwise,
-  PhUserCircle
+  PhArrowClockwise
 } from '@phosphor-icons/vue'
 import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary } from '@shared/contracts'
 import { rendererLocale } from '../i18n/rendererLocale'
@@ -20,13 +18,17 @@ const props = defineProps<{
   gitBranch: string | null
   usage: KimiUsageState
   sessionUsage: SessionUsageSummary | null
+  contextOpen: boolean
   usageOpen: boolean
+  extensionsOpen: boolean
 }>()
 
 defineEmits<{
   toggleRuntime: []
-  openSettings: []
+  chooseWorkspace: []
+  toggleContext: []
   toggleUsage: []
+  toggleExtensions: []
   refreshUsage: []
 }>()
 
@@ -90,17 +92,16 @@ function updatedLabel(value: string | null): string {
     </div>
 
     <div class="topbar-context">
-      <button class="topbar-item" type="button">
+      <button class="topbar-item" type="button" aria-label="选择项目文件夹" @click="$emit('chooseWorkspace')">
         <PhFolderSimple :size="17" weight="regular" />
         <span>{{ workspaceName }}</span>
         <PhCaretDown :size="12" />
       </button>
       <span class="topbar-divider" />
-      <button class="topbar-item" type="button">
+      <span class="topbar-item topbar-readout" :title="gitBranch || '非 Git 项目'">
         <PhGitBranch :size="17" />
         <span>{{ gitBranch || '非 Git 项目' }}</span>
-        <PhCaretDown :size="12" />
-      </button>
+      </span>
       <span class="topbar-divider" />
       <button
         class="runtime-status topbar-item"
@@ -111,12 +112,11 @@ function updatedLabel(value: string | null): string {
       >
         <span class="status-dot" />
         <span>{{ runtimeLabel }}</span>
-        <PhCaretDown :size="12" />
       </button>
     </div>
 
     <div class="topbar-actions">
-      <button class="usage-pill" :class="usageTone(contextRatio)" type="button" aria-label="查看 Context 用量" aria-controls="usage-popover" :aria-expanded="usageOpen" @click="$emit('toggleUsage')">
+      <button class="usage-pill" :class="usageTone(contextRatio)" type="button" aria-label="查看 Context 用量" aria-controls="context-popover" :aria-expanded="contextOpen" @click="$emit('toggleContext')">
         <span>Context</span>
         <strong>{{ percent(contextRatio) }}</strong>
         <span class="usage-track"><span :style="{ width: percent(contextRatio) }" /></span>
@@ -127,17 +127,32 @@ function updatedLabel(value: string | null): string {
         <span v-if="usage.phase === 'stale'" class="muted">· 已过期</span>
         <span v-else-if="tightestWindow?.resetHint" class="muted">· {{ tightestWindow.resetHint }}</span>
       </button>
-      <button class="icon-button" type="button" aria-label="搜索">
-        <PhMagnifyingGlass :size="18" />
-      </button>
-      <button class="icon-button" type="button" aria-label="切换侧栏">
+      <button class="icon-button" type="button" :aria-label="extensionsOpen ? '收起扩展栏' : '展开扩展栏'" @click="$emit('toggleExtensions')">
         <PhSidebarSimple :size="19" />
       </button>
-      <button class="account-button" type="button" aria-label="账户" @click="$emit('openSettings')">
-        <PhUserCircle :size="25" weight="duotone" />
-        <PhCaretDown :size="11" />
-      </button>
-
+      <section v-if="contextOpen" id="context-popover" class="context-popover" aria-label="当前 Session Context 用量">
+        <header class="usage-popover-header">
+          <div>
+            <strong>Context 窗口</strong>
+            <span>当前 Session 的上下文占用</span>
+          </div>
+        </header>
+        <div class="usage-section">
+          <div class="usage-token-grid">
+            <span>Input <strong>{{ compactNumber(sessionUsage?.inputTokens ?? 0) }}</strong></span>
+            <span>Output <strong>{{ compactNumber(sessionUsage?.outputTokens ?? 0) }}</strong></span>
+            <span>Cache read <strong>{{ compactNumber(sessionUsage?.cacheReadTokens ?? 0) }}</strong></span>
+            <span>Cache create <strong>{{ compactNumber(sessionUsage?.cacheCreationTokens ?? 0) }}</strong></span>
+            <span v-if="sessionUsage?.totalCostUsd !== null && sessionUsage?.totalCostUsd !== undefined">Cost <strong>{{ usd(sessionUsage.totalCostUsd) }}</strong></span>
+            <span v-if="sessionUsage?.turnCount !== null && sessionUsage?.turnCount !== undefined">Turns <strong>{{ sessionUsage.turnCount }}</strong></span>
+          </div>
+          <div class="usage-context-row">
+            <span>Context</span>
+            <strong>{{ percent(contextRatio) }}</strong>
+            <span>{{ compactNumber(sessionUsage?.contextTokens ?? 0) }} / {{ compactNumber(sessionUsage?.contextLimit ?? 0) }}</span>
+          </div>
+        </div>
+      </section>
       <section v-if="usageOpen" id="usage-popover" class="usage-popover" aria-label="Kimi 用量详情">
         <header class="usage-popover-header">
           <div>
@@ -172,23 +187,6 @@ function updatedLabel(value: string | null): string {
               <span v-if="usage.extraUsage.monthlyChargeLimitEnabled">本月上限 {{ money(usage.extraUsage.monthlyChargeLimitCents, usage.extraUsage.currency) }}</span>
               <span v-else>未启用月度上限</span>
             </div>
-          </div>
-        </div>
-
-        <div class="usage-section">
-          <span class="usage-section-label">当前 Session</span>
-          <div class="usage-token-grid">
-            <span>Input <strong>{{ compactNumber(sessionUsage?.inputTokens ?? 0) }}</strong></span>
-            <span>Output <strong>{{ compactNumber(sessionUsage?.outputTokens ?? 0) }}</strong></span>
-            <span>Cache read <strong>{{ compactNumber(sessionUsage?.cacheReadTokens ?? 0) }}</strong></span>
-            <span>Cache create <strong>{{ compactNumber(sessionUsage?.cacheCreationTokens ?? 0) }}</strong></span>
-            <span v-if="sessionUsage?.totalCostUsd !== null && sessionUsage?.totalCostUsd !== undefined">Cost <strong>{{ usd(sessionUsage.totalCostUsd) }}</strong></span>
-            <span v-if="sessionUsage?.turnCount !== null && sessionUsage?.turnCount !== undefined">Turns <strong>{{ sessionUsage.turnCount }}</strong></span>
-          </div>
-          <div class="usage-context-row">
-            <span>Context</span>
-            <strong>{{ percent(contextRatio) }}</strong>
-            <span>{{ compactNumber(sessionUsage?.contextTokens ?? 0) }} / {{ compactNumber(sessionUsage?.contextLimit ?? 0) }}</span>
           </div>
         </div>
 

@@ -46,11 +46,7 @@ const baseProps = {
   },
   browserPending: false,
   browserError: null,
-  browserNetworkDetails: null,
-  browserNetworkDetailsPending: false,
-  browserCapture: null,
-  browserLocalServers: [],
-  browserLocalServersPending: false
+  browserCapture: null
 }
 
 describe('ExtensionsPanel', () => {
@@ -62,6 +58,16 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.findAll('.diff-code .added')).toHaveLength(1)
     await wrapper.get('.changed-file-row').trigger('click')
     expect(wrapper.emitted('selectDiff')).toEqual([['src/app.ts']])
+  })
+
+  it('keeps Diff collapsed until a changed file is selected, giving the plan room to expand', () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: { ...baseProps, fileDiff: null }
+    })
+
+    expect(wrapper.find('.diff-panel').exists()).toBe(false)
+    expect(wrapper.get('.changes-view').classes()).toContain('is-diff-collapsed')
+    expect(wrapper.get('.todo-panel').text()).toContain('计划')
   })
 
   it('replaces the Plan placeholder with authoritative cancellable Kimi Tasks', async () => {
@@ -110,6 +116,26 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.emitted('openEntry')?.[0]?.[0]).toEqual(expect.objectContaining({ path: 'src', kind: 'directory' }))
     expect(wrapper.emitted('openEntry')?.[1]?.[0]).toEqual(expect.objectContaining({ path: 'README.md', kind: 'file' }))
     expect(wrapper.get('.file-preview-code').text()).toContain('# Kimi Agent')
+  })
+
+  it('keeps the parent directory label visible and colors HTML file icons blue', () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: {
+        ...baseProps,
+        activeTab: 'files',
+        fileList: {
+          ...baseProps.fileList,
+          path: 'src/pages',
+          items: [{
+            path: 'src/pages/index.html', name: 'index.html', kind: 'file' as const, size: 42,
+            modifiedAt: null, mime: 'text/html', languageId: 'html', isBinary: false, gitStatus: null, childCount: null
+          }]
+        }
+      }
+    })
+
+    expect(wrapper.get('.file-parent-row').text()).toContain('返回上一级')
+    expect(wrapper.get('.file-row .is-html-file').classes()).toContain('is-html-file')
   })
 
   it('shows binary previews as a safe degradation instead of injecting base64', () => {
@@ -186,34 +212,22 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.emitted('revealFile')).toEqual([['README.md']])
   })
 
-  it('renders Browser navigation and diagnostics from projected Main state', async () => {
+  it('keeps the browser focused on screenshot and annotation controls', async () => {
     const wrapper = mount(ExtensionsPanel, {
       props: {
         ...baseProps,
         activeTab: 'browser',
         browserState: {
           ...baseProps.browserState,
-          url: 'http://localhost:5173/',
-          canGoBack: true,
-          consoleEntries: [{
-            id: 'console-1', level: 'info' as const, text: 'ready', source: 'app.js', line: 2, timestamp: 1
-          }],
-          networkEntries: [{
-            id: 'network-1', requestId: '1', url: 'http://localhost:5173/app.js', method: 'GET',
-            status: 200, type: 'Script', mimeType: 'text/javascript', durationMs: 12, size: 20,
-            failed: false, errorText: null
-          }]
+          url: 'http://localhost:5173/'
         }
       }
     })
 
-    expect(wrapper.get('.browser-address input').element.getAttribute('value') ?? (wrapper.get('.browser-address input').element as HTMLInputElement).value)
-      .toContain('localhost:5173')
-    expect(wrapper.get('.browser-console').text()).toContain('ready')
-    await wrapper.get('[aria-label="后退"]').trigger('click')
-    expect(wrapper.emitted('browserBack')).toEqual([[]])
-    await wrapper.findAll('.browser-diagnostics > header button')[1]!.trigger('click')
-    await wrapper.get('.browser-network > button').trigger('click')
-    expect(wrapper.emitted('browserNetworkDetails')).toEqual([['1']])
+    expect(wrapper.find('.browser-diagnostics').exists()).toBe(false)
+    await wrapper.get('[aria-label="窗口截图"]').trigger('click')
+    await wrapper.get('[aria-label="框选区域"]').trigger('click')
+    expect(wrapper.emitted('browserCapturePage')).toEqual([[false]])
+    expect(wrapper.emitted('browserPickAnnotation')).toEqual([['region']])
   })
 })

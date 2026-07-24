@@ -24,6 +24,8 @@ describe('MarkdownBlock', () => {
           '',
           '打开 src/app/index.html:12 查看。',
           '',
+          '也可以查看 `src/components/Card.tsx:8`。',
+          '',
           '```ts',
           'const ready: boolean = true',
           '```',
@@ -40,6 +42,7 @@ describe('MarkdownBlock', () => {
     expect(wrapper.find('.katex').exists()).toBe(true)
     const fileLink = wrapper.get('.markdown-file-link')
     expect(fileLink.attributes('data-workspace-path')).toBe('src/app/index.html')
+    expect(wrapper.get('code.markdown-file-inline').text()).toBe('src/components/Card.tsx:8')
     await fileLink.trigger('click')
     expect(wrapper.emitted('openFile')).toEqual([['src/app/index.html']])
   })

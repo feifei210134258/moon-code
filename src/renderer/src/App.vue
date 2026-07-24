@@ -48,7 +48,6 @@ const runtimeBridge = useRuntimeBridge()
 const browserBridge = useBrowserBridge()
 const usageBridge = useUsageBridge()
 const settingsOpen = ref(showSettingsFixture)
-const runtimeConnectOpen = ref(false)
 const showInteractionFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('interaction-fixture')
 const showActivityFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('activity-fixture')
 const showBrowserFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('browser-fixture')
@@ -58,6 +57,7 @@ const showSideChatFixture = import.meta.env.DEV && new URLSearchParams(window.lo
 const showAgentFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('agent-fixture')
 const showMentionFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('mention-fixture')
 const usageOpen = ref(showUsageFixture)
+const contextOpen = ref(false)
 const usageSessionFixture = ref<SessionUsageSummary | null>(null)
 const operationalStateFixture = ref<KimiSessionOperationalState | null>(null)
 const localPromptQueueFixtureState = ref<LocalPromptDraft[] | null>(null)
@@ -174,19 +174,26 @@ function submitBrowserAnnotation(input: BrowserAnnotationSubmitInput): void {
 
 function openSettings(): void {
   usageOpen.value = false
+  contextOpen.value = false
   settingsOpen.value = true
 }
 
-function toggleRuntime(): void {
-  if (runtimeBridge.runtime.value.status === 'running') {
-    void runtimeBridge.toggle()
-    return
-  }
-  runtimeConnectOpen.value = true
+function toggleContext(): void {
+  contextOpen.value = !contextOpen.value
+  usageOpen.value = false
 }
 
-async function connectExternalRuntime(origin: string, token: string): Promise<void> {
-  if (await runtimeBridge.connectExternalRuntime(origin, token)) runtimeConnectOpen.value = false
+function toggleUsage(): void {
+  usageOpen.value = !usageOpen.value
+  contextOpen.value = false
+}
+
+function toggleExtensions(): void {
+  store.rightPanelOpen = !store.rightPanelOpen
+}
+
+function toggleRuntime(): void {
+  void runtimeBridge.toggle()
 }
 
 async function addWorkspace(): Promise<void> {
@@ -335,9 +342,10 @@ function selectChangedFile(path: string): void {
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && usageOpen.value) {
+  if (event.key === 'Escape' && (usageOpen.value || contextOpen.value)) {
     event.preventDefault()
     usageOpen.value = false
+    contextOpen.value = false
     return
   }
   if (event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
@@ -503,10 +511,14 @@ onBeforeUnmount(() => {
       :git-branch="runtimeBridge.gitStatus.value?.branch ?? null"
       :usage="usageBridge.state.value"
       :session-usage="usageSessionFixture ?? activeSessionView?.usage ?? null"
+      :context-open="contextOpen"
       :usage-open="usageOpen"
+      :extensions-open="rightPanelOpen"
       @toggle-runtime="toggleRuntime"
-      @open-settings="openSettings"
-      @toggle-usage="usageOpen = !usageOpen"
+      @choose-workspace="addWorkspace"
+      @toggle-context="toggleContext"
+      @toggle-usage="toggleUsage"
+      @toggle-extensions="toggleExtensions"
       @refresh-usage="usageBridge.refresh"
     />
 
@@ -525,7 +537,6 @@ onBeforeUnmount(() => {
         @toggle-project="store.toggleProject"
         @select-session="store.selectSession"
         @create-session="createSession"
-        @add-workspace="addWorkspace"
         @rename-workspace="runtimeBridge.renameWorkspace"
         @delete-workspace="runtimeBridge.deleteWorkspace"
         @rename-session="runtimeBridge.renameSession"
@@ -644,11 +655,7 @@ onBeforeUnmount(() => {
           :browser-state="browserBridge.state.value"
           :browser-pending="browserBridge.pending.value"
           :browser-error="browserBridge.error.value"
-          :browser-network-details="browserBridge.networkDetails.value"
-          :browser-network-details-pending="browserBridge.networkDetailsPending.value"
           :browser-capture="browserBridge.capture.value"
-          :browser-local-servers="browserBridge.localServers.value"
-          :browser-local-servers-pending="browserBridge.localServersPending.value"
           :browser-annotation-drafts="browserBridge.annotationDrafts.value"
           :browser-annotation-picking="browserBridge.annotationPicking.value"
           :browser-annotation-submitting="browserBridge.annotationSubmitting.value"
@@ -671,20 +678,11 @@ onBeforeUnmount(() => {
           @select-diff="selectChangedFile"
           @refresh="runtimeBridge.refreshWorkspaceContext(activeSessionId)"
           @browser-bounds="browserBridge.setBounds"
-          @browser-navigate="browserBridge.navigate"
-          @browser-back="browserBridge.back"
-          @browser-forward="browserBridge.forward"
-          @browser-reload="browserBridge.reload"
-          @browser-stop="browserBridge.stop"
           @browser-viewport="browserBridge.setViewport"
-          @browser-clear-console="browserBridge.clearConsole"
-          @browser-clear-network="browserBridge.clearNetwork"
-          @browser-network-details="browserBridge.loadNetworkDetails"
           @browser-capture-page="browserBridge.capturePage"
           @browser-pick-annotation="browserBridge.pickAnnotation"
           @browser-delete-annotation="browserBridge.deleteAnnotation"
           @browser-submit-annotation="submitBrowserAnnotation"
-          @browser-open-external="browserBridge.openExternal"
           @cancel-task="cancelTask"
           @collapse="store.rightPanelOpen = false"
         />
@@ -710,12 +708,11 @@ onBeforeUnmount(() => {
       @session-restored="selectRestoredSession"
     />
     <RuntimeConnectDialog
-      :open="runtimeConnectOpen"
+      :open="runtimeBridge.runtime.value.status === 'error'"
       :pending="runtimeBridge.pending.value"
       :error="runtimeBridge.runtime.value.status === 'error' ? runtimeBridge.runtime.value.error : null"
-      @close="runtimeConnectOpen = false"
-      @start-managed="runtimeBridge.toggle"
-      @connect-external="connectExternalRuntime"
+      :missing="runtimeBridge.discovery.value?.system.executable === null"
+      @retry="runtimeBridge.toggle"
     />
   </div>
 </template>

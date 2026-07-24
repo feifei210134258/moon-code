@@ -164,6 +164,10 @@ if (process.argv.includes('--smoke-node-pty')) {
     })
     petWindows.start()
     mainWindow = createMainWindow()
+    // Moon Code uses the Kimi Code CLI installed by the user. Start it as
+    // soon as the application opens so the renderer can use its sessions
+    // without asking the user to choose a connection method.
+    void runtime.start('system')
 
     app.on('activate', () => {
       if (mainWindow === null) mainWindow = createMainWindow()

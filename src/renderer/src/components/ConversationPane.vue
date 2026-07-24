@@ -247,55 +247,6 @@ watch(
 <template>
   <section class="conversation-pane">
     <div class="conversation-header-stack">
-      <div class="conversation-toolbar">
-      <div class="conversation-toolbar-title">会话</div>
-      <div class="conversation-toolbar-actions">
-        <button
-          type="button"
-          class="conversation-tool-button"
-          :aria-expanded="tocOpen"
-          :disabled="turns.length === 0"
-          @click="tocOpen = !tocOpen"
-        ><PhListBullets :size="14" />目录</button>
-        <button
-          type="button"
-          class="conversation-tool-button"
-          :disabled="phase !== 'ready' || sideChatPending || sideChat !== null"
-          @click="emit('startSideChat')"
-        ><PhChatCircleText :size="14" />BTW</button>
-        <details class="conversation-action-menu">
-          <summary class="conversation-tool-button">会话操作<PhCaretDown :size="12" /></summary>
-          <div class="conversation-action-popover">
-            <label>
-              <span>压缩说明（可选）</span>
-              <input v-model="compactInstruction" type="text" maxlength="4000" placeholder="例如：保留当前实现约束" />
-            </label>
-            <button
-              type="button"
-              :disabled="phase !== 'ready' || promptRunning || conversationActionPending !== null"
-              @click="requestCompact"
-            >
-              <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="13" />
-              压缩上下文
-            </button>
-            <button
-              type="button"
-              :disabled="phase !== 'ready' || promptRunning || conversationActionPending !== null || turns.length === 0"
-              @click="emit('undo')"
-            >
-              <PhSpinnerGap v-if="conversationActionPending === 'undo'" class="spin" :size="13" />
-              撤销上一轮
-            </button>
-          </div>
-        </details>
-      </div>
-      <div v-if="tocOpen" class="conversation-toc" role="dialog" aria-label="会话目录">
-        <strong>会话目录</strong>
-        <button v-for="item in tocItems" :key="item.id" type="button" @click="scrollToTurn(item.id)">
-          <span>{{ item.label }}</span><small>{{ item.time }}</small>
-        </button>
-      </div>
-      </div>
       <div v-if="conversationActionError" class="conversation-action-error" role="alert">{{ conversationActionError }}</div>
       <GoalStrip
         v-if="goal"
@@ -444,7 +395,58 @@ watch(
         @activate-skill="(skillName, args) => emit('activateSkill', skillName, args)"
         @update-controls="emit('updatePromptControls', $event)"
         @update-goal-mode="emit('updateGoalMode', $event)"
-      />
+      >
+        <template #session-actions>
+          <div class="composer-session-actions" aria-label="会话操作">
+            <button
+              type="button"
+              class="conversation-tool-button"
+              :aria-expanded="tocOpen"
+              :disabled="turns.length === 0"
+              title="会话目录"
+              @click="tocOpen = !tocOpen"
+            ><PhListBullets :size="14" /><span>目录</span></button>
+            <button
+              type="button"
+              class="conversation-tool-button"
+              :disabled="phase !== 'ready' || sideChatPending || sideChat !== null"
+              title="发起 BTW 侧边会话"
+              @click="emit('startSideChat')"
+            ><PhChatCircleText :size="14" /><span>BTW</span></button>
+            <details class="conversation-action-menu">
+              <summary class="conversation-tool-button" title="会话操作"><span>会话操作</span><PhCaretDown :size="12" /></summary>
+              <div class="conversation-action-popover">
+                <label>
+                  <span>压缩说明（可选）</span>
+                  <input v-model="compactInstruction" type="text" maxlength="4000" placeholder="例如：保留当前实现约束" />
+                </label>
+                <button
+                  type="button"
+                  :disabled="phase !== 'ready' || promptRunning || conversationActionPending !== null"
+                  @click="requestCompact"
+                >
+                  <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="13" />
+                  压缩上下文
+                </button>
+                <button
+                  type="button"
+                  :disabled="phase !== 'ready' || promptRunning || conversationActionPending !== null || turns.length === 0"
+                  @click="emit('undo')"
+                >
+                  <PhSpinnerGap v-if="conversationActionPending === 'undo'" class="spin" :size="13" />
+                  撤销上一轮
+                </button>
+              </div>
+            </details>
+            <div v-if="tocOpen" class="conversation-toc" role="dialog" aria-label="会话目录">
+              <strong>会话目录</strong>
+              <button v-for="item in tocItems" :key="item.id" type="button" @click="scrollToTurn(item.id)">
+                <span>{{ item.label }}</span><small>{{ item.time }}</small>
+              </button>
+            </div>
+          </div>
+        </template>
+      </ComposerBar>
     </div>
   </section>
 </template>

@@ -21,22 +21,42 @@ function createClient() {
       default_model: 'kimi-for-coding',
       managed_provider: { name: 'managed:kimi-code', status: 'authenticated' as const }
     })),
-    listModels: vi.fn(async () => [{
-      provider: 'managed:kimi-code',
-      model: 'kimi-for-coding',
-      display_name: 'Kimi for Coding',
-      max_context_size: 262_144,
-      capabilities: ['thinking'],
-      support_efforts: ['off', 'high'],
-      default_effort: 'high'
-    }]),
-    listProviders: vi.fn(async () => [{
-      id: 'managed:kimi-code',
-      type: 'kimi',
-      has_api_key: true,
-      status: 'connected' as const,
-      models: ['kimi-for-coding']
-    }]),
+    listModels: vi.fn(async () => [
+      {
+        provider: 'managed:kimi-code',
+        model: 'kimi-for-coding',
+        display_name: 'Kimi for Coding',
+        max_context_size: 262_144,
+        capabilities: ['thinking'],
+        support_efforts: ['off', 'high'],
+        default_effort: 'high'
+      },
+      {
+        provider: 'local:openai',
+        model: 'local-coder',
+        display_name: 'Local Coder',
+        max_context_size: 131_072,
+        capabilities: [],
+        support_efforts: [],
+        default_effort: null
+      }
+    ]),
+    listProviders: vi.fn(async () => [
+      {
+        id: 'managed:kimi-code',
+        type: 'kimi',
+        has_api_key: true,
+        status: 'connected' as const,
+        models: ['kimi-for-coding']
+      },
+      {
+        id: 'local:openai',
+        type: 'openai',
+        has_api_key: true,
+        status: 'connected' as const,
+        models: ['local-coder']
+      }
+    ]),
     getConfig: vi.fn(async () => config),
     setDefaultModel: vi.fn(async () => ({})),
     setConfig: vi.fn(async () => config),
@@ -78,6 +98,8 @@ describe('KimiSettingsBridge', () => {
       capabilities: expect.objectContaining({ canAddProvider: true, canDeleteProvider: false })
     }))
     expect(JSON.stringify(snapshot)).not.toContain('api_key')
+    expect(snapshot.models.map((model) => model.id)).toEqual(['kimi-for-coding'])
+    expect(snapshot.providers.map((provider) => provider.id)).toEqual(['managed:kimi-code'])
 
     await bridge.addProvider({
       id: 'local:openai',

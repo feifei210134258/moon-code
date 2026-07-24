@@ -180,8 +180,9 @@ function decodeLocalSource(source: string): string {
 }
 
 function installFilePathLinks(markdownRenderer: MarkdownIt): void {
-  const extensions = '(?:html?|css|m?[jt]sx?|vue|py|go|rs|java|md|markdown|json|ya?ml|toml|sql|sh|zsh|txt|png|jpe?g|gif|webp|svg)'
+  const extensions = '(?:html?|css|s[ac]ss|less|m?[jt]sx?|c[jt]sx?|vue|svelte|astro|py|go|rs|java|kt|kts|swift|c|cc|cpp|cxx|h|hpp|cs|php|rb|lua|r|sh|bash|zsh|fish|ps1|sql|graphql|gql|md|mdx|markdown|txt|log|csv|tsv|jsonc?|ya?ml|toml|ini|cfg|conf|xml|xsd|xsl|svg|png|jpe?g|gif|webp|avif|ico|pdf|docx?|xlsx?|pptx?|zip|tar|gz|tgz|lock)'
   const pattern = new RegExp(`((?:\\.{0,2}\\/)?(?:[\\w.@+-]+\\/)*[\\w.@+-]+\\.${extensions})(?::\\d+(?::\\d+)?)?`, 'gi')
+  const inlineFilePattern = new RegExp(`(?:^|\\s)((?:\\.{0,2}\\/)?(?:[\\w.@+-]+\\/)*[\\w.@+-]+\\.${extensions})(?::\\d+(?::\\d+)?)?(?=$|\\s)`, 'i')
   markdownRenderer.core.ruler.after('inline', 'kimi_file_paths', (state) => {
     for (const block of state.tokens) {
       if (block.type !== 'inline' || block.children === null) continue
@@ -189,6 +190,9 @@ function installFilePathLinks(markdownRenderer: MarkdownIt): void {
       let linkDepth = 0
       for (const token of block.children) {
         if (token.type === 'link_open') linkDepth += 1
+        if (token.type === 'code_inline' && inlineFilePattern.test(token.content)) {
+          token.attrJoin('class', 'markdown-file-inline')
+        }
         if (token.type !== 'text' || linkDepth > 0) {
           next.push(token)
           if (token.type === 'link_close') linkDepth = Math.max(0, linkDepth - 1)

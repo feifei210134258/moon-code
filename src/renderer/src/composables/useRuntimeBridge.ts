@@ -390,7 +390,7 @@ export function useRuntimeBridge() {
     try {
       runtime.value = runtime.value.status === 'running'
         ? await window.kimiAgent.stopRuntime()
-        : await window.kimiAgent.startRuntime('managed')
+        : await window.kimiAgent.startRuntime('system')
       if (runtime.value.status === 'running') await refreshWorkspaceTree()
     } finally {
       pending.value = false

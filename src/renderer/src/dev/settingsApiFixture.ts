@@ -17,7 +17,7 @@ const runtime: RuntimePublicState = {
 const snapshot: KimiSettingsSnapshot = {
   auth: {
     ready: true,
-    providersCount: 2,
+    providersCount: 1,
     defaultModel: 'kimi-for-coding',
     managedProvider: { name: 'managed:kimi-code', status: 'authenticated' }
   },
@@ -29,10 +29,6 @@ const snapshot: KimiSettingsSnapshot = {
     {
       id: 'kimi-k2.5', providerId: 'managed:kimi-code', displayName: 'Kimi K2.5',
       maxContextSize: 262_144, capabilities: ['thinking', 'vision'], supportEfforts: ['low', 'high'], defaultEffort: 'high'
-    },
-    {
-      id: 'local-coder', providerId: 'local:openai', displayName: 'Local Coder',
-      maxContextSize: 131_072, capabilities: [], supportEfforts: [], defaultEffort: null
     }
   ],
   providers: [
@@ -40,10 +36,6 @@ const snapshot: KimiSettingsSnapshot = {
       id: 'managed:kimi-code', type: 'kimi', baseUrl: 'https://api.kimi.com/coding/v1',
       defaultModel: 'kimi-for-coding', hasCredential: true, status: 'connected',
       models: ['kimi-for-coding', 'kimi-k2.5']
-    },
-    {
-      id: 'local:openai', type: 'openai', baseUrl: 'http://127.0.0.1:11434/v1',
-      defaultModel: null, hasCredential: true, status: 'connected', models: ['local-coder']
     }
   ],
   preferences: {

@@ -5,15 +5,17 @@ import { describe, expect, it } from 'vitest'
 import RuntimeConnectDialog from '../../src/renderer/src/components/RuntimeConnectDialog.vue'
 
 describe('RuntimeConnectDialog', () => {
-  it('clears the token field immediately after submitting a typed external connection', async () => {
-    const wrapper = mount(RuntimeConnectDialog, { props: { open: true, pending: false, error: null }, global: { stubs: { Teleport: true } } })
-    const inputs = wrapper.findAll('input')
-    await inputs[0]!.setValue('https://kimi.example.com')
-    await inputs[1]!.setValue('secret-token')
-    await wrapper.get('form').trigger('submit')
-    await wrapper.vm.$nextTick()
+  it('guides the user to install Kimi Code instead of offering runtime choices', async () => {
+    const wrapper = mount(RuntimeConnectDialog, {
+      props: { open: true, pending: false, error: '未发现系统 Kimi Code', missing: true },
+      global: { stubs: { Teleport: true } }
+    })
 
-    expect(wrapper.emitted('connectExternal')).toEqual([['https://kimi.example.com', 'secret-token']])
-    expect((wrapper.get('input[type="password"]').element as HTMLInputElement).value).toBe('')
+    expect(wrapper.text()).toContain('需要安装 Kimi Code CLI')
+    expect(wrapper.get('.runtime-install-command').text()).toContain('npm install -g @moonshot-ai/kimi-code')
+    expect(wrapper.find('input').exists()).toBe(false)
+
+    await wrapper.get('.primary-button').trigger('click')
+    expect(wrapper.emitted('retry')).toEqual([[]])
   })
 })

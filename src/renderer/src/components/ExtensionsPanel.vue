@@ -23,7 +23,6 @@ import type {
   BrowserAnnotationSubmitInput,
   BrowserBounds,
   BrowserCaptureResult,
-  BrowserNetworkDetails,
   BrowserViewState,
   BrowserViewport,
   KimiBackgroundTask,
@@ -67,11 +66,7 @@ const props = withDefaults(defineProps<{
   browserState: BrowserViewState
   browserPending: boolean
   browserError: string | null
-  browserNetworkDetails: BrowserNetworkDetails | null
-  browserNetworkDetailsPending: boolean
   browserCapture: BrowserCaptureResult | null
-  browserLocalServers: string[]
-  browserLocalServersPending: boolean
   browserAnnotationDrafts?: BrowserAnnotationDraft[]
   browserAnnotationPicking?: boolean
   browserAnnotationSubmitting?: boolean
@@ -117,20 +112,11 @@ const emit = defineEmits<{
   selectDiff: [path: string]
   refresh: []
   browserBounds: [bounds: BrowserBounds]
-  browserNavigate: [url: string]
-  browserBack: []
-  browserForward: []
-  browserReload: []
-  browserStop: []
   browserViewport: [viewport: BrowserViewport]
-  browserClearConsole: []
-  browserClearNetwork: []
-  browserNetworkDetails: [requestId: string]
   browserCapturePage: [fullPage: boolean]
   browserPickAnnotation: [mode: BrowserAnnotationMode]
   browserDeleteAnnotation: [draftId: string]
   browserSubmitAnnotation: [input: BrowserAnnotationSubmitInput]
-  browserOpenExternal: []
   cancelTask: [taskId: string]
 }>()
 
@@ -176,6 +162,11 @@ function fileIcon(entry: WorkspaceFileEntry) {
   if (extension === 'ts' || extension === 'tsx') return PhFileTs
   if (extension === 'js' || extension === 'jsx' || extension === 'mjs') return PhFileJs
   return PhFile
+}
+
+function isHtmlFile(entry: WorkspaceFileEntry): boolean {
+  const extension = entry.name.split('.').pop()?.toLowerCase()
+  return entry.kind === 'file' && (extension === 'html' || extension === 'htm')
 }
 
 function statusLabel(status: string): string {
@@ -271,7 +262,11 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       >浏览器</button>
     </div>
 
-    <div v-if="activeTab === 'changes'" class="extension-content changes-view">
+    <div
+      v-if="activeTab === 'changes'"
+      class="extension-content changes-view"
+      :class="{ 'is-diff-collapsed': fileDiff === null && !fileDiffPending && fileDiffError === null }"
+    >
       <section class="changed-files-panel">
         <h2 v-if="gitStatus">
           {{ changedFiles.length }} 个文件已更改
@@ -295,7 +290,7 @@ function parseDiff(diff: string): RenderedDiffLine[] {
         <div v-if="gitStatus && changedFiles.length === 0" class="extension-state">工作区没有未提交更改。</div>
       </section>
 
-      <section class="diff-panel">
+      <section v-if="fileDiff || fileDiffPending || fileDiffError" class="diff-panel">
         <header>
           <strong>{{ fileDiff?.path ?? '选择文件查看 Diff' }}</strong>
           <button v-if="fileDiff" type="button" aria-label="复制 Diff" @click="copyDiff"><PhCopy :size="16" /></button>
@@ -402,8 +397,8 @@ function parseDiff(diff: string): RenderedDiffLine[] {
           <div v-if="fileGrep.truncated" class="diff-context">结果已按 Kimi Server 限制截断。</div>
         </template>
       </section>
-      <button v-if="parentPath" type="button" class="file-row" @click="emit('openDirectory', parentPath)">
-        <PhArrowUp :size="16" /><span>上一级</span>
+      <button v-if="parentPath" type="button" class="file-row file-parent-row" @click="emit('openDirectory', parentPath)">
+        <PhArrowUp :size="16" /><span>返回上一级</span>
       </button>
       <div v-if="fileListPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取目录…</div>
       <div v-else-if="fileListError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ fileListError }}</div>
@@ -417,7 +412,12 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       >
         <PhCaretRight v-if="entry.kind === 'directory'" :size="13" />
         <span v-else class="file-row-spacer" />
-        <component :is="fileIcon(entry)" :size="17" :weight="entry.kind === 'file' ? 'fill' : 'regular'" />
+        <component
+          :is="fileIcon(entry)"
+          :size="17"
+          :weight="entry.kind === 'file' ? 'fill' : 'regular'"
+          :class="{ 'is-html-file': isHtmlFile(entry) }"
+        />
         <span>{{ entry.name }}</span>
         <small v-if="entry.gitStatus && entry.gitStatus !== 'clean'" :class="`git-${entry.gitStatus}`">{{ statusLabel(entry.gitStatus) }}</small>
       </button>
@@ -454,30 +454,17 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       :state="browserState"
       :pending="browserPending"
       :error="browserError"
-      :network-details="browserNetworkDetails"
-      :network-details-pending="browserNetworkDetailsPending"
       :capture="browserCapture"
-      :local-servers="browserLocalServers"
-      :local-servers-pending="browserLocalServersPending"
       :annotation-drafts="browserAnnotationDrafts"
       :annotation-picking="browserAnnotationPicking"
       :annotation-submitting="browserAnnotationSubmitting"
       :annotation-error="browserAnnotationError"
       @bounds="emit('browserBounds', $event)"
-      @navigate="emit('browserNavigate', $event)"
-      @back="emit('browserBack')"
-      @forward="emit('browserForward')"
-      @reload="emit('browserReload')"
-      @stop="emit('browserStop')"
       @viewport="emit('browserViewport', $event)"
-      @clear-console="emit('browserClearConsole')"
-      @clear-network="emit('browserClearNetwork')"
-      @network-details="emit('browserNetworkDetails', $event)"
       @capture-page="emit('browserCapturePage', $event)"
       @pick-annotation="emit('browserPickAnnotation', $event)"
       @delete-annotation="emit('browserDeleteAnnotation', $event)"
       @submit-annotation="emit('browserSubmitAnnotation', $event)"
-      @open-external="emit('browserOpenExternal')"
     />
   </aside>
 </template>

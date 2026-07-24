@@ -38,6 +38,8 @@ function mountSidebar() {
 describe('ProjectSidebar', () => {
   it('searches sessions across projects and creates in the selected workspace', async () => {
     const wrapper = mountSidebar()
+    expect(wrapper.find('.sidebar-icon-button').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="添加项目"]').exists()).toBe(false)
     await wrapper.get('[aria-label="搜索任务"]').setValue('浏览器')
     expect(wrapper.text()).toContain('完善浏览器批注')
     expect(wrapper.text()).not.toContain('Landing Page')

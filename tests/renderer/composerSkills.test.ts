@@ -48,6 +48,26 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.emitted('submit')).toEqual([['/unknown continue', [], controls, false]])
   })
 
+  it('filters slash commands as the user types and shows a Chinese empty state', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models,
+        controls,
+        skills: [
+          { name: 'review', description: 'Review current changes', source: 'project', type: null, userInvocableOnly: false },
+          { name: 'release', description: 'Prepare a release', source: 'builtin', type: null, userInvocableOnly: false }
+        ]
+      }
+    })
+
+    await wrapper.get('textarea').setValue('/rev')
+    expect(wrapper.get('.command-popover').text()).toContain('/review')
+    expect(wrapper.get('.command-popover').text()).not.toContain('/release')
+
+    await wrapper.get('textarea').setValue('/missing')
+    expect(wrapper.get('.command-popover').text()).toContain('没有匹配的技能')
+  })
+
   it('keeps Stop available and allows a follow-up to enter the Kimi prompt queue', async () => {
     const wrapper = mount(ComposerBar, {
       props: { skills: [], models, controls, running: true }
@@ -64,7 +84,14 @@ describe('ComposerBar Skills menu', () => {
   it('uses the real model catalog and exposes independent Plan and Swarm controls', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('.model-summary').trigger('click')
-    expect(wrapper.get('.composer-popover').text()).toContain('Kimi for Coding')
+    const popover = wrapper.get('.composer-popover')
+    expect(popover.text()).toContain('Kimi for Coding')
+    expect(popover.text()).toContain('模型')
+    expect(popover.text()).toContain('思考强度')
+    expect(popover.text()).toContain('权限模式')
+    expect(popover.text()).toContain('规划模式')
+    expect(popover.text()).toContain('目标模式')
+    expect(popover.text()).toContain('协作模式')
     const toggles = wrapper.findAll('.composer-toggle-row input')
     await toggles[0]!.setValue(true)
     await toggles[2]!.setValue(true)

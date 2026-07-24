@@ -6,6 +6,11 @@ import ConversationPane from '../../src/renderer/src/components/ConversationPane
 
 function mountConversation() {
   return shallowMount(ConversationPane, {
+    global: {
+      stubs: {
+        ComposerBar: { template: '<div class="composer-bar-stub"><slot name="session-actions" /></div>' }
+      }
+    },
     props: {
       turns: [{
         id: 'turn-1', role: 'user' as const, author: 'You', time: '10:24',
@@ -53,6 +58,20 @@ function mountConversation() {
 }
 
 describe('Conversation controls', () => {
+  it('marks user turns for right-aligned bubble styling', () => {
+    const wrapper = mountConversation()
+    expect(wrapper.get('.turn').classes()).toContain('is-user')
+    expect(wrapper.find('.turn.is-user .turn-content').exists()).toBe(true)
+  })
+
+  it('removes the top conversation bar and keeps its actions with the composer', () => {
+    const wrapper = mountConversation()
+    expect(wrapper.find('.conversation-toolbar').exists()).toBe(false)
+    expect(wrapper.get('.composer-session-actions').text()).toContain('目录')
+    expect(wrapper.get('.composer-session-actions').text()).toContain('BTW')
+    expect(wrapper.get('.composer-session-actions').text()).toContain('会话操作')
+  })
+
   it('provides TOC navigation and projects authoritative transcript markers', async () => {
     const wrapper = mountConversation()
     expect(wrapper.text()).toContain('上下文已压缩')

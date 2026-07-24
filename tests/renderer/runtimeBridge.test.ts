@@ -43,6 +43,47 @@ afterEach(() => {
 })
 
 describe('useRuntimeBridge session races', () => {
+  it('reconnects through the detected system Kimi Code CLI', async () => {
+    const startRuntime = vi.fn(async () => ({
+      status: 'running' as const,
+      mode: 'system' as const,
+      version: '0.29.0',
+      serverId: 'server-1',
+      origin: 'http://127.0.0.1:1234',
+      error: null
+    }))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: { status: 'stopped' as const, mode: null, version: null, serverId: null, origin: null, error: null },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed' as const, version: '0.29.0', executable: '/managed-kimi', compatible: true, reason: null },
+          system: { kind: 'system' as const, version: '0.29.0', executable: '/usr/local/bin/kimi', compatible: true, reason: null }
+        }
+      })),
+      startRuntime,
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+
+    await bridge.toggle()
+
+    expect(startRuntime).toHaveBeenCalledWith('system')
+    expect(bridge.runtime.value.mode).toBe('system')
+    wrapper.unmount()
+  })
+
   it('coalesces cross-client navigation refreshes and exposes a Config revision without receiving config data', async () => {
     vi.useFakeTimers()
     let globalListener!: (event: { scope: 'navigation' | 'config'; eventType: string }) => void

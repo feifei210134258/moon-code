@@ -108,10 +108,9 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
-  it('submits provider credentials only through typed Kimi IPC and clears the field', async () => {
+  it('keeps settings focused on Kimi and hides Provider controls', async () => {
     const api = {
-      getKimiSettings: vi.fn(async () => snapshot),
-      addKimiProvider: vi.fn(async () => snapshot)
+      getKimiSettings: vi.fn(async () => snapshot)
     } as unknown as KimiAgentDesktopApi
     window.kimiAgent = api
     const wrapper = mount(SettingsPanel, {
@@ -120,23 +119,8 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[2]!.trigger('click')
-    await wrapper.get('.settings-title .icon-text-button').trigger('click')
-    const inputs = wrapper.findAll('.provider-form input')
-    await inputs[0]!.setValue('local:openai')
-    await inputs[1]!.setValue('http://127.0.0.1:11434/v1')
-    await inputs[2]!.setValue('secret-key')
-    await wrapper.get('.provider-form').trigger('submit')
-    await flushPromises()
-
-    expect(api.addKimiProvider).toHaveBeenCalledWith({
-      id: 'local:openai',
-      type: 'openai',
-      baseUrl: 'http://127.0.0.1:11434/v1',
-      apiKey: 'secret-key'
-    })
+    expect(wrapper.findAll('.settings-nav button').map((button) => button.text())).not.toContain('Provider')
     expect(wrapper.find('.provider-form').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('secret-key')
     wrapper.unmount()
   })
 
@@ -191,12 +175,12 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[3]!.trigger('click')
+    await wrapper.findAll('.settings-nav button')[2]!.trigger('click')
     await flushPromises()
     expect(api.listSessionSkills).toHaveBeenCalledWith('session-1')
     expect(wrapper.get('.skill-list').text()).toContain('/review')
 
-    await wrapper.findAll('.settings-nav button')[4]!.trigger('click')
+    await wrapper.findAll('.settings-nav button')[3]!.trigger('click')
     await flushPromises()
     expect(wrapper.get('.mcp-list').text()).toContain('github')
     expect(wrapper.get('.tool-list').text()).toContain('mcp__github__search')
@@ -223,7 +207,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[3]!.trigger('click')
+    await wrapper.findAll('.settings-nav button')[2]!.trigger('click')
     await flushPromises()
 
     expect(api.listWorkspaceSkills).toHaveBeenCalledWith('workspace-empty')
@@ -243,7 +227,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[5]!.trigger('click')
+    await wrapper.findAll('.settings-nav button')[4]!.trigger('click')
     const thresholds = wrapper.findAll('.preference-row input[type="number"]')
     expect(thresholds).toHaveLength(3)
     await thresholds[1]!.setValue('75')
@@ -270,11 +254,11 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[5]!.trigger('click')
+    await wrapper.findAll('.settings-nav button')[4]!.trigger('click')
     const notificationToggles = wrapper.findAll('.preference-row input[type="checkbox"]')
     await notificationToggles[1]!.setValue(false)
     await notificationToggles[2]!.setValue(false)
-    await wrapper.findAll('.settings-nav button')[7]!.trigger('click')
+    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
     await wrapper.get('.preference-row select').setValue('en-US')
     await flushPromises()
 
@@ -301,7 +285,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    await wrapper.findAll('.settings-nav button')[5]!.trigger('click')
     await flushPromises()
     expect(wrapper.get('.archive-session-list').text()).toContain('已归档任务')
     await wrapper.get('.archive-session-row button').trigger('click')

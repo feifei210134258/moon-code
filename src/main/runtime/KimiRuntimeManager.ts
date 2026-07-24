@@ -66,7 +66,7 @@ export class KimiRuntimeManager extends EventEmitter {
     })
   }
 
-  async start(mode: 'managed' | 'system' = 'managed'): Promise<RuntimePublicState> {
+  async start(mode: 'managed' | 'system' = 'system'): Promise<RuntimePublicState> {
     if (this.#state.status === 'running') {
       return this.state
     }

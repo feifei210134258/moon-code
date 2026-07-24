@@ -4,14 +4,12 @@ import {
   PhArrowClockwise,
   PhArrowCounterClockwise,
   PhCheck,
-  PhCloudArrowUp,
   PhCpu,
   PhChartDonut,
   PhGearSix,
   PhKey,
   PhMagicWand,
   PhPlugsConnected,
-  PhPlus,
   PhSignOut,
   PhSpinnerGap,
   PhX
@@ -21,7 +19,6 @@ import type {
   KimiOAuthFlow,
   KimiMcpServer,
   KimiPreferencesPatch,
-  KimiProviderType,
   KimiSettingsSnapshot,
   KimiSkill,
   KimiTool,
@@ -41,7 +38,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: []; sessionRestored: [sessionId: string] }>()
 
-type SettingsTab = 'account' | 'models' | 'providers' | 'skills' | 'tools' | 'usage' | 'archives' | 'general'
+type SettingsTab = 'account' | 'models' | 'skills' | 'tools' | 'usage' | 'archives' | 'general'
 const activeTab = ref<SettingsTab>('account')
 const snapshot = ref<KimiSettingsSnapshot | null>(null)
 const pending = ref(false)
@@ -49,17 +46,12 @@ const actionPending = ref<string | null>(null)
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 const oauthFlow = ref<KimiOAuthFlow | null>(null)
-const addProviderOpen = ref(false)
 const skills = ref<KimiSkill[]>([])
 const tools = ref<KimiTool[]>([])
 const mcpServers = ref<KimiMcpServer[]>([])
 const capabilitiesPending = ref(false)
 const archivedSessions = ref<SessionNavigationItem[]>([])
 const archivesPending = ref(false)
-const providerId = ref('')
-const providerType = ref<KimiProviderType>('openai')
-const providerBaseUrl = ref('')
-const providerApiKey = ref('')
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let oauthGeneration = 0
 let capabilitiesGeneration = 0
@@ -192,50 +184,22 @@ async function setDefaultModel(modelId: string): Promise<void> {
   }
 }
 
-async function refreshProviders(scope: 'all' | 'oauth' | 'provider', id?: string): Promise<void> {
+async function refreshModels(): Promise<void> {
   const api = window.kimiAgent
   if (api === undefined || actionPending.value !== null) return
-  actionPending.value = `refresh:${id ?? scope}`
+  actionPending.value = 'refresh:models'
   error.value = null
   notice.value = null
   try {
-    const result = await api.refreshKimiProviders({
-      scope,
-      ...(id === undefined ? {} : { providerId: id })
-    })
+    const result = await api.refreshKimiProviders({ scope: 'oauth' })
     await loadSettings()
     const changed = result.changed.reduce((count, item) => count + item.added + item.removed, 0)
     notice.value = result.failed.length > 0
-      ? `${result.failed.length} 个 Provider 刷新失败：${result.failed.map((item) => item.provider).join('、')}`
+      ? 'Kimi 模型目录刷新失败，请稍后重试。'
       : `模型目录已刷新${changed > 0 ? `，共 ${changed} 项变化` : '，没有变化'}。`
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
-    actionPending.value = null
-  }
-}
-
-async function addProvider(): Promise<void> {
-  const api = window.kimiAgent
-  if (api === undefined || actionPending.value !== null || providerId.value.trim().length === 0) return
-  actionPending.value = 'provider:add'
-  error.value = null
-  notice.value = null
-  try {
-    snapshot.value = await api.addKimiProvider({
-      id: providerId.value.trim(),
-      type: providerType.value,
-      ...(providerBaseUrl.value.trim().length === 0 ? {} : { baseUrl: providerBaseUrl.value.trim() }),
-      ...(providerApiKey.value.length === 0 ? {} : { apiKey: providerApiKey.value })
-    })
-    providerId.value = ''
-    providerBaseUrl.value = ''
-    addProviderOpen.value = false
-    notice.value = 'Provider 已交给 Kimi 保存并刷新；API Key 不会回传到界面。'
-  } catch (reason) {
-    error.value = errorMessage(reason)
-  } finally {
-    providerApiKey.value = ''
     actionPending.value = null
   }
 }
@@ -433,9 +397,6 @@ function errorMessage(reason: unknown): string {
             <button :class="{ 'is-active': activeTab === 'models' }" type="button" @click="activeTab = 'models'">
               <PhCpu :size="17" />模型
             </button>
-            <button :class="{ 'is-active': activeTab === 'providers' }" type="button" @click="activeTab = 'providers'">
-              <PhCloudArrowUp :size="17" />Provider
-            </button>
             <button :class="{ 'is-active': activeTab === 'skills' }" type="button" @click="activeTab = 'skills'">
               <PhMagicWand :size="17" />Skills
             </button>
@@ -498,7 +459,7 @@ function errorMessage(reason: unknown): string {
               <section v-else-if="activeTab === 'models'" class="settings-section">
                 <div class="settings-title">
                   <div><h2>默认模型</h2><p>影响新 Session；已有 Session 保留自己的模型。</p></div>
-                  <button class="icon-text-button" type="button" :disabled="actionPending !== null" @click="refreshProviders('all')">
+                  <button class="icon-text-button" type="button" :disabled="actionPending !== null" @click="refreshModels">
                     <PhArrowClockwise :class="{ spin: actionPending?.startsWith('refresh:') }" :size="15" />刷新目录
                   </button>
                 </div>
@@ -517,37 +478,6 @@ function errorMessage(reason: unknown): string {
                     <small>{{ Math.round(model.maxContextSize / 1024) }}k context</small>
                   </button>
                 </div>
-              </section>
-
-              <section v-else-if="activeTab === 'providers'" class="settings-section">
-                <div class="settings-title">
-                  <div><h2>Provider</h2><p>凭据只提交给 Kimi Server，界面只读取“已配置”。</p></div>
-                  <button class="icon-text-button" type="button" @click="addProviderOpen = !addProviderOpen"><PhPlus :size="15" />添加</button>
-                </div>
-                <form v-if="addProviderOpen" class="provider-form" @submit.prevent="addProvider">
-                  <label><span>ID</span><input v-model="providerId" required maxlength="128" placeholder="例如 local:openai" /></label>
-                  <label><span>类型</span><select v-model="providerType">
-                    <option value="openai">OpenAI</option><option value="openai_responses">OpenAI Responses</option>
-                    <option value="anthropic">Anthropic</option><option value="kimi">Kimi</option>
-                    <option value="google-genai">Google GenAI</option><option value="vertexai">Vertex AI</option>
-                  </select></label>
-                  <label><span>Base URL</span><input v-model="providerBaseUrl" maxlength="2048" placeholder="https://api.example.com/v1" /></label>
-                  <label><span>API Key</span><input v-model="providerApiKey" type="password" maxlength="8192" autocomplete="off" /></label>
-                  <div><button type="button" @click="addProviderOpen = false">取消</button><button class="primary-button" type="submit" :disabled="actionPending !== null">保存并刷新</button></div>
-                </form>
-                <div class="provider-list">
-                  <article v-for="provider in snapshot.providers" :key="provider.id" class="provider-row">
-                    <span class="provider-status" :class="`is-${provider.status}`" />
-                    <div><strong>{{ provider.id }}</strong><small>{{ provider.type }}<template v-if="provider.baseUrl"> · {{ provider.baseUrl }}</template></small></div>
-                    <span>{{ provider.models.length }} models</span>
-                    <button type="button" :disabled="actionPending !== null" @click="refreshProviders('provider', provider.id)">
-                      <PhArrowClockwise :class="{ spin: actionPending === `refresh:${provider.id}` }" :size="14" />
-                    </button>
-                  </article>
-                </div>
-                <p v-if="!snapshot.capabilities.canDeleteProvider" class="compatibility-note">
-                  {{ snapshot.capabilities.providerDeleteUnavailableReason }}
-                </p>
               </section>
 
               <section v-else-if="activeTab === 'skills'" class="settings-section">

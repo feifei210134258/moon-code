@@ -24,22 +24,34 @@ const sessionUsage: SessionUsageSummary = {
 }
 
 describe('TopBar usage', () => {
-  it('keeps plan, Extra Usage, Session tokens and Context visibly separate', async () => {
+  it('separates Context from Kimi plan usage and wires the actionable navigation controls', async () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage, sessionUsage, usageOpen: true
+        workspaceName: 'Kimi Agent', gitBranch: 'main', usage, sessionUsage,
+        contextOpen: true, usageOpen: false, extensionsOpen: true
       }
     })
 
     expect(wrapper.text()).toContain('82%')
-    expect(wrapper.text()).toContain('Extra Usage')
-    expect(wrapper.text()).toContain('余额')
+    expect(wrapper.get('.context-popover').text()).toContain('Context 窗口')
     expect(wrapper.text()).toContain('Input')
     expect(wrapper.text()).toContain('Cost')
     expect(wrapper.text()).toContain('Turns')
     expect(wrapper.text()).toContain('Context')
-    expect(wrapper.text()).toContain('准实时轮询')
+    expect(wrapper.find('.usage-popover').exists()).toBe(false)
+
+    await wrapper.get('[aria-label="选择项目文件夹"]').trigger('click')
+    expect(wrapper.emitted('chooseWorkspace')).toEqual([[]])
+    await wrapper.get('[aria-label="收起扩展栏"]').trigger('click')
+    expect(wrapper.emitted('toggleExtensions')).toEqual([[]])
+    await wrapper.get('[aria-label="查看 Context 用量"]').trigger('click')
+    expect(wrapper.emitted('toggleContext')).toEqual([[]])
+
+    await wrapper.setProps({ contextOpen: false, usageOpen: true })
+    expect(wrapper.get('.usage-popover').text()).toContain('Extra Usage')
+    expect(wrapper.get('.usage-popover').text()).toContain('余额')
+    expect(wrapper.get('.usage-popover').text()).toContain('准实时轮询')
 
     await wrapper.get('[aria-label="查看 Kimi 套餐用量"]').trigger('click')
     expect(wrapper.emitted('toggleUsage')).toHaveLength(1)

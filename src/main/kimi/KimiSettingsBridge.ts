@@ -32,6 +32,11 @@ export class KimiSettingsBridge {
       client.listProviders(),
       client.getConfig()
     ])
+    const kimiProviders = providers.filter((provider) => (
+      provider.type === 'kimi' || provider.id === auth.managed_provider?.name
+    ))
+    const kimiProviderIds = new Set(kimiProviders.map((provider) => provider.id))
+    if (auth.managed_provider !== null) kimiProviderIds.add(auth.managed_provider.name)
     return {
       auth: {
         ready: auth.ready,
@@ -42,8 +47,8 @@ export class KimiSettingsBridge {
           status: auth.managed_provider.status
         }
       },
-      models: models.map(mapModel),
-      providers: providers.map(mapProvider),
+      models: models.filter((model) => kimiProviderIds.has(model.provider)).map(mapModel),
+      providers: kimiProviders.map(mapProvider),
       preferences: mapPreferences(config),
       capabilities: {
         canAddProvider: true,

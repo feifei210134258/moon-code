@@ -6,14 +6,12 @@ import {
   PhCopy,
   PhDotsThree,
   PhDownloadSimple,
-  PhFolderPlus,
   PhFolderSimple,
   PhGearSix,
   PhGitFork,
   PhMagnifyingGlass,
   PhNotePencil,
   PhPencilSimple,
-  PhPlus,
   PhTrash,
   PhX
 } from '@phosphor-icons/vue'
@@ -37,7 +35,6 @@ const emit = defineEmits<{
   toggleProject: [projectId: string]
   selectSession: [sessionId: string]
   createSession: [workspaceId: string]
-  addWorkspace: []
   renameWorkspace: [workspaceId: string, name: string]
   deleteWorkspace: [workspaceId: string]
   renameSession: [sessionId: string, title: string]
@@ -133,9 +130,6 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
         <PhNotePencil :size="17" />
         <span>新建任务</span>
       </button>
-      <button class="sidebar-icon-button" type="button" aria-label="添加项目" :disabled="lifecyclePending !== null" @click="$emit('addWorkspace')">
-        <PhFolderPlus :size="17" />
-      </button>
     </div>
 
     <label class="session-search">
@@ -144,10 +138,7 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
       <button v-if="searchQuery" type="button" aria-label="清除搜索" @click="searchQuery = ''"><PhX :size="13" /></button>
     </label>
 
-    <div class="section-heading">
-      <span>项目</span>
-      <button type="button" aria-label="添加项目" :disabled="lifecyclePending !== null" @click="$emit('addWorkspace')"><PhPlus :size="14" /></button>
-    </div>
+    <div class="section-heading"><span>项目</span></div>
 
     <nav class="project-tree" aria-label="项目和任务">
       <section v-for="project in filteredProjects" :key="project.id" class="project-group">
