@@ -90,11 +90,11 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Background tasks      | `/tasks` + task events           | P0       | Running/Completed/Failed/Cancelled，支持取消     |
 | Skills 列表与激活     | Session/Workspace skills         | P0       | Slash 菜单和设置入口                             |
 | Slash commands        | `SlashMenu`                      | P0       | 与普通文本输入区分                               |
-| Mention menu          | `MentionMenu`                    | P0       | 文件和能力 mention                               |
+| Mention menu          | `MentionMenu`                    | P0       | 文件 mention；可调用能力由 Slash menu 处理       |
 | MCP 状态              | `/mcp/servers`                   | P0       | 列表、状态、重启                                 |
 | Tools 列表            | `/tools`                         | P0       | 用于诊断和能力展示                               |
 
-实现状态：Session `/status`、真实 Model picker、模型能力相关 Thinking effort、Permission、Plan 与 Swarm 已接入；普通文本和浏览器批注 Prompt 均携带当前控制字段。Prompt Queue 已按官方边界区分可编辑/重排的本地 Draft 和 Kimi 已接收队列，见 [ADR 0011](./adr/0011-prompt-queue-local-draft-boundary.md)。`/tasks`、Goal 创建/读取/控制也已接入。Transcript 的 authoritative `todos` 会投影到 Changes 下半部的“计划”，并从已识别的 `todo_list` tool display 实时更新；后续 resync 以 Server 结果覆盖本地视图。BTW Side Chat 以官方 Web `:btw` 创建的 agent 为目标，通过同一 Session 的 `agent_id` Prompt 独立流式呈现，不污染主 Transcript，边界见 [ADR 0014](./adr/0014-kimi-web-btw-side-chat-boundary.md)。Agent roster 可打开只读 Detail Panel，按 Kimi `agent_id` Transcript 展示状态、独立输出和详细用量，且伪造 Agent ID 会在 Main 的 REST 调用前被拒绝，见 [ADR 0015](./adr/0015-kimi-agent-detail-transcript-boundary.md)。Workspace 添加/重命名/移除，以及 Session 搜索/分页/创建/改名/归档/恢复/Fork/Children/Export/warnings 已形成真实 Kimi 生命周期链路。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
+实现状态：Session `/status`、真实 Model picker、模型能力相关 Thinking effort、Permission、Plan 与 Swarm 已接入；普通文本和浏览器批注 Prompt 均携带当前控制字段。Prompt Queue 已按官方边界区分可编辑/重排的本地 Draft 和 Kimi 已接收队列，见 [ADR 0011](./adr/0011-prompt-queue-local-draft-boundary.md)。`/tasks`、Goal 创建/读取/控制也已接入。Composer 的 `@` 入口会经 Kimi Session FS 搜索当前 Workspace，支持空查询、200 ms 防抖、键盘选择和路径插入；它只把路径作为普通 Prompt 文本的一部分，不伪造 Kimi 未声明的结构化 mention 协议。Transcript 的 authoritative `todos` 会投影到 Changes 下半部的“计划”，并从已识别的 `todo_list` tool display 实时更新；后续 resync 以 Server 结果覆盖本地视图。BTW Side Chat 以官方 Web `:btw` 创建的 agent 为目标，通过同一 Session 的 `agent_id` Prompt 独立流式呈现，不污染主 Transcript，边界见 [ADR 0014](./adr/0014-kimi-web-btw-side-chat-boundary.md)。Agent roster 可打开只读 Detail Panel，按 Kimi `agent_id` Transcript 展示状态、独立输出和详细用量，且伪造 Agent ID 会在 Main 的 REST 调用前被拒绝，见 [ADR 0015](./adr/0015-kimi-agent-detail-transcript-boundary.md)。Workspace 添加/重命名/移除，以及 Session 搜索/分页/创建/改名/归档/恢复/Fork/Children/Export/warnings 已形成真实 Kimi 生命周期链路。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
 
 ## 6. 文件、Git、Diff 与终端
 

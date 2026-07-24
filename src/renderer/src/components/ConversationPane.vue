@@ -16,7 +16,8 @@ import type {
   QuestionAnswerInput,
   QuestionRequestView,
   SessionAgentView,
-  SessionTranscriptMarker
+  SessionTranscriptMarker,
+  WorkspaceFileSearchItem
 } from '@shared/contracts'
 import ApprovalCard from './ApprovalCard.vue'
 import ActivityBlock from './ActivityBlock.vue'
@@ -77,6 +78,7 @@ const props = withDefaults(defineProps<{
   agentTranscript?: KimiAgentTranscript | null
   agentTranscriptPending?: boolean
   agentTranscriptError?: string | null
+  mentionSearch?: (query: string) => Promise<WorkspaceFileSearchItem[]>
 }>(), {
   sideChat: null,
   sideChatPending: false,
@@ -412,6 +414,7 @@ watch(
         :controls="promptControls"
         :controls-pending="controlsPending"
         :goal-mode="goalMode"
+        :mention-search="mentionSearch"
         :disabled-reason="controlsPending ? '正在读取 Kimi 会话控制…' : '连接 Kimi 并选择一个会话后即可输入'"
         @submit="(text, attachments, controls, goalMode) => emit('submit', text, attachments, controls, goalMode)"
         @abort="emit('abort')"

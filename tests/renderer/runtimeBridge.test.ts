@@ -377,6 +377,7 @@ describe('useRuntimeBridge session races', () => {
     await flushPromises()
     await bridge.openSession('session-one')
 
+    const mentionSearch = bridge.searchMentionFiles('App')
     const search = bridge.searchFiles('App')
     expect(bridge.fileSearchPending.value).toBe(true)
     bridge.clearActiveSession()
@@ -385,6 +386,7 @@ describe('useRuntimeBridge session races', () => {
       truncated: false
     })
     await search
+    await expect(mentionSearch).resolves.toEqual([])
     expect(bridge.fileSearch.value).toBeNull()
     expect(bridge.fileSearchError.value).toBeNull()
     expect(bridge.fileSearchPending.value).toBe(false)

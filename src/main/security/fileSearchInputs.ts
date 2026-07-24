@@ -8,7 +8,7 @@ export function validateFileSearchQuery(value: unknown, label: 'search' | 'grep'
     throw new TypeError(`Invalid Kimi file ${label} query`)
   }
   const query = value.trim()
-  if (query.length === 0) throw new TypeError(`Invalid Kimi file ${label} query`)
+  if (query.length === 0 && label === 'grep') throw new TypeError(`Invalid Kimi file ${label} query`)
   return query
 }
 

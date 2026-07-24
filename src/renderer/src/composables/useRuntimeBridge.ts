@@ -27,6 +27,7 @@ import type {
   WorkspaceFileDiff,
   WorkspaceFileList,
   WorkspaceFilePreview,
+  WorkspaceFileSearchItem,
   WorkspaceFileSearchResult,
   WorkspaceGrepResult,
   WorkspaceGitStatus,
@@ -758,6 +759,17 @@ export function useRuntimeBridge() {
     }
   }
 
+  const searchMentionFiles = async (query: string): Promise<WorkspaceFileSearchItem[]> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null) return []
+    try {
+      const result = await window.kimiAgent.searchFiles(sessionId, query)
+      return sessionId === requestedSessionId ? result.items.slice(0, 20) : []
+    } catch {
+      return []
+    }
+  }
+
   const searchFiles = async (query: string): Promise<void> => {
     const sessionId = requestedSessionId
     if (window.kimiAgent === undefined || sessionId === null || fileSearchPending.value) return
@@ -1262,6 +1274,7 @@ export function useRuntimeBridge() {
     dismissQuestion,
     loadDirectory,
     openFile,
+    searchMentionFiles,
     searchFiles,
     grepFiles,
     downloadWorkspaceFile,

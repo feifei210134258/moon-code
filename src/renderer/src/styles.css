@@ -2706,6 +2706,87 @@ select:focus-visible {
   text-align: center;
 }
 
+.mention-popover {
+  position: absolute;
+  left: 10px;
+  bottom: 54px;
+  z-index: 31;
+  width: min(420px, calc(100% - 20px));
+  max-height: 310px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 18px 44px rgba(45, 61, 80, 0.16);
+  backdrop-filter: blur(26px);
+}
+
+.mention-popover > header {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 9px;
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.mention-popover > header strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.mention-popover .command-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mention-item {
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  color: #526276;
+  cursor: pointer;
+}
+
+.mention-item.active,
+.mention-item:hover {
+  color: #315f9f;
+  background: rgba(37, 99, 235, 0.065);
+}
+
+.mention-item > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.mention-item strong,
+.mention-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mention-item strong { color: var(--text); font-size: 11px; }
+.mention-item small { color: var(--muted); font-size: 9.5px; }
+.mention-item em {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-style: normal;
+}
+
 .agent-roster {
   width: calc(100% - 46px);
   max-width: 810px;

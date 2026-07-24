@@ -8,8 +8,9 @@ import {
 describe('file search and external action IPC inputs', () => {
   it('accepts bounded search and grep queries', () => {
     expect(validateFileSearchQuery('  App.vue ', 'search')).toBe('App.vue')
+    expect(validateFileSearchQuery('', 'search')).toBe('')
     expect(validateFileSearchQuery('ready', 'grep')).toBe('ready')
-    expect(() => validateFileSearchQuery('', 'search')).toThrow('Invalid Kimi file search query')
+    expect(() => validateFileSearchQuery('', 'grep')).toThrow('Invalid Kimi file grep query')
     expect(() => validateFileSearchQuery(`x${'y'.repeat(512)}`, 'grep')).toThrow('Invalid Kimi file grep query')
   })
 

@@ -80,7 +80,7 @@
 | BTW side chat | 完成 | 官方 Web `:btw` 创建 agent、同 Session `agent_id` Prompt、独立流式 Panel 与主 Transcript 隔离；见 ADR 0014 |
 | Background tasks | 完成 | `/tasks` 轮询、状态/输出预览和运行中任务取消已替换右栏占位 |
 | Skills / Slash commands | 完成 | Session Skills、slash menu 与 activation |
-| Mention menu | 缺失 | `@` 按钮无行为 |
+| Mention menu | 完成 | Composer 的 `@` 按钮与输入触发使用当前 Session 的 Kimi FS 搜索；支持空查询、200 ms 防抖、键盘导航、目录/文件图标和路径插入，且 Session 切换后的旧结果不会写回 |
 | MCP / Tools | 完成 | 真实列表、状态与 MCP restart |
 
 ## 6. 文件、Git、Diff 与终端
@@ -111,8 +111,7 @@
 ## 8. 下一实现顺序
 
 1. Conversation 控制的真实 Kimi 0.29.0 回归、Compact token marker 与打包验收。
-2. Mention menu。
-3. Workspace/Config 的完整多客户端全局同步。
-4. Language 与通知声音；Theme 已按产品决策移出 P0。
+2. Workspace/Config 的完整多客户端全局同步。
+3. Language 与通知声音；Theme 已按产品决策移出 P0。
 
 每个切片完成后更新本表，并运行 `pnpm typecheck`、`pnpm test` 和相关 packaged smoke；公开 Beta 仍要求所有非“上游阻塞”的 P0 行完成。

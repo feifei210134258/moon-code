@@ -15,6 +15,7 @@ const models = [{
 }]
 
 afterEach(() => {
+  vi.useRealTimers()
   delete window.kimiAgent
 })
 
@@ -89,5 +90,28 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('textarea').setValue('看看这里')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('submit')).toEqual([['看看这里', [attachment], controls, false]])
+  })
+
+  it('matches Kimi Web file mentions with debounced search, keyboard selection, and path insertion', async () => {
+    vi.useFakeTimers()
+    const mentionSearch = vi.fn(async () => [
+      { path: 'src/App.vue', name: 'App.vue', kind: 'file' as const, score: 1, matchPositions: [] },
+      { path: 'docs/adr', name: 'adr', kind: 'directory' as const, score: 0.8, matchPositions: [] }
+    ])
+    const wrapper = mount(ComposerBar, { props: { skills: [], models, controls, mentionSearch } })
+
+    await wrapper.get('[aria-label="引用文件"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(200)
+    await wrapper.vm.$nextTick()
+    expect(mentionSearch).toHaveBeenCalledWith('')
+    expect(wrapper.findAll('.mention-item')).toHaveLength(2)
+
+    await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' })
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    await wrapper.vm.$nextTick()
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('docs/adr')
+
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([['docs/adr', [], controls, false]])
   })
 })

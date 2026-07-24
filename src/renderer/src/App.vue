@@ -23,7 +23,8 @@ import type {
   QuestionAnswerInput,
   SessionAgentView,
   SessionUsageSummary,
-  WorkspaceFileEntry
+  WorkspaceFileEntry,
+  WorkspaceFileSearchItem
 } from '@shared/contracts'
 import type { LocalPromptDraft } from './utils/localPromptQueue'
 
@@ -52,6 +53,7 @@ const showUsageFixture = import.meta.env.DEV && new URLSearchParams(window.locat
 const showOperationalFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('operational-fixture')
 const showSideChatFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('side-chat-fixture')
 const showAgentFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('agent-fixture')
+const showMentionFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('mention-fixture')
 const usageOpen = ref(showUsageFixture)
 const usageSessionFixture = ref<SessionUsageSummary | null>(null)
 const operationalStateFixture = ref<KimiSessionOperationalState | null>(null)
@@ -130,6 +132,19 @@ const agentTranscriptFixture: KimiAgentTranscript = {
 }
 const visibleAgentDetail = computed(() => showAgentFixture ? agentDetailFixture : selectedAgent.value)
 const visibleAgentTranscript = computed(() => showAgentFixture ? agentTranscriptFixture : runtimeBridge.agentTranscript.value)
+const mentionFixtureItems: WorkspaceFileSearchItem[] = [
+  { path: 'src/renderer/src/App.vue', name: 'App.vue', kind: 'file', score: 1, matchPositions: [] },
+  { path: 'src/renderer/src/components/ComposerBar.vue', name: 'ComposerBar.vue', kind: 'file', score: 0.96, matchPositions: [] },
+  { path: 'docs/adr', name: 'adr', kind: 'directory', score: 0.8, matchPositions: [] }
+]
+
+async function searchMentionFiles(query: string): Promise<WorkspaceFileSearchItem[]> {
+  if (!showMentionFixture) return await runtimeBridge.searchMentionFiles(query)
+  const normalized = query.trim().toLowerCase()
+  return normalized.length === 0
+    ? mentionFixtureItems
+    : mentionFixtureItems.filter((item) => `${item.name} ${item.path}`.toLowerCase().includes(normalized))
+}
 
 function submitPrompt(text: string, attachments: KimiUploadedFile[], controls: KimiPromptControls, goalMode: boolean): void {
   if (activeSessionId.value.length === 0) return
@@ -544,6 +559,7 @@ onBeforeUnmount(() => {
         :agent-transcript="visibleAgentTranscript"
         :agent-transcript-pending="runtimeBridge.agentTranscriptPending.value"
         :agent-transcript-error="runtimeBridge.agentTranscriptError.value"
+        :mention-search="searchMentionFiles"
         @submit="submitPrompt"
         @abort="runtimeBridge.abortActivePrompt"
         @respond-approval="respondApproval"

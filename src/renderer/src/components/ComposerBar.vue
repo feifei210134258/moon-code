@@ -3,6 +3,7 @@ import {
   PhAt,
   PhCaretDown,
   PhFile,
+  PhFolderOpen,
   PhPaperclip,
   PhPaperPlaneTilt,
   PhSlidersHorizontal,
@@ -11,8 +12,14 @@ import {
   PhSpinnerGap,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, nextTick, ref } from 'vue'
-import type { KimiModelCatalogItem, KimiPromptControls, KimiSkill, KimiUploadedFile } from '@shared/contracts'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import type {
+  KimiModelCatalogItem,
+  KimiPromptControls,
+  KimiSkill,
+  KimiUploadedFile,
+  WorkspaceFileSearchItem
+} from '@shared/contracts'
 
 const props = defineProps<{
   disabled?: boolean
@@ -26,6 +33,7 @@ const props = defineProps<{
   controls: KimiPromptControls | null
   controlsPending?: boolean
   goalMode?: boolean
+  mentionSearch?: ((query: string) => Promise<WorkspaceFileSearchItem[]>) | undefined
 }>()
 
 const emit = defineEmits<{
@@ -43,7 +51,13 @@ const attachmentPending = ref(false)
 const attachmentError = ref<string | null>(null)
 const optionsOpen = ref(false)
 const commandOpen = ref(false)
+const mentionOpen = ref(false)
+const mentionLoading = ref(false)
+const mentionItems = ref<WorkspaceFileSearchItem[]>([])
+const mentionActiveIndex = ref(0)
 const input = ref<HTMLTextAreaElement | null>(null)
+let mentionTimer: ReturnType<typeof setTimeout> | null = null
+let mentionGeneration = 0
 const selectedModel = computed(() => props.models.find((model) => model.id === props.controls?.model) ?? null)
 const thinkingOptions = computed(() => {
   const efforts = selectedModel.value?.supportEfforts ?? []
@@ -74,6 +88,7 @@ function submit(): void {
   value.value = ''
   attachments.value = []
   commandOpen.value = false
+  closeMention()
   void nextTick(() => input.value?.focus())
 }
 
@@ -106,12 +121,16 @@ function updateBoolean(key: 'planMode' | 'swarmMode', event: Event): void {
 
 function toggleCommands(): void {
   commandOpen.value = !commandOpen.value
-  if (commandOpen.value) optionsOpen.value = false
+  if (commandOpen.value) {
+    optionsOpen.value = false
+    closeMention()
+  }
 }
 
 function chooseSkill(skill: KimiSkill): void {
   value.value = `/${skill.name} `
   commandOpen.value = false
+  closeMention()
   void nextTick(() => input.value?.focus())
 }
 
@@ -120,6 +139,7 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   attachments.value = [...files]
   commandOpen.value = false
   optionsOpen.value = false
+  closeMention()
   await nextTick()
   input.value?.focus()
 }
@@ -155,14 +175,118 @@ function formattedSize(size: number): string {
   return `${(size / 1_048_576).toFixed(1)} MB`
 }
 
+function currentMentionToken(): { query: string; start: number; end: number } | null {
+  const text = value.value
+  const end = input.value?.selectionStart ?? text.length
+  let start = end - 1
+  while (start >= 0 && !/\s/.test(text[start] ?? '')) start -= 1
+  start += 1
+  const token = text.slice(start, end)
+  return token.startsWith('@') ? { query: token.slice(1), start, end } : null
+}
+
+function closeMention(): void {
+  mentionGeneration += 1
+  if (mentionTimer !== null) clearTimeout(mentionTimer)
+  mentionTimer = null
+  mentionOpen.value = false
+  mentionLoading.value = false
+  mentionItems.value = []
+  mentionActiveIndex.value = 0
+}
+
+function queueMentionSearch(): void {
+  const token = currentMentionToken()
+  const search = props.mentionSearch
+  if (token === null || search === undefined || props.disabled === true) {
+    closeMention()
+    return
+  }
+  const generation = ++mentionGeneration
+  if (mentionTimer !== null) clearTimeout(mentionTimer)
+  mentionOpen.value = true
+  mentionLoading.value = true
+  mentionActiveIndex.value = 0
+  commandOpen.value = false
+  optionsOpen.value = false
+  mentionTimer = setTimeout(() => {
+    mentionTimer = null
+    void search(token.query).then((items) => {
+      if (generation !== mentionGeneration) return
+      mentionItems.value = items.slice(0, 20)
+      mentionActiveIndex.value = 0
+    }).catch(() => {
+      if (generation === mentionGeneration) mentionItems.value = []
+    }).finally(() => {
+      if (generation === mentionGeneration) mentionLoading.value = false
+    })
+  }, 200)
+}
+
+function insertMentionTrigger(): void {
+  if (props.disabled === true || props.mentionSearch === undefined) return
+  const element = input.value
+  const start = element?.selectionStart ?? value.value.length
+  const end = element?.selectionEnd ?? start
+  const prefix = start > 0 && !/\s/.test(value.value[start - 1] ?? '') ? ' @' : '@'
+  value.value = `${value.value.slice(0, start)}${prefix}${value.value.slice(end)}`
+  void nextTick(() => {
+    const caret = start + prefix.length
+    input.value?.setSelectionRange(caret, caret)
+    input.value?.focus()
+    queueMentionSearch()
+  })
+}
+
+function selectMention(item: WorkspaceFileSearchItem): void {
+  const token = currentMentionToken()
+  if (token === null) return
+  value.value = `${value.value.slice(0, token.start)}${item.path}${value.value.slice(token.end)}`
+  closeMention()
+  void nextTick(() => {
+    const caret = token.start + item.path.length
+    input.value?.setSelectionRange(caret, caret)
+    input.value?.focus()
+  })
+}
+
+function mentionIcon(item: WorkspaceFileSearchItem) {
+  return item.kind === 'directory' ? PhFolderOpen : PhFile
+}
+
 defineExpose({ loadDraft })
 
 function onKeydown(event: KeyboardEvent): void {
+  if (mentionOpen.value) {
+    const count = mentionItems.value.length
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeMention()
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (count > 0) {
+        mentionActiveIndex.value = event.key === 'ArrowDown'
+          ? (mentionActiveIndex.value + 1) % count
+          : (mentionActiveIndex.value - 1 + count) % count
+      }
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      const item = mentionItems.value[mentionActiveIndex.value]
+      if (item !== undefined && !mentionLoading.value) selectMention(item)
+      return
+    }
+  }
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     submit()
   }
 }
+
+onBeforeUnmount(closeMention)
 </script>
 
 <template>
@@ -183,13 +307,21 @@ function onKeydown(event: KeyboardEvent): void {
       :placeholder="disabled ? disabledReason : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
       :disabled="disabled"
       aria-label="输入任务"
+      aria-autocomplete="list"
       @keydown="onKeydown"
+      @input="queueMentionSearch"
     />
     <div v-if="goalMode" class="goal-mode-banner"><strong>Goal</strong><span>下一条消息会创建 Kimi Goal 并立即开始执行</span></div>
     <div class="composer-actions">
       <div class="composer-primary-tools">
         <button type="button" aria-label="添加附件" :disabled="disabled || attachmentPending" @click="pickAttachments"><PhPaperclip :size="19" /></button>
-        <button type="button" aria-label="引用文件" :disabled="disabled"><PhAt :size="19" /></button>
+        <button
+          type="button"
+          aria-label="引用文件"
+          :aria-expanded="mentionOpen"
+          :disabled="disabled || mentionSearch === undefined"
+          @click="insertMentionTrigger"
+        ><PhAt :size="19" /></button>
         <button
           type="button"
           aria-label="使用命令"
@@ -203,7 +335,7 @@ function onKeydown(event: KeyboardEvent): void {
         </button>
       </div>
       <div class="composer-settings">
-        <button class="model-summary" type="button" :disabled="disabled" @click="optionsOpen = !optionsOpen; commandOpen = false">
+        <button class="model-summary" type="button" :disabled="disabled" @click="optionsOpen = !optionsOpen; commandOpen = false; closeMention()">
           <span>{{ selectedModel?.displayName ?? controls?.model ?? (controlsPending ? '读取模型…' : '未配置模型') }}</span>
           <PhCaretDown :size="12" />
         </button>
@@ -213,7 +345,7 @@ function onKeydown(event: KeyboardEvent): void {
           :aria-expanded="optionsOpen"
           :disabled="disabled"
           aria-label="会话设置"
-          @click="optionsOpen = !optionsOpen"
+          @click="optionsOpen = !optionsOpen; closeMention()"
         >
           <PhSlidersHorizontal :size="18" />
         </button>
@@ -290,6 +422,28 @@ function onKeydown(event: KeyboardEvent): void {
           <span><strong>/{{ skill.name }}</strong><small>{{ skill.description || '无描述' }}</small></span>
           <em>{{ skill.source }}</em>
         </button>
+      </template>
+    </div>
+
+    <div v-if="mentionOpen" class="mention-popover" role="listbox" aria-label="项目文件引用">
+      <header><strong>项目文件</strong><span>选择后插入路径</span></header>
+      <div v-if="mentionLoading" class="command-empty"><PhSpinnerGap class="spin" :size="15" />正在搜索 Kimi Workspace…</div>
+      <div v-else-if="mentionItems.length === 0" class="command-empty">没有匹配的文件</div>
+      <template v-else>
+        <div
+          v-for="(item, index) in mentionItems"
+          :key="item.path"
+          class="mention-item"
+          :class="{ active: index === mentionActiveIndex }"
+          role="option"
+          :aria-selected="index === mentionActiveIndex"
+          @mouseenter="mentionActiveIndex = index"
+          @mousedown.prevent="selectMention(item)"
+        >
+          <component :is="mentionIcon(item)" :size="16" />
+          <span><strong>{{ item.name }}</strong><small>{{ item.path }}</small></span>
+          <em>{{ item.kind === 'directory' ? '目录' : '文件' }}</em>
+        </div>
       </template>
     </div>
   </div>
