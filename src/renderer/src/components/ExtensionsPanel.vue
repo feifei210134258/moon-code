@@ -4,6 +4,7 @@ import {
   PhArrowUp,
   PhCaretRight,
   PhCopy,
+  PhDownloadSimple,
   PhFile,
   PhFileCss,
   PhFileHtml,
@@ -15,7 +16,7 @@ import {
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -30,6 +31,8 @@ import type {
   WorkspaceFileEntry,
   WorkspaceFileList,
   WorkspaceFilePreview,
+  WorkspaceFileSearchResult,
+  WorkspaceGrepResult,
   WorkspaceGitStatus
 } from '@shared/contracts'
 import type { ExtensionTab } from '../types'
@@ -51,6 +54,15 @@ const props = withDefaults(defineProps<{
   fileDiff: WorkspaceFileDiff | null
   fileDiffPending: boolean
   fileDiffError: string | null
+  fileSearch?: WorkspaceFileSearchResult | null
+  fileSearchPending?: boolean
+  fileSearchError?: string | null
+  fileGrep?: WorkspaceGrepResult | null
+  fileGrepPending?: boolean
+  fileGrepError?: string | null
+  fileActionPending?: string | null
+  fileActionError?: string | null
+  fileActionNotice?: string | null
   browserState: BrowserViewState
   browserPending: boolean
   browserError: string | null
@@ -72,6 +84,15 @@ const props = withDefaults(defineProps<{
   browserAnnotationPicking: false,
   browserAnnotationSubmitting: false,
   browserAnnotationError: null,
+  fileSearch: null,
+  fileSearchPending: false,
+  fileSearchError: null,
+  fileGrep: null,
+  fileGrepPending: false,
+  fileGrepError: null,
+  fileActionPending: null,
+  fileActionError: null,
+  fileActionNotice: null,
   tasks: () => [],
   tasksPending: false,
   tasksError: null,
@@ -82,7 +103,14 @@ const emit = defineEmits<{
   selectTab: [tab: ExtensionTab]
   collapse: []
   openEntry: [entry: WorkspaceFileEntry]
+  openFile: [path: string]
   openDirectory: [path: string]
+  searchFiles: [query: string]
+  grepFiles: [pattern: string]
+  downloadFile: [path: string]
+  openExternalFile: [path: string]
+  openFileIn: [appId: 'cursor' | 'vscode', path: string]
+  revealFile: [path: string]
   selectDiff: [path: string]
   refresh: []
   browserBounds: [bounds: BrowserBounds]
@@ -117,6 +145,18 @@ const previewLines = computed(() => (props.filePreview?.content ?? '').split('\n
 const previewClipped = computed(() => (props.filePreview?.lineCount ?? previewLines.value.length) > previewLines.value.length)
 const diffLines = computed(() => parseDiff(props.fileDiff?.diff ?? '').slice(0, 600))
 const diffClipped = computed(() => (props.fileDiff?.diff.split('\n').length ?? 0) > diffLines.value.length)
+const fileSearchQuery = ref('')
+const grepPattern = ref('')
+
+function submitFileSearch(): void {
+  const query = fileSearchQuery.value.trim()
+  if (query.length > 0) emit('searchFiles', query)
+}
+
+function submitGrep(): void {
+  const pattern = grepPattern.value.trim()
+  if (pattern.length > 0) emit('grepFiles', pattern)
+}
 
 function fileIcon(entry: WorkspaceFileEntry) {
   if (entry.kind === 'directory') return PhFolderOpen
@@ -291,6 +331,52 @@ function parseDiff(diff: string): RenderedDiffLine[] {
         <strong><PhFolderOpen :size="18" />{{ workspaceName }}</strong>
         <span>{{ fileList?.path ?? '.' }}</span>
       </header>
+      <div class="files-search-tools">
+        <form @submit.prevent="submitFileSearch">
+          <input v-model="fileSearchQuery" type="search" maxlength="512" placeholder="搜索文件名…" aria-label="搜索文件名" />
+          <button type="submit" :disabled="fileSearchPending">搜索</button>
+        </form>
+        <form @submit.prevent="submitGrep">
+          <input v-model="grepPattern" type="search" maxlength="512" placeholder="搜索文件内容…" aria-label="搜索文件内容" />
+          <button type="submit" :disabled="fileGrepPending">内容</button>
+        </form>
+      </div>
+      <section v-if="fileSearchPending || fileSearchError || fileSearch" class="file-search-results">
+        <header><strong>文件搜索</strong><span v-if="fileSearch">{{ fileSearch.items.length }} 项</span></header>
+        <div v-if="fileSearchPending" class="extension-state"><PhSpinnerGap class="spin" :size="16" />正在搜索文件…</div>
+        <div v-else-if="fileSearchError" class="extension-state is-error"><PhWarningCircle :size="16" />{{ fileSearchError }}</div>
+        <template v-else-if="fileSearch">
+          <button
+            v-for="item in fileSearch.items"
+            :key="item.path"
+            type="button"
+            @click="item.kind === 'directory' ? emit('openDirectory', item.path) : emit('openFile', item.path)"
+          >
+            <PhFolderOpen v-if="item.kind === 'directory'" :size="14" />
+            <PhFile v-else :size="14" />
+            <span>{{ item.path }}</span><small>{{ Math.round(item.score * 100) }}%</small>
+          </button>
+          <div v-if="fileSearch.items.length === 0" class="extension-state">没有匹配的文件。</div>
+          <div v-if="fileSearch.truncated" class="diff-context">结果已按 Kimi Server 限制截断。</div>
+        </template>
+      </section>
+      <section v-if="fileGrepPending || fileGrepError || fileGrep" class="file-search-results grep-results">
+        <header><strong>内容搜索</strong><span v-if="fileGrep">{{ fileGrep.filesScanned }} 个文件</span></header>
+        <div v-if="fileGrepPending" class="extension-state"><PhSpinnerGap class="spin" :size="16" />正在搜索内容…</div>
+        <div v-else-if="fileGrepError" class="extension-state is-error"><PhWarningCircle :size="16" />{{ fileGrepError }}</div>
+        <template v-else-if="fileGrep">
+          <button v-for="file in fileGrep.files" :key="file.path" type="button" @click="emit('openFile', file.path)">
+            <PhFile :size="14" /><span>{{ file.path }}</span><small>{{ file.matches.length }} 处</small>
+          </button>
+          <div v-for="file in fileGrep.files" :key="`${file.path}:matches`" class="grep-match-list">
+            <button v-for="match in file.matches.slice(0, 5)" :key="`${file.path}:${match.line}:${match.column}`" type="button" @click="emit('openFile', file.path)">
+              <span>{{ file.path }}:{{ match.line }}</span><code>{{ match.text }}</code>
+            </button>
+          </div>
+          <div v-if="fileGrep.files.length === 0" class="extension-state">没有匹配的内容。</div>
+          <div v-if="fileGrep.truncated" class="diff-context">结果已按 Kimi Server 限制截断。</div>
+        </template>
+      </section>
       <button v-if="parentPath" type="button" class="file-row" @click="emit('openDirectory', parentPath)">
         <PhArrowUp :size="16" /><span>上一级</span>
       </button>
@@ -314,7 +400,19 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       <div v-if="fileList && fileList.items.length === 0" class="extension-state">这个目录是空的。</div>
 
       <section v-if="filePreviewPending || filePreviewError || filePreview" class="file-preview-panel">
-        <header><strong>{{ filePreview?.path ?? '文件预览' }}</strong></header>
+        <header>
+          <strong>{{ filePreview?.path ?? '文件预览' }}</strong>
+          <details v-if="filePreview" class="file-preview-actions">
+            <summary aria-label="文件操作">⋯</summary>
+            <div>
+              <button type="button" :disabled="fileActionPending !== null" @click="emit('downloadFile', filePreview.path)"><PhDownloadSimple :size="14" />下载</button>
+              <button type="button" :disabled="fileActionPending !== null" @click="emit('openExternalFile', filePreview.path)">系统打开</button>
+              <button type="button" :disabled="fileActionPending !== null" @click="emit('openFileIn', 'cursor', filePreview.path)">Cursor 打开</button>
+              <button type="button" :disabled="fileActionPending !== null" @click="emit('openFileIn', 'vscode', filePreview.path)">VS Code 打开</button>
+              <button type="button" :disabled="fileActionPending !== null" @click="emit('revealFile', filePreview.path)">在 Finder 中显示</button>
+            </div>
+          </details>
+        </header>
         <div v-if="filePreviewPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取文件…</div>
         <div v-else-if="filePreviewError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ filePreviewError }}</div>
         <div v-else-if="filePreview?.isBinary" class="extension-state">二进制文件不会作为文本载入 Renderer。</div>
@@ -322,6 +420,8 @@ function parseDiff(diff: string): RenderedDiffLine[] {
 </code></pre>
         <div v-if="filePreview?.truncated || previewClipped" class="diff-context">文件较大，当前仅显示前 {{ previewLines.length }} 行</div>
       </section>
+      <p v-if="fileActionError" class="file-action-message is-error" role="alert">{{ fileActionError }}</p>
+      <p v-else-if="fileActionNotice" class="file-action-message">{{ fileActionNotice }}</p>
     </div>
 
     <BrowserPanel

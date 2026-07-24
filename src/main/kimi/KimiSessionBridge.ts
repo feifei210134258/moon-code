@@ -30,7 +30,10 @@ import type {
   WorkspaceFileEntry,
   WorkspaceFileList,
   WorkspaceFilePreview,
+  WorkspaceFileSearchResult,
+  WorkspaceGrepResult,
   WorkspaceMarkdownImage,
+  WorkspaceOpenApp,
   WorkspaceGitStatus
 } from '../../shared/contracts.js'
 
@@ -322,6 +325,66 @@ export class KimiSessionBridge extends EventEmitter {
       lineCount: result.line_count ?? null,
       isBinary: result.is_binary
     }
+  }
+
+  async searchFiles(sessionId: string, query: string): Promise<WorkspaceFileSearchResult> {
+    this.#assertActiveSession(sessionId)
+    const result = await this.#runtime.createRestClient().searchFiles(sessionId, query)
+    return {
+      items: result.items.map((item) => ({
+        path: item.path,
+        name: item.name,
+        kind: item.kind,
+        score: item.score,
+        matchPositions: [...item.match_positions]
+      })),
+      truncated: result.truncated
+    }
+  }
+
+  async grepFiles(sessionId: string, pattern: string): Promise<WorkspaceGrepResult> {
+    this.#assertActiveSession(sessionId)
+    const result = await this.#runtime.createRestClient().grepFiles(sessionId, pattern)
+    return {
+      files: result.files.map((file) => ({
+        path: file.path,
+        matches: file.matches.map((match) => ({
+          line: match.line,
+          column: match.col,
+          text: match.text,
+          before: [...match.before],
+          after: [...match.after]
+        }))
+      })),
+      filesScanned: result.files_scanned,
+      truncated: result.truncated,
+      elapsedMs: result.elapsed_ms
+    }
+  }
+
+  async downloadWorkspaceFile(sessionId: string, path: string): Promise<Uint8Array> {
+    this.#assertActiveSession(sessionId)
+    return await this.#runtime.createRestClient().downloadWorkspaceFile(sessionId, path)
+  }
+
+  async openWorkspaceFile(sessionId: string, path: string, line?: number): Promise<{ opened: true }> {
+    this.#assertActiveSession(sessionId)
+    return await this.#runtime.createRestClient().openFile(sessionId, path, line)
+  }
+
+  async openWorkspaceFileIn(
+    sessionId: string,
+    appId: WorkspaceOpenApp,
+    path: string,
+    line?: number
+  ): Promise<{ opened: true }> {
+    this.#assertActiveSession(sessionId)
+    return await this.#runtime.createRestClient().openFileIn(sessionId, appId, path, line)
+  }
+
+  async revealWorkspaceFile(sessionId: string, path: string): Promise<{ revealed: true }> {
+    this.#assertActiveSession(sessionId)
+    return await this.#runtime.createRestClient().revealFile(sessionId, path)
   }
 
   async readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null> {

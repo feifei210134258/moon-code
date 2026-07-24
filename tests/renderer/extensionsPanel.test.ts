@@ -112,6 +112,61 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.text()).toContain('二进制文件不会作为文本载入 Renderer')
   })
 
+  it('submits native file queries and routes search directories without trying to read them as files', async () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: {
+        ...baseProps,
+        activeTab: 'files',
+        fileSearch: {
+          items: [
+            { path: 'src', name: 'src', kind: 'directory' as const, score: 0.91, matchPositions: [0] },
+            { path: 'src/index.html', name: 'index.html', kind: 'file' as const, score: 0.88, matchPositions: [4] }
+          ],
+          truncated: false
+        },
+        fileGrep: {
+          files: [{
+            path: 'src/index.html',
+            matches: [{ line: 12, column: 3, text: '<main>Ready</main>', before: [], after: [] }]
+          }],
+          filesScanned: 2,
+          truncated: false,
+          elapsedMs: 4
+        }
+      }
+    })
+
+    const forms = wrapper.findAll('.files-search-tools form')
+    await forms[0]!.get('input').setValue(' src ')
+    await forms[0]!.trigger('submit')
+    await forms[1]!.get('input').setValue(' Ready ')
+    await forms[1]!.trigger('submit')
+    expect(wrapper.emitted('searchFiles')).toEqual([['src']])
+    expect(wrapper.emitted('grepFiles')).toEqual([['Ready']])
+
+    const resultButtons = wrapper.findAll('.file-search-results > button')
+    await resultButtons[0]!.trigger('click')
+    await resultButtons[1]!.trigger('click')
+    expect(wrapper.emitted('openDirectory')).toEqual([['src']])
+    expect(wrapper.emitted('openFile')).toEqual([['src/index.html']])
+  })
+
+  it('exposes download, external open, IDE open and reveal from a file preview menu', async () => {
+    const wrapper = mount(ExtensionsPanel, { props: { ...baseProps, activeTab: 'files' } })
+    await wrapper.get('.file-preview-actions summary').trigger('click')
+    const actions = wrapper.findAll('.file-preview-actions button')
+    await actions[0]!.trigger('click')
+    await actions[1]!.trigger('click')
+    await actions[2]!.trigger('click')
+    await actions[3]!.trigger('click')
+    await actions[4]!.trigger('click')
+
+    expect(wrapper.emitted('downloadFile')).toEqual([['README.md']])
+    expect(wrapper.emitted('openExternalFile')).toEqual([['README.md']])
+    expect(wrapper.emitted('openFileIn')).toEqual([['cursor', 'README.md'], ['vscode', 'README.md']])
+    expect(wrapper.emitted('revealFile')).toEqual([['README.md']])
+  })
+
   it('renders Browser navigation and diagnostics from projected Main state', async () => {
     const wrapper = mount(ExtensionsPanel, {
       props: {

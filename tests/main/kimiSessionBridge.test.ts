@@ -50,6 +50,18 @@ class FakeRuntime extends EventEmitter {
     mime: 'image/png',
     is_binary: true
   }))
+  readonly searchFiles = vi.fn(async () => ({
+    items: [{ path: 'src/App.vue', name: 'App.vue', kind: 'file' as const, score: 0.98, match_positions: [0] }],
+    truncated: false
+  }))
+  readonly grepFiles = vi.fn(async () => ({
+    files: [{ path: 'src/App.vue', matches: [{ line: 8, col: 3, text: 'const ready = true', before: [], after: [] }] }],
+    files_scanned: 1, truncated: false, elapsed_ms: 2
+  }))
+  readonly downloadWorkspaceFile = vi.fn(async () => new Uint8Array([1, 2]))
+  readonly openFile = vi.fn(async () => ({ opened: true as const }))
+  readonly openFileIn = vi.fn(async () => ({ opened: true as const }))
+  readonly revealFile = vi.fn(async () => ({ revealed: true as const }))
   snapshotMessages: Array<Record<string, unknown>> = []
 
   constructor(readonly socket: FakeSocket) {
@@ -67,6 +79,12 @@ class FakeRuntime extends EventEmitter {
       compactSession: this.compactSession,
       undoSession: this.undoSession,
       readFile: this.readFile,
+      searchFiles: this.searchFiles,
+      grepFiles: this.grepFiles,
+      downloadWorkspaceFile: this.downloadWorkspaceFile,
+      openFile: this.openFile,
+      openFileIn: this.openFileIn,
+      revealFile: this.revealFile,
       getSessionTranscript: vi.fn(async () => ({
         agent_id: 'main', items: [], has_more: false, tasks: [], interactions: [],
         attachments: [], todos: [], meta: {}, agents: [], pending_interactions: []
@@ -176,6 +194,29 @@ describe('KimiSessionBridge terminals', () => {
       length: 10 * 1024 * 1024
     })
     await expect(bridge.readMarkdownImage('session-1', '/tmp/outside.png')).resolves.toBeNull()
+    await bridge.close()
+  })
+
+  it('projects Kimi Session file search and external file actions without direct Renderer access', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+
+    await expect(bridge.searchFiles('session-1', 'app')).resolves.toEqual({
+      items: [{ path: 'src/App.vue', name: 'App.vue', kind: 'file', score: 0.98, matchPositions: [0] }], truncated: false
+    })
+    await expect(bridge.grepFiles('session-1', 'ready')).resolves.toEqual({
+      files: [{ path: 'src/App.vue', matches: [{ line: 8, column: 3, text: 'const ready = true', before: [], after: [] }] }],
+      filesScanned: 1, truncated: false, elapsedMs: 2
+    })
+    await expect(bridge.downloadWorkspaceFile('session-1', 'src/App.vue')).resolves.toEqual(new Uint8Array([1, 2]))
+    await bridge.openWorkspaceFile('session-1', 'src/App.vue', 8)
+    await bridge.openWorkspaceFileIn('session-1', 'vscode', 'src/App.vue', 8)
+    await bridge.revealWorkspaceFile('session-1', 'src/App.vue')
+
+    expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/App.vue', 8)
+    expect(runtime.openFileIn).toHaveBeenCalledWith('session-1', 'vscode', 'src/App.vue', 8)
+    expect(runtime.revealFile).toHaveBeenCalledWith('session-1', 'src/App.vue')
     await bridge.close()
   })
 

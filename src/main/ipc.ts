@@ -39,7 +39,10 @@ import {
   type WorkspaceFileDiff,
   type WorkspaceFileList,
   type WorkspaceFilePreview,
+  type WorkspaceFileSearchResult,
+  type WorkspaceGrepResult,
   type WorkspaceGitStatus,
+  type WorkspaceOpenApp,
   type WorkspaceNavigationItem,
   type WorkspaceNavigationSnapshot,
   type KimiSessionWarning,
@@ -86,6 +89,11 @@ import {
   validateProviderRefreshInput
 } from './security/settingsInputs.js'
 import { validateWorkspacePath } from './security/workspaceInputs.js'
+import {
+  validateFileSearchQuery,
+  validateWorkspaceLine,
+  validateWorkspaceOpenApp
+} from './security/fileSearchInputs.js'
 import { validateMediaType, validatePromptControls, validatePromptInput } from './security/promptInputs.js'
 import {
   validateCompactInstruction,
@@ -463,6 +471,73 @@ export function registerIpc(
       assertTrustedSender(event)
       assertSessionId(sessionId)
       return await sessions.readFile(sessionId, validateWorkspacePath(path))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesSearch,
+    async (event, sessionId?: unknown, query?: unknown): Promise<WorkspaceFileSearchResult> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      return await sessions.searchFiles(sessionId, validateFileSearchQuery(query, 'search'))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesGrep,
+    async (event, sessionId?: unknown, pattern?: unknown): Promise<WorkspaceGrepResult> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      return await sessions.grepFiles(sessionId, validateFileSearchQuery(pattern, 'grep'))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesDownload,
+    async (event, sessionId?: unknown, path?: unknown): Promise<{ saved: boolean }> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      const safePath = validateWorkspacePath(path)
+      const saveOptions = { defaultPath: basename(safePath) }
+      const window = getMainWindow()
+      const target = window === null
+        ? await dialog.showSaveDialog(saveOptions)
+        : await dialog.showSaveDialog(window, saveOptions)
+      if (target.canceled || target.filePath === undefined) return { saved: false }
+      await writeFile(target.filePath, await sessions.downloadWorkspaceFile(sessionId, safePath))
+      return { saved: true }
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesOpen,
+    async (event, sessionId?: unknown, path?: unknown, line?: unknown): Promise<{ opened: true }> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      return await sessions.openWorkspaceFile(sessionId, validateWorkspacePath(path), validateWorkspaceLine(line))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesOpenIn,
+    async (
+      event,
+      sessionId?: unknown,
+      appId?: unknown,
+      path?: unknown,
+      line?: unknown
+    ): Promise<{ opened: true }> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      return await sessions.openWorkspaceFileIn(
+        sessionId,
+        validateWorkspaceOpenApp(appId),
+        validateWorkspacePath(path),
+        validateWorkspaceLine(line)
+      )
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesReveal,
+    async (event, sessionId?: unknown, path?: unknown): Promise<{ revealed: true }> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      return await sessions.revealWorkspaceFile(sessionId, validateWorkspacePath(path))
     }
   )
   ipcMain.handle(

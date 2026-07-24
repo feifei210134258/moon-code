@@ -3085,6 +3085,87 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.files-search-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding: 7px 8px 5px;
+}
+
+.files-search-tools form { display: flex; min-width: 0; }
+.files-search-tools input {
+  min-width: 0;
+  width: 100%;
+  height: 29px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-right: 0;
+  border-radius: 7px 0 0 7px;
+  outline: none;
+  color: var(--text);
+  background: rgba(249, 251, 253, 0.82);
+  font: inherit;
+  font-size: 10px;
+}
+.files-search-tools input:focus { border-color: rgba(37, 99, 235, 0.32); }
+.files-search-tools button {
+  height: 29px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 0 7px 7px 0;
+  color: #526276;
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  font-size: 9px;
+}
+.files-search-tools button:disabled { opacity: 0.48; cursor: default; }
+
+.file-search-results {
+  display: grid;
+  gap: 2px;
+  margin: 2px 8px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(96, 116, 138, 0.12);
+  border-radius: 9px;
+  background: rgba(249, 251, 253, 0.62);
+}
+.file-search-results > header {
+  min-height: 29px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(96, 116, 138, 0.1);
+  color: var(--muted);
+  font-size: 9.5px;
+}
+.file-search-results > header strong { color: #4c5a6c; font-size: 10px; }
+.file-search-results > button,
+.grep-match-list > button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 0 7px;
+  border: 0;
+  color: #445267;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 10px;
+}
+.file-search-results > button:hover,
+.grep-match-list > button:hover { background: rgba(82, 105, 132, 0.07); }
+.file-search-results > button span,
+.grep-match-list > button span,
+.grep-match-list code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-search-results > button small { color: var(--faint); font-size: 8.5px; }
+.grep-match-list { display: grid; padding: 0 0 3px 18px; }
+.grep-match-list > button { grid-template-columns: minmax(72px, auto) minmax(0, 1fr); min-height: 24px; color: var(--muted); font-size: 9px; }
+.grep-match-list code { color: #68778a; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 8.5px; }
+
 .file-row {
   min-height: 34px;
   display: grid;
@@ -3133,6 +3214,54 @@ select:focus-visible {
   border-bottom: 1px solid var(--border);
   font-size: 10.5px;
 }
+
+.file-preview-panel > header > strong { min-width: 0; flex: 1; }
+.file-preview-actions { position: relative; margin-left: auto; }
+.file-preview-actions summary {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+}
+.file-preview-actions summary::-webkit-details-marker { display: none; }
+.file-preview-actions summary:hover { background: rgba(82, 105, 132, 0.08); }
+.file-preview-actions > div {
+  position: absolute;
+  z-index: 8;
+  top: 29px;
+  right: 0;
+  width: 142px;
+  display: grid;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid rgba(96, 116, 138, 0.15);
+  border-radius: 9px;
+  background: rgba(253, 254, 255, 0.96);
+  box-shadow: 0 12px 28px rgba(42, 59, 78, 0.12);
+  backdrop-filter: blur(18px);
+}
+.file-preview-actions button {
+  min-height: 27px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  color: #455368;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 9.5px;
+}
+.file-preview-actions button:hover { background: rgba(82, 105, 132, 0.08); }
+.file-preview-actions button:disabled { opacity: 0.45; cursor: default; }
+.file-action-message { margin: 5px 8px 0; color: #497560; font-size: 9.5px; }
+.file-action-message.is-error { color: var(--red); }
 
 .file-preview-panel > header strong {
   overflow: hidden;

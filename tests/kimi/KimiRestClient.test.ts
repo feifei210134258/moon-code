@@ -426,6 +426,68 @@ describe('KimiRestClient', () => {
     )
   })
 
+  it('uses Kimi native file search, grep, download and external file actions', async () => {
+    const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(envelope({
+        items: [{ path: 'src/App.vue', name: 'App.vue', kind: 'file', score: 0.98, match_positions: [0, 3] }],
+        truncated: false
+      }))
+      .mockResolvedValueOnce(envelope({
+        files: [{ path: 'src/App.vue', matches: [{ line: 12, col: 4, text: 'const ready = true', before: [], after: [] }] }],
+        files_scanned: 5, truncated: false, elapsed_ms: 3
+      }))
+      .mockResolvedValueOnce(envelope({ opened: true }))
+      .mockResolvedValueOnce(envelope({ opened: true }))
+      .mockResolvedValueOnce(envelope({ revealed: true }))
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200 }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.searchFiles('session-1', 'app')).resolves.toEqual(expect.objectContaining({ truncated: false }))
+    await expect(client.grepFiles('session-1', 'ready')).resolves.toEqual(expect.objectContaining({ files_scanned: 5 }))
+    await client.openFile('session-1', 'src/App.vue', 12)
+    await client.openFileIn('session-1', 'vscode', 'src/App.vue', 12)
+    await client.revealFile('session-1', 'src/App.vue')
+    await expect(client.downloadWorkspaceFile('session-1', 'src/App.vue')).resolves.toEqual(new Uint8Array([1, 2, 3]))
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/fs:search',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ query: 'app', limit: 50, follow_gitignore: true }) })
+    )
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/fs:grep',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({
+        pattern: 'ready', regex: false, case_sensitive: false, follow_gitignore: true,
+        max_files: 200, max_matches_per_file: 50, max_total_matches: 5000, context_lines: 2
+      }) })
+    )
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/fs:open',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ path: 'src/App.vue', line: 12 }) })
+    )
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      4,
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/fs:open-in',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ app_id: 'vscode', path: 'src/App.vue', line: 12 }) })
+    )
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      5,
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/fs:reveal',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ path: 'src/App.vue' }) })
+    )
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      6,
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/fs/src/App.vue',
+      expect.objectContaining({ headers: expect.any(Headers) })
+    )
+  })
+
   it('uses the official Web Compact and Undo session actions', async () => {
     const response = () => new Response(JSON.stringify({ code: 0, msg: 'ok', data: {} }), {
       status: 200,

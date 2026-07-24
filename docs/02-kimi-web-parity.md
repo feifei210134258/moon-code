@@ -72,7 +72,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Cron notice               | `CronNotice`                       | P0       | 保留触发来源和时间                               |
 | 声音与系统通知            | Web composables                    | P0       | 可单独关闭；桌宠状态同步                         |
 
-实现状态：Attachment 已按固定 `0.29.0` 契约接入 `/files` 上传和 file-source/file-content Prompt；历史文件与媒体由 Main 添加 Bearer 后以 Blob 预览。Assistant 文本已支持 GFM、代码高亮、KaTeX、Mermaid 和 Workspace 文件路径点击，边界见 [ADR 0012](./adr/0012-attachment-media-and-markdown-boundary.md)。Markdown 本地图片源的预解析/改写仍待完成。
+实现状态：Attachment 已按固定 `0.29.0` 契约接入 `/files` 上传和 file-source/file-content Prompt；历史文件与媒体由 Main 添加 Bearer 后以 Blob 预览。Assistant 文本已支持 GFM、代码高亮、KaTeX、Mermaid 和 Workspace 文件路径点击，边界见 [ADR 0012](./adr/0012-attachment-media-and-markdown-boundary.md)。本地图片使用 Main 的 Session FS 受限读取（cwd 内、10 MiB、base64 二进制、未截断），远程 Markdown 图片默认不自动请求。Conversation TOC、Compact、Undo、Cron notice 与 transcript marker 已接入，边界见 [ADR 0013](./adr/0013-kimi-web-conversation-controls-and-local-image-boundary.md)；其中 Compact 的真实会话回归和 token 统计展示仍待补齐。
 
 ## 5. Agent、任务和运行模式
 
@@ -114,7 +114,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Terminal list/create/get/close | `/terminals`        | P0       | Session 绑定，多 Terminal      |
 | Terminal stream/resize/input   | WS terminal frames  | P0       | PTY 只做终端，不作为 Kimi 协议 |
 
-实现状态：Terminal 已提供中栏底部抽屉、多标签、创建/关闭、ANSI、输入、Resize、输出 replay、Session 切换 Detach 与 `⌘J`。Kimi `0.29.0` v2 服务端会静默丢弃已声明的 Terminal WS 帧，当前托管版本按 [ADR 0004](./adr/0004-kimi-v2-terminal-compatibility.md) 使用 Session cwd 约束的 Main PTY 兼容层；Agent 与 Transcript 路径没有降级。
+实现状态：文件区已使用 Kimi Session FS 的 `search`、`grep`、下载、`open`、`open-in` 和 `reveal`；搜索到的目录进入目录，HTML 文件仍统一路由到内置浏览器。下载内容只在 Main 通过原生保存对话框写入用户选择的位置，Renderer 不直接取得本机写入权限。Terminal 已提供中栏底部抽屉、多标签、创建/关闭、ANSI、输入、Resize、输出 replay、Session 切换 Detach 与 `⌘J`。Kimi `0.29.0` v2 服务端会静默丢弃已声明的 Terminal WS 帧，当前托管版本按 [ADR 0004](./adr/0004-kimi-v2-terminal-compatibility.md) 使用 Session cwd 约束的 Main PTY 兼容层；Agent 与 Transcript 路径没有降级。
 
 ## 7. Provider、Config 和设置
 
@@ -126,7 +126,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Managed Provider 刷新 | OAuth refresh      | P0       | 登录后即时更新模型                        |
 | 默认模型              | `/models/:default` | P0       | 与 Session model 分层                     |
 | Global Config         | `/config`          | P0       | 依赖官方 merge semantics，secret redacted |
-| Theme                 | Light/Dark/System  | P0       | 桌宠可独立遵循系统外观                    |
+| Theme                 | Light/Dark/System  | P2       | 按当前产品决策不进入 P0                    |
 | Language              | zh/en              | P0       | 初始支持官方两种语言                      |
 | Notification/Sound    | Settings           | P0       | 独立控制                                  |
 | Telemetry 开关        | Settings           | P0       | 尊重 Kimi 官方设置，不增加默认追踪        |

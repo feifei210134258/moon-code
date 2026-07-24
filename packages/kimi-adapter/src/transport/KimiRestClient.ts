@@ -7,6 +7,10 @@ import {
   fileDiffResultSchema,
   fileListResultSchema,
   fileReadResultSchema,
+  fileSearchResultSchema,
+  fileGrepResultSchema,
+  fileOpenResultSchema,
+  fileRevealResultSchema,
   gitStatusResultSchema,
   promptAbortResultSchema,
   sessionAbortResultSchema,
@@ -53,6 +57,10 @@ import {
   type FileDiffResult,
   type FileListResult,
   type FileReadResult,
+  type FileSearchResult,
+  type FileGrepResult,
+  type FileOpenResult,
+  type FileRevealResult,
   type GitStatusResult,
   type MessageContentPart,
   type KimiConfigSnapshot,
@@ -210,25 +218,7 @@ export class KimiRestClient {
         accept: 'application/octet-stream'
       })
     })
-    if (!response.ok) {
-      let message = `Kimi file download failed with HTTP ${response.status}`
-      let code = -1
-      let requestId: string | undefined
-      try {
-        const payload = await response.json() as Partial<KimiEnvelope<unknown>>
-        message = payload.msg ?? message
-        code = typeof payload.code === 'number' ? payload.code : code
-        requestId = payload.request_id
-      } catch {
-        // Successful file bodies are binary; failed endpoints may still omit JSON.
-      }
-      throw new KimiApiError(message, {
-        code,
-        ...(requestId === undefined ? {} : { requestId }),
-        status: response.status,
-        retryAfterMs: parseRetryAfter(response.headers.get('retry-after'))
-      })
-    }
+    if (!response.ok) throw await this.#binaryError(response, 'Kimi file download failed')
     return new Uint8Array(await response.arrayBuffer())
   }
 
@@ -807,6 +797,71 @@ export class KimiRestClient {
     )
   }
 
+  searchFiles(sessionId: string, query: string): Promise<FileSearchResult> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/fs:search`,
+      { method: 'POST', body: JSON.stringify({ query, limit: 50, follow_gitignore: true }) },
+      fileSearchResultSchema
+    )
+  }
+
+  grepFiles(sessionId: string, pattern: string): Promise<FileGrepResult> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/fs:grep`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          pattern,
+          regex: false,
+          case_sensitive: false,
+          follow_gitignore: true,
+          max_files: 200,
+          max_matches_per_file: 50,
+          max_total_matches: 5_000,
+          context_lines: 2
+        })
+      },
+      fileGrepResultSchema
+    )
+  }
+
+  openFile(sessionId: string, path: string, line?: number): Promise<FileOpenResult> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/fs:open`,
+      { method: 'POST', body: JSON.stringify({ path, ...(line === undefined ? {} : { line }) }) },
+      fileOpenResultSchema
+    )
+  }
+
+  openFileIn(sessionId: string, appId: 'finder' | 'cursor' | 'vscode' | 'iterm' | 'terminal', path: string, line?: number): Promise<FileOpenResult> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/fs:open-in`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ app_id: appId, path, ...(line === undefined ? {} : { line }) })
+      },
+      fileOpenResultSchema
+    )
+  }
+
+  revealFile(sessionId: string, path: string): Promise<FileRevealResult> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/fs:reveal`,
+      { method: 'POST', body: JSON.stringify({ path }) },
+      fileRevealResultSchema
+    )
+  }
+
+  async downloadWorkspaceFile(sessionId: string, path: string): Promise<Uint8Array> {
+    const encodedPath = path.split('/').map((segment) => encodeURIComponent(segment)).join('/')
+    const response = await this.#fetch(
+      `${this.#origin}/api/v1/sessions/${encodeURIComponent(sessionId)}/fs/${encodedPath}`,
+      { headers: new Headers({ authorization: `Bearer ${this.#token}`, accept: 'application/octet-stream' }) }
+    )
+    if (!response.ok) throw await this.#binaryError(response, 'Kimi workspace file download failed')
+    return new Uint8Array(await response.arrayBuffer())
+  }
+
   getGitStatus(sessionId: string, paths: string[] = []): Promise<GitStatusResult> {
     return this.request(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/fs:git_status`,
@@ -864,6 +919,26 @@ export class KimiRestClient {
 
   async shutdown(): Promise<void> {
     await this.request<unknown>('/api/v1/shutdown', { method: 'POST' })
+  }
+
+  async #binaryError(response: Response, messagePrefix: string): Promise<KimiApiError> {
+    let message = `${messagePrefix} with HTTP ${response.status}`
+    let code = -1
+    let requestId: string | undefined
+    try {
+      const payload = await response.json() as Partial<KimiEnvelope<unknown>>
+      message = payload.msg ?? message
+      code = typeof payload.code === 'number' ? payload.code : code
+      requestId = payload.request_id
+    } catch {
+      // Binary endpoint failures may omit a JSON envelope.
+    }
+    return new KimiApiError(message, {
+      code,
+      ...(requestId === undefined ? {} : { requestId }),
+      status: response.status,
+      retryAfterMs: parseRetryAfter(response.headers.get('retry-after'))
+    })
   }
 }
 

@@ -38,6 +38,12 @@ export const ipcChannels = {
   attachmentDiscard: 'attachment:discard',
   filesList: 'files:list',
   filesRead: 'files:read',
+  filesSearch: 'files:search',
+  filesGrep: 'files:grep',
+  filesDownload: 'files:download',
+  filesOpen: 'files:open',
+  filesOpenIn: 'files:open-in',
+  filesReveal: 'files:reveal',
   markdownImageRead: 'markdown:image:read',
   gitStatus: 'git:status',
   fileDiff: 'file:diff',
@@ -545,6 +551,36 @@ export interface WorkspaceFilePreview {
   isBinary: boolean
 }
 
+export interface WorkspaceFileSearchItem {
+  path: string
+  name: string
+  kind: WorkspaceFileKind
+  score: number
+  matchPositions: number[]
+}
+
+export interface WorkspaceFileSearchResult {
+  items: WorkspaceFileSearchItem[]
+  truncated: boolean
+}
+
+export interface WorkspaceGrepMatch {
+  line: number
+  column: number
+  text: string
+  before: string[]
+  after: string[]
+}
+
+export interface WorkspaceGrepResult {
+  files: Array<{ path: string; matches: WorkspaceGrepMatch[] }>
+  filesScanned: number
+  truncated: boolean
+  elapsedMs: number
+}
+
+export type WorkspaceOpenApp = 'finder' | 'cursor' | 'vscode' | 'iterm' | 'terminal'
+
 export interface WorkspaceGitStatus {
   branch: string
   ahead: number
@@ -937,6 +973,12 @@ export interface KimiAgentDesktopApi {
   discardAttachment(fileId: string): Promise<void>
   listFiles(sessionId: string, path?: string): Promise<WorkspaceFileList>
   readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview>
+  searchFiles(sessionId: string, query: string): Promise<WorkspaceFileSearchResult>
+  grepFiles(sessionId: string, pattern: string): Promise<WorkspaceGrepResult>
+  downloadWorkspaceFile(sessionId: string, path: string): Promise<{ saved: boolean }>
+  openWorkspaceFile(sessionId: string, path: string, line?: number): Promise<{ opened: true }>
+  openWorkspaceFileIn(sessionId: string, appId: WorkspaceOpenApp, path: string, line?: number): Promise<{ opened: true }>
+  revealWorkspaceFile(sessionId: string, path: string): Promise<{ revealed: true }>
   readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null>
   getGitStatus(sessionId: string): Promise<WorkspaceGitStatus>
   getFileDiff(sessionId: string, path: string): Promise<WorkspaceFileDiff>

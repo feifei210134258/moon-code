@@ -363,6 +363,40 @@ export const fileReadResultSchema = z.object({
   is_binary: z.boolean()
 })
 
+export const fileSearchItemSchema = z.object({
+  path: z.string(),
+  name: z.string(),
+  kind: z.enum(['file', 'directory', 'symlink']),
+  score: z.number().min(0).max(1),
+  match_positions: z.array(z.number().int().nonnegative())
+})
+
+export const fileSearchResultSchema = z.object({
+  items: z.array(fileSearchItemSchema),
+  truncated: z.boolean()
+})
+
+export const fileGrepMatchSchema = z.object({
+  line: z.number().int().positive(),
+  col: z.number().int().positive(),
+  text: z.string(),
+  before: z.array(z.string()),
+  after: z.array(z.string())
+})
+
+export const fileGrepResultSchema = z.object({
+  files: z.array(z.object({
+    path: z.string(),
+    matches: z.array(fileGrepMatchSchema)
+  })),
+  files_scanned: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  elapsed_ms: z.number().int().nonnegative()
+})
+
+export const fileOpenResultSchema = z.object({ opened: z.literal(true) })
+export const fileRevealResultSchema = z.object({ revealed: z.literal(true) })
+
 export const gitPullRequestSchema = z.object({
   number: z.number().int().positive(),
   state: z.enum(['open', 'merged', 'closed', 'draft']),
@@ -630,6 +664,10 @@ export type FileGitStatus = z.infer<typeof fileGitStatusSchema>
 export type FileEntry = z.infer<typeof fileEntrySchema>
 export type FileListResult = z.infer<typeof fileListResultSchema>
 export type FileReadResult = z.infer<typeof fileReadResultSchema>
+export type FileSearchResult = z.infer<typeof fileSearchResultSchema>
+export type FileGrepResult = z.infer<typeof fileGrepResultSchema>
+export type FileOpenResult = z.infer<typeof fileOpenResultSchema>
+export type FileRevealResult = z.infer<typeof fileRevealResultSchema>
 export type GitStatusResult = z.infer<typeof gitStatusResultSchema>
 export type FileDiffResult = z.infer<typeof fileDiffResultSchema>
 export type Terminal = z.infer<typeof terminalSchema>

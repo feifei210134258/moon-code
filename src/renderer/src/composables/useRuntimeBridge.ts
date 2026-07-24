@@ -25,7 +25,10 @@ import type {
   WorkspaceFileDiff,
   WorkspaceFileList,
   WorkspaceFilePreview,
+  WorkspaceFileSearchResult,
+  WorkspaceGrepResult,
   WorkspaceGitStatus,
+  WorkspaceOpenApp,
   WorkspaceNavigationItem
 } from '@shared/contracts'
 
@@ -91,6 +94,15 @@ export function useRuntimeBridge() {
   const fileDiff = ref<WorkspaceFileDiff | null>(null)
   const fileDiffPending = ref(false)
   const fileDiffError = ref<string | null>(null)
+  const fileSearch = ref<WorkspaceFileSearchResult | null>(null)
+  const fileSearchPending = ref(false)
+  const fileSearchError = ref<string | null>(null)
+  const fileGrep = ref<WorkspaceGrepResult | null>(null)
+  const fileGrepPending = ref(false)
+  const fileGrepError = ref<string | null>(null)
+  const fileActionPending = ref<string | null>(null)
+  const fileActionError = ref<string | null>(null)
+  const fileActionNotice = ref<string | null>(null)
   let unsubscribeRuntime: (() => void) | undefined
   let unsubscribeSession: (() => void) | undefined
   let interactionGeneration = 0
@@ -99,6 +111,9 @@ export function useRuntimeBridge() {
   let directoryGeneration = 0
   let previewGeneration = 0
   let diffGeneration = 0
+  let fileSearchGeneration = 0
+  let fileGrepGeneration = 0
+  let fileActionGeneration = 0
   let skillsGeneration = 0
   let controlsGeneration = 0
   let operationalGeneration = 0
@@ -660,6 +675,96 @@ export function useRuntimeBridge() {
     }
   }
 
+  const searchFiles = async (query: string): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null || fileSearchPending.value) return
+    const generation = ++fileSearchGeneration
+    fileSearchPending.value = true
+    fileSearchError.value = null
+    try {
+      const result = await window.kimiAgent.searchFiles(sessionId, query)
+      if (generation !== fileSearchGeneration || sessionId !== requestedSessionId) return
+      fileSearch.value = result
+    } catch (error) {
+      if (generation === fileSearchGeneration && sessionId === requestedSessionId) {
+        fileSearch.value = null
+        fileSearchError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === fileSearchGeneration) fileSearchPending.value = false
+    }
+  }
+
+  const grepFiles = async (pattern: string): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null || fileGrepPending.value) return
+    const generation = ++fileGrepGeneration
+    fileGrepPending.value = true
+    fileGrepError.value = null
+    try {
+      const result = await window.kimiAgent.grepFiles(sessionId, pattern)
+      if (generation !== fileGrepGeneration || sessionId !== requestedSessionId) return
+      fileGrep.value = result
+    } catch (error) {
+      if (generation === fileGrepGeneration && sessionId === requestedSessionId) {
+        fileGrep.value = null
+        fileGrepError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === fileGrepGeneration) fileGrepPending.value = false
+    }
+  }
+
+  const runFileAction = async (
+    key: string,
+    action: (sessionId: string) => Promise<boolean | void>
+  ): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null || fileActionPending.value !== null) return
+    const generation = ++fileActionGeneration
+    fileActionPending.value = key
+    fileActionError.value = null
+    fileActionNotice.value = null
+    try {
+      const completed = await action(sessionId)
+      if (generation !== fileActionGeneration || sessionId !== requestedSessionId || completed === false) return
+      if (key.startsWith('download:')) fileActionNotice.value = '文件已保存到所选位置。'
+      else if (key.startsWith('reveal:')) fileActionNotice.value = '已在 Finder 中显示文件。'
+      else fileActionNotice.value = '已交给 Kimi 打开文件。'
+    } catch (error) {
+      if (generation === fileActionGeneration && sessionId === requestedSessionId) {
+        fileActionError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === fileActionGeneration) fileActionPending.value = null
+    }
+  }
+
+  const downloadWorkspaceFile = async (path: string): Promise<void> => {
+    await runFileAction(`download:${path}`, async (sessionId) => {
+      const result = await window.kimiAgent!.downloadWorkspaceFile(sessionId, path)
+      return result.saved
+    })
+  }
+
+  const openWorkspaceFile = async (path: string, line?: number): Promise<void> => {
+    await runFileAction(`open:${path}`, async (sessionId) => {
+      await window.kimiAgent!.openWorkspaceFile(sessionId, path, line)
+    })
+  }
+
+  const openWorkspaceFileIn = async (appId: WorkspaceOpenApp, path: string, line?: number): Promise<void> => {
+    await runFileAction(`open-in:${appId}:${path}`, async (sessionId) => {
+      await window.kimiAgent!.openWorkspaceFileIn(sessionId, appId, path, line)
+    })
+  }
+
+  const revealWorkspaceFile = async (path: string): Promise<void> => {
+    await runFileAction(`reveal:${path}`, async (sessionId) => {
+      await window.kimiAgent!.revealWorkspaceFile(sessionId, path)
+    })
+  }
+
   const loadFileDiff = async (path: string): Promise<void> => {
     const sessionId = requestedSessionId
     if (window.kimiAgent === undefined || sessionId === null) return
@@ -744,6 +849,9 @@ export function useRuntimeBridge() {
     directoryGeneration += 1
     previewGeneration += 1
     diffGeneration += 1
+    fileSearchGeneration += 1
+    fileGrepGeneration += 1
+    fileActionGeneration += 1
     fileList.value = null
     fileListPending.value = false
     fileListError.value = null
@@ -756,6 +864,15 @@ export function useRuntimeBridge() {
     fileDiff.value = null
     fileDiffPending.value = false
     fileDiffError.value = null
+    fileSearch.value = null
+    fileSearchPending.value = false
+    fileSearchError.value = null
+    fileGrep.value = null
+    fileGrepPending.value = false
+    fileGrepError.value = null
+    fileActionPending.value = null
+    fileActionError.value = null
+    fileActionNotice.value = null
   }
 
   const loadSessionSkills = async (sessionId: string): Promise<void> => {
@@ -1007,6 +1124,15 @@ export function useRuntimeBridge() {
     fileDiff,
     fileDiffPending,
     fileDiffError,
+    fileSearch,
+    fileSearchPending,
+    fileSearchError,
+    fileGrep,
+    fileGrepPending,
+    fileGrepError,
+    fileActionPending,
+    fileActionError,
+    fileActionNotice,
     refreshWorkspaceTree,
     loadMoreSessions,
     loadSessionChildren,
@@ -1040,6 +1166,12 @@ export function useRuntimeBridge() {
     dismissQuestion,
     loadDirectory,
     openFile,
+    searchFiles,
+    grepFiles,
+    downloadWorkspaceFile,
+    openWorkspaceFile,
+    openWorkspaceFileIn,
+    revealWorkspaceFile,
     loadFileDiff,
     refreshWorkspaceContext,
     toggle

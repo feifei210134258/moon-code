@@ -281,6 +281,64 @@ describe('useRuntimeBridge session races', () => {
     wrapper.unmount()
   })
 
+  it('keeps file queries scoped to the active Session and treats a cancelled save as a no-op', async () => {
+    let resolveSearch!: (value: Awaited<ReturnType<KimiAgentDesktopApi['searchFiles']>>) => void
+    const pendingSearch = new Promise<Awaited<ReturnType<KimiAgentDesktopApi['searchFiles']>>>((resolve) => {
+      resolveSearch = resolve
+    })
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:1234', error: null },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      searchFiles: vi.fn(() => pendingSearch),
+      downloadWorkspaceFile: vi.fn(async () => ({ saved: false }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-one')
+
+    const search = bridge.searchFiles('App')
+    expect(bridge.fileSearchPending.value).toBe(true)
+    bridge.clearActiveSession()
+    resolveSearch({
+      items: [{ path: 'src/App.vue', name: 'App.vue', kind: 'file', score: 0.9, matchPositions: [0] }],
+      truncated: false
+    })
+    await search
+    expect(bridge.fileSearch.value).toBeNull()
+    expect(bridge.fileSearchError.value).toBeNull()
+    expect(bridge.fileSearchPending.value).toBe(false)
+
+    await bridge.openSession('session-two')
+    await bridge.downloadWorkspaceFile('README.md')
+    expect(api.downloadWorkspaceFile).toHaveBeenCalledWith('session-two', 'README.md')
+    expect(bridge.fileActionError.value).toBeNull()
+    expect(bridge.fileActionNotice.value).toBeNull()
+    wrapper.unmount()
+  })
+
   it('merges authoritative paged Session navigation without duplicating workspaces', async () => {
     const session = (id: string) => ({
       id, title: id, updatedAt: null, busy: false, pendingInteraction: 'none' as const,

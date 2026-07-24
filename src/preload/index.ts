@@ -54,6 +54,13 @@ const api: KimiAgentDesktopApi = {
   discardAttachment: (fileId) => ipcRenderer.invoke(ipcChannels.attachmentDiscard, fileId),
   listFiles: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesList, sessionId, path),
   readFile: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesRead, sessionId, path),
+  searchFiles: (sessionId, query) => ipcRenderer.invoke(ipcChannels.filesSearch, sessionId, query),
+  grepFiles: (sessionId, pattern) => ipcRenderer.invoke(ipcChannels.filesGrep, sessionId, pattern),
+  downloadWorkspaceFile: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesDownload, sessionId, path),
+  openWorkspaceFile: (sessionId, path, line) => ipcRenderer.invoke(ipcChannels.filesOpen, sessionId, path, line),
+  openWorkspaceFileIn: (sessionId, appId, path, line) =>
+    ipcRenderer.invoke(ipcChannels.filesOpenIn, sessionId, appId, path, line),
+  revealWorkspaceFile: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesReveal, sessionId, path),
   readMarkdownImage: (sessionId, source) =>
     ipcRenderer.invoke(ipcChannels.markdownImageRead, sessionId, source),
   getGitStatus: (sessionId) => ipcRenderer.invoke(ipcChannels.gitStatus, sessionId),

@@ -65,8 +65,8 @@
 | Attachment / Media | 完成 | 原生多选、Kimi `/files` multipart 上传、官方 image/video/file content 映射、Bearer Blob 预览与 Draft 保留；见 ADR 0012 |
 | Markdown GFM / KaTeX / Mermaid | 完成 | raw HTML 禁用、DOMPurify、代码高亮、公式与 strict Mermaid SVG；文件路径内部路由 |
 | 文件路径链接 / HTML 路由 | 完成 | 蓝色文件入口；HTML 打开内置浏览器 |
-| 本地图片引用 | 缺失 | 尚未做 bearer/Blob 或源文本预解析 |
-| Conversation TOC / Compact / Undo / Cron notice | 缺失 | 尚无入口与投影 |
+| 本地图片引用 | 部分 | Markdown 本地图片经 Main 的 Session FS 读取，限制为当前 cwd、10 MiB、未截断 base64 二进制；远程 URL 不自动请求。尚待真实 Kimi 0.29.0 会话验收 |
+| Conversation TOC / Compact / Undo / Cron notice | 部分 | TOC、Compact/Undo 真实 IPC、Undo 草稿恢复、Cron origin notice 和 transcript marker 已接入；Compact marker 的 token 前后统计与真实会话回归仍待补齐，见 ADR 0013 |
 | 声音与系统通知 | 缺失 | Usage 通知偏好不能替代 Turn 通知 |
 
 ## 5. Agent、任务与运行模式
@@ -88,10 +88,10 @@
 | 能力 | 状态 | 当前证据或缺口 |
 | --- | --- | --- |
 | 文件树与读取/预览 | 完成 | Session FS list/read；二进制降级 |
-| 文件搜索与 grep | 缺失 | 尚无接口或 UI |
+| 文件搜索与 grep | 完成 | Kimi Session FS 的 search/grep；右栏按文件和匹配行呈现，目录结果进入目录 |
 | Git status / 单文件 Diff / Changed Files | 完成 | 右栏真实状态、按需 Diff、独立滚动区 |
 | Tool Diff | 部分 | Tool 输出存在，专用 Tool Diff 视图未完成 |
-| 下载 / Open / Reveal / Open in IDE | 缺失 | 内部预览与 HTML 路由已有，系统动作未完成 |
+| 下载 / Open / Reveal / Open in IDE | 完成 | 下载仅由 Main 的原生保存对话框落盘；系统打开、Finder reveal、Cursor/VS Code 均使用 Kimi Server FS action |
 | Terminal | 完成 | 多标签、输入、resize、replay、detach、关闭与打包 smoke |
 
 ## 7. Provider、设置与产品增强
@@ -100,7 +100,8 @@
 | --- | --- | --- |
 | Provider/Model/Auth/Config | 完成 | 真实目录、添加、刷新、默认模型、OAuth 与白名单设置 |
 | Provider 删除 | 上游阻塞 | 见 ADR 0005；Kimi `0.29.0` 无安全 REST mutation |
-| Theme / Language / 通知声音 | 缺失 | 设置页尚未提供完整产品配置 |
+| Theme | P2（明确不做） | 当前产品范围不实现 Theme 切换 |
+| Language / 通知声音 | 缺失 | 设置页尚未提供完整产品配置 |
 | Archived Sessions | 完成 | 设置页读取 Kimi 归档列表并恢复至原 Workspace |
 | Usage 实时监控 | 完成 | `/oauth/usage`、阈值、轮询、stale/backoff 与顶部 UI |
 | 内置开发浏览器 / HTML 路由 | 完成 | `WebContentsView`、preview server、console/network、viewport |
@@ -109,9 +110,9 @@
 
 ## 8. 下一实现顺序
 
-1. Conversation TOC、Compact、Undo、Cron notice 与本地图片源重写。
-2. 文件搜索、grep、下载和系统 Open/Reveal。
-3. Todo、BTW Side Chat、Mention menu 与完整 Agent 详情。
-4. Theme、Language 与通知声音。
+1. Conversation 控制的真实 Kimi 0.29.0 回归、Compact token marker 与打包验收。
+2. Todo、BTW Side Chat、Mention menu 与完整 Agent 详情。
+3. Workspace/Config 的完整多客户端全局同步。
+4. Language 与通知声音；Theme 已按产品决策移出 P0。
 
 每个切片完成后更新本表，并运行 `pnpm typecheck`、`pnpm test` 和相关 packaged smoke；公开 Beta 仍要求所有非“上游阻塞”的 P0 行完成。
