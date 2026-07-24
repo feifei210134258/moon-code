@@ -70,7 +70,13 @@ describe('SessionSyncController', () => {
             at: '2026-07-23T00:02:00.000Z'
           }],
           has_more: false,
-          tasks: [], interactions: [], attachments: [], todos: [], meta: {}, agents: [], pending_interactions: []
+          tasks: [], interactions: [], attachments: [],
+          todos: [{
+            todoId: 'todo-main',
+            items: [{ title: 'Inspect the repository', status: 'done' }, { title: 'Implement the panel', status: 'in_progress' }],
+            updatedAt: '2026-07-23T00:02:00.000Z'
+          }],
+          meta: {}, agents: [], pending_interactions: []
         })
       },
       socket: new FakeSocket()
@@ -82,6 +88,40 @@ describe('SessionSyncController', () => {
     expect(state.markers).toEqual([{
       markerId: 'marker-1', marker: 'history_compacted', payload: { compactedCount: 4 },
       at: '2026-07-23T00:02:00.000Z'
+    }])
+    expect(state.todos).toEqual([{
+      todoId: 'todo-main',
+      items: [{ title: 'Inspect the repository', status: 'done' }, { title: 'Implement the panel', status: 'in_progress' }],
+      updatedAt: '2026-07-23T00:02:00.000Z'
+    }])
+    controller.close()
+  })
+
+  it('updates the visible Todo list from a live Kimi tool display before the next resync', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.use', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:03:00.000Z',
+      payload: {
+        toolCallId: 'tool-todo', name: 'TodoWrite', todoId: 'todo-live',
+        display: {
+          kind: 'todo_list',
+          items: [{ title: 'Collect Kimi state', status: 'done' }, { title: 'Render it in Plan', status: 'in_progress' }]
+        }
+      }
+    } satisfies SessionEventFrame)
+
+    expect(controller.getState('session-1')?.todos).toEqual([{
+      todoId: 'todo-live',
+      items: [{ title: 'Collect Kimi state', status: 'done' }, { title: 'Render it in Plan', status: 'in_progress' }],
+      updatedAt: '2026-07-23T00:03:00.000Z'
     }])
     controller.close()
   })

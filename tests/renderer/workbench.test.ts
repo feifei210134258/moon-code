@@ -28,6 +28,7 @@ function sessionState(): SessionViewState {
       status: 'completed'
     }],
     markers: [],
+    todos: [],
     pendingApprovals: [],
     pendingQuestions: [],
     agents: [],

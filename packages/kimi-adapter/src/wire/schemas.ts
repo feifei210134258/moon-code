@@ -205,6 +205,17 @@ export const transcriptItemSchema = z.discriminatedUnion('kind', [
   })
 ])
 
+export const sessionTodoItemSchema = z.object({
+  title: z.string(),
+  status: z.enum(['pending', 'in_progress', 'done'])
+})
+
+export const sessionTodoSchema = z.object({
+  todoId: z.string(),
+  items: z.array(sessionTodoItemSchema),
+  updatedAt: z.string().optional()
+})
+
 export const sessionTranscriptSchema = z.object({
   agent_id: z.string().min(1),
   items: z.array(transcriptItemSchema),
@@ -212,7 +223,7 @@ export const sessionTranscriptSchema = z.object({
   tasks: z.array(z.record(z.string(), z.unknown())),
   interactions: z.array(z.record(z.string(), z.unknown())),
   attachments: z.array(z.record(z.string(), z.unknown())),
-  todos: z.array(z.record(z.string(), z.unknown())),
+  todos: z.array(sessionTodoSchema),
   meta: z.record(z.string(), z.unknown()),
   agents: z.array(z.record(z.string(), z.unknown())),
   pending_interactions: z.array(z.record(z.string(), z.unknown()))
@@ -664,6 +675,7 @@ export type FileGitStatus = z.infer<typeof fileGitStatusSchema>
 export type FileEntry = z.infer<typeof fileEntrySchema>
 export type FileListResult = z.infer<typeof fileListResultSchema>
 export type FileReadResult = z.infer<typeof fileReadResultSchema>
+export type SessionTodo = z.infer<typeof sessionTodoSchema>
 export type FileSearchResult = z.infer<typeof fileSearchResultSchema>
 export type FileGrepResult = z.infer<typeof fileGrepResultSchema>
 export type FileOpenResult = z.infer<typeof fileOpenResultSchema>

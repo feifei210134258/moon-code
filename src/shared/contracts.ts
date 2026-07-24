@@ -225,6 +225,17 @@ export interface SessionTranscriptMarker {
   at: string | null
 }
 
+export interface KimiTodoItem {
+  title: string
+  status: 'pending' | 'in_progress' | 'done'
+}
+
+export interface KimiTodoList {
+  todoId: string
+  items: KimiTodoItem[]
+  updatedAt: string | null
+}
+
 export interface SessionViewState {
   sessionId: string
   title: string
@@ -237,6 +248,7 @@ export interface SessionViewState {
   cursor: { seq: number; epoch?: string } | null
   messages: SessionTranscriptMessage[]
   markers: SessionTranscriptMarker[]
+  todos: KimiTodoList[]
   pendingApprovals: ApprovalRequestView[]
   pendingQuestions: QuestionRequestView[]
   agents: SessionAgentView[]

@@ -81,6 +81,25 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.emitted('cancelTask')).toEqual([['task-1']])
   })
 
+  it('renders the latest authoritative Kimi Todo list under Changes', () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: {
+        ...baseProps,
+        todos: [{
+          todoId: 'todo-1',
+          items: [{ title: '读取 Kimi 状态', status: 'done' as const }, { title: '呈现计划', status: 'in_progress' as const }],
+          updatedAt: '2026-07-24T00:00:00.000Z'
+        }]
+      }
+    })
+
+    expect(wrapper.get('.todo-panel header').text()).toContain('1/2')
+    expect(wrapper.get('.todo-panel').text()).toContain('读取 Kimi 状态')
+    expect(wrapper.get('.todo-panel').text()).toContain('进行中')
+    expect(wrapper.find('.todo-panel li.is-done').exists()).toBe(true)
+    expect(wrapper.find('.todo-panel li.is-in_progress').exists()).toBe(true)
+  })
+
   it('routes directories and files through typed entry events and renders bounded preview text', async () => {
     const wrapper = mount(ExtensionsPanel, { props: { ...baseProps, activeTab: 'files' } })
     const rows = wrapper.findAll('.file-row')

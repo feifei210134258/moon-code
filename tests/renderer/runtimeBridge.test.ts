@@ -22,6 +22,7 @@ function sessionState(sessionId: string): SessionViewState {
     cursor: { seq: 1, epoch: 'epoch-1' },
     messages: [],
     markers: [],
+    todos: [],
     pendingApprovals: [],
     pendingQuestions: [],
     agents: [],

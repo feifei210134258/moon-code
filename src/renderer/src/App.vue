@@ -523,6 +523,7 @@ onBeforeUnmount(() => {
           :browser-annotation-picking="browserBridge.annotationPicking.value"
           :browser-annotation-submitting="browserBridge.annotationSubmitting.value"
           :browser-annotation-error="browserBridge.annotationError.value"
+          :todos="activeSessionView?.todos ?? []"
           :tasks="visibleOperational?.tasks ?? []"
           :tasks-pending="runtimeBridge.sessionOperationalPending.value"
           :tasks-error="runtimeBridge.sessionOperationalError.value"

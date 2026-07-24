@@ -2766,12 +2766,13 @@ select:focus-visible {
 
 .changes-view {
   display: grid;
-  grid-template-rows: auto minmax(250px, 1fr) auto;
+  grid-template-rows: auto minmax(250px, 1fr) auto auto;
   gap: 10px;
 }
 
 .changed-files-panel,
 .diff-panel,
+.todo-panel,
 .plan-panel {
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2780,6 +2781,7 @@ select:focus-visible {
 }
 
 .changed-files-panel h2,
+.todo-panel h2,
 .plan-panel h2 {
   margin: 0;
   font-size: 12px;
@@ -2926,10 +2928,12 @@ select:focus-visible {
   font-size: 10px;
 }
 
+.todo-panel,
 .plan-panel {
   padding: 8px 10px 10px;
 }
 
+.todo-panel header,
 .plan-panel header {
   min-height: 30px;
   display: flex;
@@ -2937,6 +2941,7 @@ select:focus-visible {
   justify-content: space-between;
 }
 
+.todo-panel ol,
 .plan-panel ol {
   display: grid;
   gap: 7px;
@@ -2945,6 +2950,7 @@ select:focus-visible {
   list-style: none;
 }
 
+.todo-panel li,
 .plan-panel li {
   display: grid;
   grid-template-columns: 17px minmax(0, 1fr);
@@ -2957,6 +2963,43 @@ select:focus-visible {
 .plan-panel li svg {
   color: var(--green);
 }
+
+.todo-panel li {
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.todo-panel li > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-panel li em {
+  color: var(--muted);
+  font-size: 8.5px;
+  font-style: normal;
+}
+
+.todo-status-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(101, 117, 136, 0.52);
+  border-radius: 50%;
+}
+
+.todo-panel li.is-in_progress .todo-status-dot {
+  border-color: #6e91d7;
+  background: #6e91d7;
+  box-shadow: 0 0 0 3px rgba(110, 145, 215, 0.13);
+}
+
+.todo-panel li.is-done .todo-status-dot {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.todo-panel li.is-done > span:nth-child(2) { color: var(--muted); text-decoration: line-through; }
 
 .plan-empty {
   margin: 2px 0 4px;

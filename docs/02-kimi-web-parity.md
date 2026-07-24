@@ -94,7 +94,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | MCP 状态              | `/mcp/servers`                   | P0       | 列表、状态、重启                                 |
 | Tools 列表            | `/tools`                         | P0       | 用于诊断和能力展示                               |
 
-实现状态：Session `/status`、真实 Model picker、模型能力相关 Thinking effort、Permission、Plan 与 Swarm 已接入；普通文本和浏览器批注 Prompt 均携带当前控制字段。Prompt Queue 已按官方边界区分可编辑/重排的本地 Draft 和 Kimi 已接收队列，见 [ADR 0011](./adr/0011-prompt-queue-local-draft-boundary.md)。`/tasks`、Goal 创建/读取/控制也已接入。Workspace 添加/重命名/移除，以及 Session 搜索/分页/创建/改名/归档/恢复/Fork/Children/Export/warnings 已形成真实 Kimi 生命周期链路。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
+实现状态：Session `/status`、真实 Model picker、模型能力相关 Thinking effort、Permission、Plan 与 Swarm 已接入；普通文本和浏览器批注 Prompt 均携带当前控制字段。Prompt Queue 已按官方边界区分可编辑/重排的本地 Draft 和 Kimi 已接收队列，见 [ADR 0011](./adr/0011-prompt-queue-local-draft-boundary.md)。`/tasks`、Goal 创建/读取/控制也已接入。Transcript 的 authoritative `todos` 会投影到 Changes 下半部的“计划”，并从已识别的 `todo_list` tool display 实时更新；后续 resync 以 Server 结果覆盖本地视图。Workspace 添加/重命名/移除，以及 Session 搜索/分页/创建/改名/归档/恢复/Fork/Children/Export/warnings 已形成真实 Kimi 生命周期链路。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
 
 ## 6. 文件、Git、Diff 与终端
 

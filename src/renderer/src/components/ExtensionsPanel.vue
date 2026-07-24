@@ -27,6 +27,7 @@ import type {
   BrowserViewState,
   BrowserViewport,
   KimiBackgroundTask,
+  KimiTodoList,
   WorkspaceFileDiff,
   WorkspaceFileEntry,
   WorkspaceFileList,
@@ -75,6 +76,7 @@ const props = withDefaults(defineProps<{
   browserAnnotationPicking?: boolean
   browserAnnotationSubmitting?: boolean
   browserAnnotationError?: string | null
+  todos?: KimiTodoList[]
   tasks?: KimiBackgroundTask[]
   tasksPending?: boolean
   tasksError?: string | null
@@ -93,6 +95,7 @@ const props = withDefaults(defineProps<{
   fileActionPending: null,
   fileActionError: null,
   fileActionNotice: null,
+  todos: () => [],
   tasks: () => [],
   tasksPending: false,
   tasksError: null,
@@ -145,6 +148,9 @@ const previewLines = computed(() => (props.filePreview?.content ?? '').split('\n
 const previewClipped = computed(() => (props.filePreview?.lineCount ?? previewLines.value.length) > previewLines.value.length)
 const diffLines = computed(() => parseDiff(props.fileDiff?.diff ?? '').slice(0, 600))
 const diffClipped = computed(() => (props.fileDiff?.diff.split('\n').length ?? 0) > diffLines.value.length)
+const activeTodo = computed(() => props.todos.at(-1) ?? null)
+const todoItems = computed(() => activeTodo.value?.items ?? [])
+const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
 const fileSearchQuery = ref('')
 const grepPattern = ref('')
 
@@ -156,6 +162,10 @@ function submitFileSearch(): void {
 function submitGrep(): void {
   const pattern = grepPattern.value.trim()
   if (pattern.length > 0) emit('grepFiles', pattern)
+}
+
+function todoStatusLabel(status: 'pending' | 'in_progress' | 'done'): string {
+  return status === 'done' ? '完成' : status === 'in_progress' ? '进行中' : '待处理'
 }
 
 function fileIcon(entry: WorkspaceFileEntry) {
@@ -301,6 +311,21 @@ function parseDiff(diff: string): RenderedDiffLine[] {
         </div>
         <div v-else class="extension-state">{{ fileDiff ? '这个文件没有可显示的文本 Diff。' : '从上方 Changed Files 选择一个文件。' }}</div>
         <div v-if="fileDiff?.truncated || diffClipped" class="diff-context">Diff 较大，当前仅显示前 {{ diffLines.length }} 行</div>
+      </section>
+
+      <section class="todo-panel">
+        <header>
+          <h2>计划</h2>
+          <span v-if="activeTodo">{{ completedTodos }}/{{ todoItems.length }}</span>
+        </header>
+        <ol v-if="todoItems.length > 0" aria-label="Kimi Todo 计划">
+          <li v-for="(todo, index) in todoItems" :key="`${activeTodo?.todoId}:${index}:${todo.title}`" :class="`is-${todo.status}`">
+            <span class="todo-status-dot" aria-hidden="true" />
+            <span>{{ todo.title }}</span>
+            <em>{{ todoStatusLabel(todo.status) }}</em>
+          </li>
+        </ol>
+        <p v-else class="plan-empty">Kimi 生成计划后会在这里实时显示。</p>
       </section>
 
       <section class="plan-panel">

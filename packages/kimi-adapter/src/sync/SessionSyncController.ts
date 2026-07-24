@@ -12,6 +12,7 @@ import {
   type PromptSubmitResult,
   type QuestionRequest,
   type SessionSnapshot,
+  type SessionTodo,
   type SessionTranscript
 } from '../wire/schemas.js'
 
@@ -65,6 +66,7 @@ export interface SessionSyncView {
   cursor: KimiCursor | null
   messages: TranscriptMessage[]
   markers: SessionTranscriptMarkerView[]
+  todos: SessionTodoView[]
   pendingApprovals: PendingApprovalView[]
   pendingQuestions: PendingQuestionView[]
   agents: AgentRosterItem[]
@@ -80,6 +82,22 @@ export interface SessionTranscriptMarkerView {
   marker: string
   payload: unknown
   at: string | null
+}
+
+export interface SessionTodoItemView {
+  title: string
+  status: 'pending' | 'in_progress' | 'done'
+}
+
+export interface SessionTodoView {
+  todoId: string
+  items: SessionTodoItemView[]
+  updatedAt: string | null
+}
+
+interface TranscriptSupplement {
+  markers: SessionTranscriptMarkerView[]
+  todos: SessionTodoView[]
 }
 
 export interface SessionUsageView {
@@ -198,9 +216,9 @@ export class SessionSyncController extends EventEmitter {
     this.#emitState(loading)
 
     try {
-      const [snapshot, markers] = await Promise.all([
+      const [snapshot, transcript] = await Promise.all([
         this.#rest.getSessionSnapshot(sessionId),
-        this.#loadTranscriptMarkers(sessionId)
+        this.#loadTranscriptSupplement(sessionId)
       ])
       if (generation !== this.#generation || this.#activeSessionId !== sessionId) return cloneView(loading)
 
@@ -222,7 +240,8 @@ export class SessionSyncController extends EventEmitter {
         phase: 'ready',
         cursor,
         messages: projection.messages,
-        markers,
+        markers: transcript.markers,
+        todos: transcript.todos,
         pendingApprovals: snapshot.pending_approvals.map(mapApproval),
         pendingQuestions: snapshot.pending_questions.map(mapQuestion),
         agents,
@@ -357,6 +376,7 @@ export class SessionSyncController extends EventEmitter {
     if (isAuthoritativeSkillWorkFrame(frame.type)) this.#optimisticSkills.delete(sessionId)
     const workChanged = this.#applySessionWorkChanged(state, frame)
     const usageChanged = this.#applyAgentUsage(state, frame)
+    const todosChanged = this.#applyTodoEvent(state, frame)
     if (this.#applyInteractionEvent(state, frame)) {
       const cursor = this.#socket.cursors[sessionId]
       if (cursor !== undefined) state.cursor = { ...cursor }
@@ -371,7 +391,7 @@ export class SessionSyncController extends EventEmitter {
     }
     const cursor = this.#socket.cursors[sessionId]
     if (cursor !== undefined) state.cursor = { ...cursor }
-    if (!result.changed && !agentsChanged && !workChanged && !usageChanged) return
+    if (!result.changed && !agentsChanged && !workChanged && !usageChanged && !todosChanged) return
     if (result.changed) this.#applyProjection(state, this.#projector.getProjection(sessionId))
     if (agentsChanged) state.agents = this.#agentProjector.getRoster(sessionId)
     this.#emitState(state)
@@ -425,6 +445,20 @@ export class SessionSyncController extends EventEmitter {
     return changed
   }
 
+  #applyTodoEvent(state: SessionSyncView, frame: SessionEventFrame): boolean {
+    const next = liveTodo(frame)
+    if (next === null) return false
+    const index = state.todos.findIndex((todo) => todo.todoId === next.todoId)
+    if (index < 0) {
+      state.todos = [...state.todos, next]
+      return true
+    }
+    const previous = state.todos[index]!
+    if (sameTodo(previous, next)) return false
+    state.todos = state.todos.map((todo, todoIndex) => todoIndex === index ? next : todo)
+    return true
+  }
+
   #resync(sessionId: string): Promise<void> {
     const existing = this.#resyncing.get(sessionId)
     if (existing !== undefined) return existing
@@ -441,9 +475,9 @@ export class SessionSyncController extends EventEmitter {
     state.error = null
     this.#emitState(state)
     try {
-      const [snapshot, markers] = await Promise.all([
+      const [snapshot, transcript] = await Promise.all([
         this.#rest.getSessionSnapshot(sessionId),
-        this.#loadTranscriptMarkers(sessionId)
+        this.#loadTranscriptSupplement(sessionId)
       ])
       if (this.#closed || sessionId !== this.#activeSessionId) return
       const projection = this.#projector.seedSnapshot(sessionId, snapshot)
@@ -461,7 +495,8 @@ export class SessionSyncController extends EventEmitter {
       state.activePromptStatus = snapshot.in_flight_turn === null ? null : 'running'
       state.cursor = cursor
       state.messages = projection.messages
-      state.markers = markers
+      state.markers = transcript.markers
+      state.todos = transcript.todos
       state.pendingApprovals = snapshot.pending_approvals.map(mapApproval)
       state.pendingQuestions = snapshot.pending_questions.map(mapQuestion)
       state.agents = agents
@@ -478,21 +513,24 @@ export class SessionSyncController extends EventEmitter {
     }
   }
 
-  async #loadTranscriptMarkers(sessionId: string): Promise<SessionTranscriptMarkerView[]> {
-    if (this.#rest.getSessionTranscript === undefined) return []
+  async #loadTranscriptSupplement(sessionId: string): Promise<TranscriptSupplement> {
+    if (this.#rest.getSessionTranscript === undefined) return { markers: [], todos: [] }
     try {
       const transcript: SessionTranscript = await this.#rest.getSessionTranscript(sessionId, { pageSize: 50 })
-      return transcript.items.flatMap((item) => item.kind === 'marker'
-        ? [{
-            markerId: item.markerId,
-            marker: item.marker,
-            payload: item.payload,
-            at: item.at ?? null
-          }]
-        : [])
+      return {
+        markers: transcript.items.flatMap((item) => item.kind === 'marker'
+          ? [{
+              markerId: item.markerId,
+              marker: item.marker,
+              payload: item.payload,
+              at: item.at ?? null
+            }]
+          : []),
+        todos: transcript.todos.map(mapTodo)
+      }
     } catch {
-      // Snapshot loading remains usable if an older compatible server omits transcript markers.
-      return []
+      // Snapshot loading remains usable if an older compatible server omits transcript extras.
+      return { markers: [], todos: [] }
     }
   }
 
@@ -598,6 +636,7 @@ function emptyView(sessionId: string): SessionSyncView {
     cursor: null,
     messages: [],
     markers: [],
+    todos: [],
     pendingApprovals: [],
     pendingQuestions: [],
     agents: [],
@@ -618,6 +657,7 @@ function cloneView(state: SessionSyncView): SessionSyncView {
       content: message.content.map((part) => ({ ...part }))
     })),
     markers: state.markers.map((marker) => ({ ...marker })),
+    todos: state.todos.map((todo) => ({ ...todo, items: todo.items.map((item) => ({ ...item })) })),
     pendingApprovals: state.pendingApprovals.map((item) => ({ ...item })),
     pendingQuestions: state.pendingQuestions.map((item) => ({
       ...item,
@@ -678,6 +718,49 @@ function recordValue(value: unknown): Record<string, unknown> | null {
 
 function nonNegativeNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : null
+}
+
+function mapTodo(todo: SessionTodo): SessionTodoView {
+  return {
+    todoId: todo.todoId,
+    items: todo.items.map((item) => ({ title: item.title, status: item.status })),
+    updatedAt: todo.updatedAt ?? null
+  }
+}
+
+function liveTodo(frame: SessionEventFrame): SessionTodoView | null {
+  const display = recordValue(frame.payload.display)
+  if (display?.kind !== 'todo_list') return null
+  const items = parseTodoItems(display.items)
+  if (items === null) return null
+  return {
+    todoId: recordString(frame.payload, 'todoId')
+      ?? recordString(frame.payload, 'todo_id')
+      ?? `live:${frame.session_id ?? 'session'}`,
+    items,
+    updatedAt: typeof frame.timestamp === 'string' ? frame.timestamp : null
+  }
+}
+
+function parseTodoItems(value: unknown): SessionTodoItemView[] | null {
+  if (!Array.isArray(value)) return null
+  const items: SessionTodoItemView[] = []
+  for (const item of value) {
+    const record = recordValue(item)
+    const title = typeof record?.title === 'string' ? record.title : null
+    const status = record?.status
+    if (title === null || (status !== 'pending' && status !== 'in_progress' && status !== 'done')) return null
+    items.push({ title, status })
+  }
+  return items
+}
+
+function sameTodo(left: SessionTodoView, right: SessionTodoView): boolean {
+  return left.updatedAt === right.updatedAt &&
+    left.items.length === right.items.length &&
+    left.items.every((item, index) => (
+      item.title === right.items[index]?.title && item.status === right.items[index]?.status
+    ))
 }
 
 function isAuthoritativeSkillWorkFrame(type: string): boolean {
