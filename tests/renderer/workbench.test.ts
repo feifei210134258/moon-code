@@ -29,6 +29,7 @@ function sessionState(): SessionViewState {
     }],
     markers: [],
     todos: [],
+    sideChat: null,
     pendingApprovals: [],
     pendingQuestions: [],
     agents: [],

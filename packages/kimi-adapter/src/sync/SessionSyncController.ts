@@ -67,6 +67,7 @@ export interface SessionSyncView {
   messages: TranscriptMessage[]
   markers: SessionTranscriptMarkerView[]
   todos: SessionTodoView[]
+  sideChat: SessionSideChatView | null
   pendingApprovals: PendingApprovalView[]
   pendingQuestions: PendingQuestionView[]
   agents: AgentRosterItem[]
@@ -95,9 +96,21 @@ export interface SessionTodoView {
   updatedAt: string | null
 }
 
+export interface SessionSideChatView {
+  agentId: string
+  messages: TranscriptMessage[]
+  active: boolean
+  error: string | null
+}
+
 interface TranscriptSupplement {
   markers: SessionTranscriptMarkerView[]
   todos: SessionTodoView[]
+}
+
+interface SideChatEventResult {
+  matched: boolean
+  changed: boolean
 }
 
 export interface SessionUsageView {
@@ -147,6 +160,7 @@ export class SessionSyncController extends EventEmitter {
   readonly #agentProjector = new AgentProjector()
   readonly #states = new Map<string, SessionSyncView>()
   readonly #reconnectBaseMs: number
+  #sideChatProjector: { sessionId: string; agentId: string; projector: TranscriptProjector } | null = null
   #activeSessionId: string | null = null
   #connected = false
   #closed = false
@@ -200,6 +214,7 @@ export class SessionSyncController extends EventEmitter {
     const generation = ++this.#generation
     const previousSessionId = this.#activeSessionId
     this.#activeSessionId = sessionId
+    if (this.#sideChatProjector?.sessionId !== sessionId) this.#sideChatProjector = null
     if (previousSessionId !== null && previousSessionId !== sessionId && this.#connected) {
       try {
         await this.#socket.unsubscribe([previousSessionId])
@@ -210,6 +225,7 @@ export class SessionSyncController extends EventEmitter {
     }
 
     const loading = this.#states.get(sessionId) ?? emptyView(sessionId)
+    if (this.#sideChatProjector?.sessionId !== sessionId) loading.sideChat = null
     loading.phase = 'loading'
     loading.error = null
     this.#states.set(sessionId, loading)
@@ -242,6 +258,7 @@ export class SessionSyncController extends EventEmitter {
         messages: projection.messages,
         markers: transcript.markers,
         todos: transcript.todos,
+        sideChat: cloneSideChat(loading.sideChat),
         pendingApprovals: snapshot.pending_approvals.map(mapApproval),
         pendingQuestions: snapshot.pending_questions.map(mapQuestion),
         agents,
@@ -287,6 +304,7 @@ export class SessionSyncController extends EventEmitter {
     this.#socket.close()
     this.#connected = false
     this.#optimisticSkills.clear()
+    this.#sideChatProjector = null
   }
 
   acceptSubmittedPrompt(sessionId: string, prompt: PromptSubmitResult): SessionSyncView | null {
@@ -317,6 +335,62 @@ export class SessionSyncController extends EventEmitter {
     }
     this.#emitState(state)
     return cloneView(state)
+  }
+
+  startSideChat(sessionId: string, agentId: string): SessionSideChatView {
+    const state = this.#states.get(sessionId)
+    if (state === undefined || sessionId !== this.#activeSessionId) throw new Error('Kimi session is not active')
+    const projector = new TranscriptProjector(agentId)
+    projector.reset(sessionId)
+    this.#sideChatProjector = { sessionId, agentId, projector }
+    state.sideChat = { agentId, messages: [], active: false, error: null }
+    this.#emitState(state)
+    return cloneSideChat(state.sideChat)!
+  }
+
+  acceptSideChatPrompt(sessionId: string, agentId: string, prompt: PromptSubmitResult): SessionSideChatView {
+    const state = this.#states.get(sessionId)
+    const sideChat = state?.sideChat
+    const projector = this.#sideChatProjector
+    if (
+      state === undefined || sessionId !== this.#activeSessionId || sideChat?.agentId !== agentId ||
+      projector?.sessionId !== sessionId || projector.agentId !== agentId
+    ) throw new Error('Kimi Side Chat is not active')
+    projector.projector.project({
+      type: 'prompt.submitted',
+      seq: state.cursor?.seq ?? 0,
+      ...(state.cursor?.epoch === undefined ? {} : { epoch: state.cursor.epoch }),
+      volatile: true,
+      session_id: sessionId,
+      timestamp: typeof prompt.created_at === 'string' ? prompt.created_at : new Date().toISOString(),
+      payload: {
+        agentId,
+        promptId: prompt.prompt_id,
+        userMessageId: prompt.user_message_id,
+        status: prompt.status,
+        content: prompt.content,
+        createdAt: prompt.created_at
+      }
+    })
+    const projection = projector.projector.getProjection(sessionId)
+    state.sideChat = {
+      agentId,
+      messages: projection.messages,
+      active: prompt.status === 'running',
+      error: null
+    }
+    this.#emitState(state)
+    return cloneSideChat(state.sideChat)!
+  }
+
+  closeSideChat(sessionId: string, agentId: string): void {
+    const state = this.#states.get(sessionId)
+    if (state === undefined || sessionId !== this.#activeSessionId || state.sideChat?.agentId !== agentId) {
+      throw new Error('Kimi Side Chat is not active')
+    }
+    state.sideChat = null
+    this.#sideChatProjector = null
+    this.#emitState(state)
   }
 
   beginSkillActivation(sessionId: string): SessionSyncView | null {
@@ -373,6 +447,13 @@ export class SessionSyncController extends EventEmitter {
     if (sessionId === undefined || sessionId !== this.#activeSessionId || this.#resyncing.has(sessionId)) return
     const state = this.#states.get(sessionId)
     if (state === undefined) return
+    const sideChat = this.#applySideChatEvent(state, frame)
+    if (sideChat.matched) {
+      const cursor = this.#socket.cursors[sessionId]
+      if (cursor !== undefined) state.cursor = { ...cursor }
+      if (sideChat.changed) this.#emitState(state)
+      return
+    }
     if (isAuthoritativeSkillWorkFrame(frame.type)) this.#optimisticSkills.delete(sessionId)
     const workChanged = this.#applySessionWorkChanged(state, frame)
     const usageChanged = this.#applyAgentUsage(state, frame)
@@ -457,6 +538,34 @@ export class SessionSyncController extends EventEmitter {
     if (sameTodo(previous, next)) return false
     state.todos = state.todos.map((todo, todoIndex) => todoIndex === index ? next : todo)
     return true
+  }
+
+  #applySideChatEvent(state: SessionSyncView, frame: SessionEventFrame): SideChatEventResult {
+    const sideChat = state.sideChat
+    const projector = this.#sideChatProjector
+    if (
+      sideChat === null || projector === null || projector.sessionId !== state.sessionId ||
+      projector.agentId !== sideChat.agentId || !isSideChatFrame(frame, sideChat)
+    ) return { matched: false, changed: false }
+    const result = projector.projector.project(frame)
+    if (result.resyncRequired) {
+      state.sideChat = {
+        ...sideChat,
+        active: false,
+        error: 'Side Chat 的实时历史需要重新打开。'
+      }
+      return { matched: true, changed: true }
+    }
+    const projection = projector.projector.getProjection(state.sessionId)
+    const next: SessionSideChatView = {
+      agentId: sideChat.agentId,
+      messages: projection.messages,
+      active: projection.active,
+      error: null
+    }
+    const changed = !sameSideChat(sideChat, next)
+    if (changed) state.sideChat = next
+    return { matched: true, changed }
   }
 
   #resync(sessionId: string): Promise<void> {
@@ -637,6 +746,7 @@ function emptyView(sessionId: string): SessionSyncView {
     messages: [],
     markers: [],
     todos: [],
+    sideChat: null,
     pendingApprovals: [],
     pendingQuestions: [],
     agents: [],
@@ -658,6 +768,7 @@ function cloneView(state: SessionSyncView): SessionSyncView {
     })),
     markers: state.markers.map((marker) => ({ ...marker })),
     todos: state.todos.map((todo) => ({ ...todo, items: todo.items.map((item) => ({ ...item })) })),
+    sideChat: cloneSideChat(state.sideChat),
     pendingApprovals: state.pendingApprovals.map((item) => ({ ...item })),
     pendingQuestions: state.pendingQuestions.map((item) => ({
       ...item,
@@ -761,6 +872,49 @@ function sameTodo(left: SessionTodoView, right: SessionTodoView): boolean {
     left.items.every((item, index) => (
       item.title === right.items[index]?.title && item.status === right.items[index]?.status
     ))
+}
+
+function cloneSideChat(value: SessionSideChatView | null): SessionSideChatView | null {
+  if (value === null) return null
+  return {
+    ...value,
+    messages: value.messages.map((message) => ({
+      ...message,
+      content: message.content.map((part) => ({ ...part }))
+    }))
+  }
+}
+
+function sameSideChat(left: SessionSideChatView, right: SessionSideChatView): boolean {
+  if (left.agentId !== right.agentId || left.active !== right.active || left.error !== right.error) return false
+  if (left.messages.length !== right.messages.length) return false
+  return left.messages.every((message, index) => (
+    message.id === right.messages[index]?.id &&
+    message.status === right.messages[index]?.status &&
+    JSON.stringify(message.content) === JSON.stringify(right.messages[index]?.content)
+  ))
+}
+
+function isSideChatFrame(frame: SessionEventFrame, sideChat: SessionSideChatView): boolean {
+  const agentId = frameAgentId(frame)
+  if (agentId !== null) return agentId === sideChat.agentId
+  const messageId = recordString(frame.payload, 'message_id') ?? recordString(frame.payload, 'messageId')
+  if (messageId !== null && sideChat.messages.some((message) => message.id === messageId)) return true
+  const toolCallId = recordString(frame.payload, 'tool_call_id') ?? recordString(frame.payload, 'toolCallId')
+  return toolCallId !== null && sideChat.messages.some((message) => message.content.some((part) => (
+    part.type === 'tool' && part.toolCallId === toolCallId
+  )))
+}
+
+function frameAgentId(frame: SessionEventFrame): string | null {
+  const direct = recordString(frame.payload, 'agentId') ?? recordString(frame.payload, 'agent_id')
+  if (direct !== null) return direct
+  const message = recordValue(frame.payload.message)
+  const metadata = recordValue(message?.metadata)
+  return recordString(message, 'agentId')
+    ?? recordString(message, 'agent_id')
+    ?? recordString(metadata, 'agentId')
+    ?? recordString(metadata, 'agent_id')
 }
 
 function isAuthoritativeSkillWorkFrame(type: string): boolean {

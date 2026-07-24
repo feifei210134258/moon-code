@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { PhCaretDown, PhListBullets, PhSpinnerGap } from '@phosphor-icons/vue'
+import { PhCaretDown, PhChatCircleText, PhListBullets, PhSpinnerGap } from '@phosphor-icons/vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import type { ChatTurn } from '../types'
 import type {
   ApprovalRequestView,
   KimiModelCatalogItem,
   KimiPromptQueueState,
+  KimiSideChatView,
   KimiPromptControls,
   KimiSessionGoal,
   KimiSessionWarning,
@@ -28,9 +29,10 @@ import AttachmentBlock from './AttachmentBlock.vue'
 import MediaBlock from './MediaBlock.vue'
 import MarkdownBlock from './MarkdownBlock.vue'
 import SessionWarnings from './SessionWarnings.vue'
+import SideChatPanel from './SideChatPanel.vue'
 import type { LocalPromptDraft } from '../utils/localPromptQueue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   turns: ChatTurn[]
   phase: 'idle' | 'loading' | 'ready' | 'resyncing' | 'reconnecting' | 'error'
   error: string | null
@@ -66,7 +68,14 @@ const props = defineProps<{
   markers: SessionTranscriptMarker[]
   conversationActionPending: 'compact' | 'undo' | null
   conversationActionError: string | null
-}>()
+  sideChat?: KimiSideChatView | null
+  sideChatPending?: boolean
+  sideChatError?: string | null
+}>(), {
+  sideChat: null,
+  sideChatPending: false,
+  sideChatError: null
+})
 
 const emit = defineEmits<{
   submit: [text: string, attachments: KimiUploadedFile[], controls: KimiPromptControls, goalMode: boolean]
@@ -88,6 +97,9 @@ const emit = defineEmits<{
   moveLocalPrompt: [draftId: string, direction: -1 | 1]
   compact: [instruction?: string]
   undo: []
+  startSideChat: []
+  sendSideChat: [agentId: string, text: string]
+  closeSideChat: [agentId: string]
 }>()
 
 const transcriptScroll = ref<HTMLElement | null>(null)
@@ -211,6 +223,12 @@ watch(
           :disabled="turns.length === 0"
           @click="tocOpen = !tocOpen"
         ><PhListBullets :size="14" />目录</button>
+        <button
+          type="button"
+          class="conversation-tool-button"
+          :disabled="phase !== 'ready' || sideChatPending || sideChat !== null"
+          @click="emit('startSideChat')"
+        ><PhChatCircleText :size="14" />BTW</button>
         <details class="conversation-action-menu">
           <summary class="conversation-tool-button">会话操作<PhCaretDown :size="12" /></summary>
           <div class="conversation-action-popover">
@@ -304,6 +322,14 @@ watch(
     </div>
 
     <AgentRoster :agents="agents" />
+
+    <SideChatPanel
+      :side-chat="sideChat"
+      :pending="sideChatPending"
+      :error="sideChatError"
+      @send="(agentId, text) => emit('sendSideChat', agentId, text)"
+      @close="emit('closeSideChat', $event)"
+    />
 
     <TerminalDrawer
       :session-id="sessionId"

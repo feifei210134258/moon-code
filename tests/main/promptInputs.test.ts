@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { validatePromptControls, validatePromptInput } from '../../src/main/security/promptInputs.js'
+import {
+  validatePromptControls,
+  validatePromptInput,
+  validateSideChatPromptInput
+} from '../../src/main/security/promptInputs.js'
 
 const controls = {
   model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false
@@ -30,5 +34,13 @@ describe('prompt inputs', () => {
     expect(() => validatePromptInput({
       text: '', controls, attachments: [{ ...attachment, mediaType: 'not-a-mime' }]
     })).toThrow()
+  })
+
+  it('keeps BTW Side Chat text-only at the Main trust boundary', () => {
+    expect(validateSideChatPromptInput({ text: '只检查测试', controls })).toEqual({ text: '只检查测试', controls })
+    expect(() => validateSideChatPromptInput({
+      text: '不要接受附件', controls,
+      attachments: [{ fileId: 'file-1', name: 'secret.txt', mediaType: 'text/plain', size: 1 }]
+    })).toThrow('Kimi Side Chat only accepts text prompts')
   })
 })

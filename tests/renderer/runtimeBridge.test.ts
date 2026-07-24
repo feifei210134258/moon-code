@@ -23,6 +23,7 @@ function sessionState(sessionId: string): SessionViewState {
     messages: [],
     markers: [],
     todos: [],
+    sideChat: null,
     pendingApprovals: [],
     pendingQuestions: [],
     agents: [],

@@ -17,6 +17,7 @@ import {
   type KimiAttachmentBlob,
   type KimiAttachmentPickResult,
   type KimiSessionRuntimeStatus,
+  type KimiSideChatView,
   type KimiSessionGoal,
   type KimiSessionOperationalState,
   type KimiProviderRefreshResult,
@@ -94,7 +95,12 @@ import {
   validateWorkspaceLine,
   validateWorkspaceOpenApp
 } from './security/fileSearchInputs.js'
-import { validateMediaType, validatePromptControls, validatePromptInput } from './security/promptInputs.js'
+import {
+  validateMediaType,
+  validatePromptControls,
+  validatePromptInput,
+  validateSideChatPromptInput
+} from './security/promptInputs.js'
 import {
   validateCompactInstruction,
   validateMarkdownImageSource,
@@ -305,6 +311,34 @@ export function registerIpc(
       return await sessions.undoSession(sessionId, validateUndoCount(count))
     }
   )
+  ipcMain.handle(
+    ipcChannels.sideChatStart,
+    async (event, sessionId?: unknown): Promise<KimiSideChatView> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      return await sessions.startSideChat(sessionId)
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.sideChatPrompt,
+    async (
+      event,
+      sessionId?: unknown,
+      agentId?: unknown,
+      input?: unknown
+    ): Promise<PromptSubmissionResult> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      assertShortId(agentId, 'Side Chat agent')
+      return await sessions.submitSideChatPrompt(sessionId, agentId, validateSideChatPromptInput(input))
+    }
+  )
+  ipcMain.handle(ipcChannels.sideChatClose, (event, sessionId?: unknown, agentId?: unknown): void => {
+    assertTrustedSender(event)
+    assertSessionId(sessionId)
+    assertShortId(agentId, 'Side Chat agent')
+    sessions.closeSideChat(sessionId, agentId)
+  })
   ipcMain.handle(
     ipcChannels.sessionGoalControl,
     async (event, sessionId?: unknown, control?: unknown): Promise<KimiSessionGoal | null> => {

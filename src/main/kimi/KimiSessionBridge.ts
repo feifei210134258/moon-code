@@ -13,6 +13,8 @@ import type {
   InteractionResolveResult,
   KimiPromptControls,
   KimiPromptInput,
+  KimiSideChatPromptInput,
+  KimiSideChatView,
   KimiUndoDraft,
   KimiPromptQueueItem,
   KimiSessionGoal,
@@ -195,6 +197,44 @@ export class KimiSessionBridge extends EventEmitter {
       }
     }
     return await this.#submitContent(sessionId, content, undefined, input.controls)
+  }
+
+  async startSideChat(sessionId: string): Promise<KimiSideChatView> {
+    this.#assertActiveSession(sessionId)
+    const result = await this.#runtime.createRestClient().startSideChat(sessionId)
+    return this.#getController().startSideChat(sessionId, result.agent_id)
+  }
+
+  async submitSideChatPrompt(
+    sessionId: string,
+    agentId: string,
+    input: KimiSideChatPromptInput
+  ): Promise<PromptSubmissionResult> {
+    this.#assertActiveSession(sessionId)
+    const controller = this.#getController()
+    if (controller.getState(sessionId)?.sideChat?.agentId !== agentId) {
+      throw new Error('Kimi Side Chat is not active')
+    }
+    const result = await this.#runtime.createRestClient().submitPrompt(sessionId, {
+      content: [{ type: 'text', text: input.text }],
+      agentId,
+      model: input.controls.model,
+      thinking: input.controls.thinking,
+      permissionMode: input.controls.permissionMode,
+      planMode: input.controls.planMode,
+      swarmMode: input.controls.swarmMode
+    })
+    controller.acceptSideChatPrompt(sessionId, agentId, result)
+    return {
+      promptId: result.prompt_id,
+      userMessageId: result.user_message_id,
+      status: result.status
+    }
+  }
+
+  closeSideChat(sessionId: string, agentId: string): void {
+    this.#assertActiveSession(sessionId)
+    this.#getController().closeSideChat(sessionId, agentId)
   }
 
   async submitVisualAnnotation(

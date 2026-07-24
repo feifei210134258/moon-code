@@ -91,6 +91,11 @@ interface ToolTerminalState {
 
 export class TranscriptProjector {
   readonly #sessions = new Map<string, ProjectorSessionState>()
+  readonly #targetAgentId: string
+
+  constructor(targetAgentId = MAIN_AGENT_ID) {
+    this.#targetAgentId = targetAgentId
+  }
 
   reset(sessionId: string): void {
     this.#sessions.set(sessionId, createState())
@@ -105,7 +110,7 @@ export class TranscriptProjector {
         continue
       }
       if (isSanitizedSlashMessage(rawMessage)) state.sanitizedMessageIds.add(rawMessage.id)
-      if (message.agentId !== undefined && message.agentId !== MAIN_AGENT_ID) {
+      if (message.agentId !== undefined && message.agentId !== this.#targetAgentId) {
         rememberNonMainMessage(state, message)
       } else {
         rememberTerminalTools(state, message.content)
@@ -138,7 +143,7 @@ export class TranscriptProjector {
     const state = this.#getOrCreate(sessionId)
     const payload = frame.payload
     const agentId = transcriptFrameAgentId(frame.type, payload, state)
-    if (agentId !== null && agentId !== MAIN_AGENT_ID && isMainTranscriptFrame(frame.type)) {
+    if (agentId !== null && agentId !== this.#targetAgentId && isMainTranscriptFrame(frame.type)) {
       rememberNonMainFrame(frame.type, payload, state)
       return { changed: false, resyncRequired: false }
     }

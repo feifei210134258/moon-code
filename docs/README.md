@@ -39,6 +39,7 @@
 19. [ADR-0011：Prompt Queue 本地草稿边界](./adr/0011-prompt-queue-local-draft-boundary.md)
 20. [ADR-0012：Attachment、Media 与 Markdown 安全边界](./adr/0012-attachment-media-and-markdown-boundary.md)
 21. [ADR-0013：Conversation Controls 与 Markdown 本地图片边界](./adr/0013-kimi-web-conversation-controls-and-local-image-boundary.md)
+22. [ADR-0014：Kimi Web BTW Side Chat 边界](./adr/0014-kimi-web-btw-side-chat-boundary.md)
 
 ### Spike 实施记录
 

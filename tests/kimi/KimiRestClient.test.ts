@@ -513,6 +513,21 @@ describe('KimiRestClient', () => {
     )
   })
 
+  it('uses the official Web BTW action to create an agent-scoped Side Chat', async () => {
+    const response = new Response(JSON.stringify({ code: 0, msg: 'ok', data: { agent_id: 'agent-btw-1' } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response)
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.startSideChat('session-1')).resolves.toEqual({ agent_id: 'agent-btw-1' })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/sessions/session-1:btw',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({}) })
+    )
+  })
+
   it('uses the pinned Session Terminal REST resources', async () => {
     const terminal = {
       id: 'terminal-1', session_id: 'session-1', cwd: '/tmp/project', shell: '/bin/zsh',

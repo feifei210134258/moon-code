@@ -216,6 +216,10 @@ export const sessionTodoSchema = z.object({
   updatedAt: z.string().optional()
 })
 
+export const sideChatStartResultSchema = z.object({
+  agent_id: z.string().min(1)
+})
+
 export const sessionTranscriptSchema = z.object({
   agent_id: z.string().min(1),
   items: z.array(transcriptItemSchema),
@@ -676,6 +680,7 @@ export type FileEntry = z.infer<typeof fileEntrySchema>
 export type FileListResult = z.infer<typeof fileListResultSchema>
 export type FileReadResult = z.infer<typeof fileReadResultSchema>
 export type SessionTodo = z.infer<typeof sessionTodoSchema>
+export type SideChatStartResult = z.infer<typeof sideChatStartResultSchema>
 export type FileSearchResult = z.infer<typeof fileSearchResultSchema>
 export type FileGrepResult = z.infer<typeof fileGrepResultSchema>
 export type FileOpenResult = z.infer<typeof fileOpenResultSchema>

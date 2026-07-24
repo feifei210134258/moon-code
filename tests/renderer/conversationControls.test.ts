@@ -69,4 +69,11 @@ describe('Conversation controls', () => {
     expect(wrapper.emitted('compact')).toEqual([['保留安全边界']])
     expect(wrapper.emitted('undo')).toEqual([[]])
   })
+
+  it('opens a BTW Side Chat without coupling it to the main conversation actions', async () => {
+    const wrapper = mountConversation()
+    const buttons = wrapper.findAll('.conversation-tool-button')
+    await buttons.find((button) => button.text().includes('BTW'))!.trigger('click')
+    expect(wrapper.emitted('startSideChat')).toEqual([[]])
+  })
 })

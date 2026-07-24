@@ -36,6 +36,10 @@ const api: KimiAgentDesktopApi = {
   compactSession: (sessionId, instruction) =>
     ipcRenderer.invoke(ipcChannels.sessionCompact, sessionId, instruction),
   undoSession: (sessionId, count) => ipcRenderer.invoke(ipcChannels.sessionUndo, sessionId, count),
+  startSideChat: (sessionId) => ipcRenderer.invoke(ipcChannels.sideChatStart, sessionId),
+  submitSideChatPrompt: (sessionId, agentId, input) =>
+    ipcRenderer.invoke(ipcChannels.sideChatPrompt, sessionId, agentId, input),
+  closeSideChat: (sessionId, agentId) => ipcRenderer.invoke(ipcChannels.sideChatClose, sessionId, agentId),
   controlSessionGoal: (sessionId, control) =>
     ipcRenderer.invoke(ipcChannels.sessionGoalControl, sessionId, control),
   cancelBackgroundTask: (sessionId, taskId) => ipcRenderer.invoke(ipcChannels.taskCancel, sessionId, taskId),

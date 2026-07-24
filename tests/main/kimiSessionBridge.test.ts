@@ -40,6 +40,7 @@ class FakeRuntime extends EventEmitter {
   readonly updateSessionGoalObjective = vi.fn(async () => ({}))
   readonly compactSession = vi.fn(async () => undefined)
   readonly undoSession = vi.fn(async () => undefined)
+  readonly startSideChat = vi.fn(async () => ({ agent_id: 'agent-btw-1' }))
   readonly readFile = vi.fn(async () => ({
     path: 'assets/preview.png',
     content: 'AA==',
@@ -78,6 +79,7 @@ class FakeRuntime extends EventEmitter {
       updateSessionGoalObjective: this.updateSessionGoalObjective,
       compactSession: this.compactSession,
       undoSession: this.undoSession,
+      startSideChat: this.startSideChat,
       readFile: this.readFile,
       searchFiles: this.searchFiles,
       grepFiles: this.grepFiles,
@@ -155,6 +157,34 @@ class FakeRuntime extends EventEmitter {
 }
 
 describe('KimiSessionBridge terminals', () => {
+  it('starts and submits an agent-scoped Kimi BTW Side Chat without creating a main transcript prompt', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+
+    await expect(bridge.startSideChat('session-1')).resolves.toEqual(expect.objectContaining({ agentId: 'agent-btw-1' }))
+    await expect(bridge.submitSideChatPrompt('session-1', 'agent-invented', {
+      text: '不应发送',
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      }
+    })).rejects.toThrow('Kimi Side Chat is not active')
+    expect(runtime.submitPrompt).not.toHaveBeenCalled()
+    await bridge.submitSideChatPrompt('session-1', 'agent-btw-1', {
+      text: '只检查当前测试',
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      }
+    })
+    bridge.closeSideChat('session-1', 'agent-btw-1')
+
+    expect(runtime.startSideChat).toHaveBeenCalledWith('session-1')
+    expect(runtime.submitPrompt).toHaveBeenCalledWith('session-1', expect.objectContaining({
+      agentId: 'agent-btw-1', content: [{ type: 'text', text: '只检查当前测试' }]
+    }))
+    await bridge.close()
+  })
+
   it('compacts and undoes through Kimi before resyncing, restoring the last user draft', async () => {
     const runtime = new FakeRuntime(new FakeSocket())
     runtime.snapshotMessages = [{

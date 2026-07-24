@@ -126,6 +126,50 @@ describe('SessionSyncController', () => {
     controller.close()
   })
 
+  it('keeps a BTW Side Chat agent-scoped and projects its streamed reply outside the main transcript', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+    controller.startSideChat('session-1', 'agent-btw-1')
+    controller.acceptSideChatPrompt('session-1', 'agent-btw-1', {
+      prompt_id: 'prompt-btw-1', user_message_id: 'message-btw-user', status: 'running',
+      content: [{ type: 'text', text: '只检查测试覆盖，不修改主任务。' }],
+      created_at: '2026-07-24T00:00:00.000Z'
+    })
+
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'turn.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-24T00:00:01.000Z', payload: { turnId: 9, agentId: 'agent-btw-1' }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'turn.step.started', seq: 12, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-24T00:00:01.500Z', payload: { turnId: 9, step: 1, agentId: 'agent-btw-1' }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'assistant.delta', seq: 13, epoch: 'epoch-1', session_id: 'session-1', offset: 0,
+      timestamp: '2026-07-24T00:00:02.000Z', payload: { agentId: 'agent-btw-1', delta: '覆盖了核心路径。' }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'turn.ended', seq: 14, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-24T00:00:03.000Z', payload: { agentId: 'agent-btw-1', reason: 'completed' }
+    } satisfies SessionEventFrame)
+
+    const state = controller.getState('session-1')
+    expect(state?.sideChat).toEqual(expect.objectContaining({ agentId: 'agent-btw-1', active: false }))
+    expect(state?.sideChat?.messages).toContainEqual(expect.objectContaining({
+      role: 'user', content: [{ type: 'text', text: '只检查测试覆盖，不修改主任务。' }]
+    }))
+    expect(state?.sideChat?.messages).toContainEqual(expect.objectContaining({
+      role: 'assistant', content: [{ type: 'text', text: '覆盖了核心路径。' }]
+    }))
+    expect(state?.messages).not.toContainEqual(expect.objectContaining({ id: 'message-btw-user' }))
+    controller.close()
+  })
+
   it('uses snapshot → cursor → subscribe and rebuilds after a volatile delta gap', async () => {
     const socket = new FakeSocket()
     const rest = {

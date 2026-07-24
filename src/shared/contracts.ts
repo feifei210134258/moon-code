@@ -23,6 +23,9 @@ export const ipcChannels = {
   sessionOperationalGet: 'session:operational:get',
   sessionCompact: 'session:compact',
   sessionUndo: 'session:undo',
+  sideChatStart: 'side-chat:start',
+  sideChatPrompt: 'side-chat:prompt',
+  sideChatClose: 'side-chat:close',
   sessionGoalControl: 'session:goal:control',
   taskCancel: 'task:cancel',
   sessionStateChanged: 'session:state-changed',
@@ -236,6 +239,13 @@ export interface KimiTodoList {
   updatedAt: string | null
 }
 
+export interface KimiSideChatView {
+  agentId: string
+  messages: SessionTranscriptMessage[]
+  active: boolean
+  error: string | null
+}
+
 export interface SessionViewState {
   sessionId: string
   title: string
@@ -249,6 +259,7 @@ export interface SessionViewState {
   messages: SessionTranscriptMessage[]
   markers: SessionTranscriptMarker[]
   todos: KimiTodoList[]
+  sideChat: KimiSideChatView | null
   pendingApprovals: ApprovalRequestView[]
   pendingQuestions: QuestionRequestView[]
   agents: SessionAgentView[]
@@ -427,6 +438,11 @@ export interface KimiPromptInput {
   controls: KimiPromptControls
   attachments?: KimiUploadedFile[]
   goalObjective?: string
+}
+
+export interface KimiSideChatPromptInput {
+  text: string
+  controls: KimiPromptControls
 }
 
 export interface KimiUndoDraft {
@@ -963,6 +979,13 @@ export interface KimiAgentDesktopApi {
   getSessionOperationalState(sessionId: string): Promise<KimiSessionOperationalState>
   compactSession(sessionId: string, instruction?: string): Promise<void>
   undoSession(sessionId: string, count?: number): Promise<KimiUndoDraft | null>
+  startSideChat(sessionId: string): Promise<KimiSideChatView>
+  submitSideChatPrompt(
+    sessionId: string,
+    agentId: string,
+    input: KimiSideChatPromptInput
+  ): Promise<PromptSubmissionResult>
+  closeSideChat(sessionId: string, agentId: string): Promise<void>
   controlSessionGoal(sessionId: string, control: 'pause' | 'resume' | 'cancel'): Promise<KimiSessionGoal | null>
   cancelBackgroundTask(sessionId: string, taskId: string): Promise<{ cancelled: true }>
   submitPrompt(sessionId: string, input: KimiPromptInput): Promise<PromptSubmissionResult>

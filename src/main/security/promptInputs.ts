@@ -1,4 +1,9 @@
-import type { KimiPromptControls, KimiPromptInput, KimiUploadedFile } from '../../shared/contracts.js'
+import type {
+  KimiPromptControls,
+  KimiPromptInput,
+  KimiSideChatPromptInput,
+  KimiUploadedFile
+} from '../../shared/contracts.js'
 
 const MAX_PROMPT_TEXT = 200_000
 const MAX_MODEL_ID = 512
@@ -46,6 +51,14 @@ export function validatePromptInput(value: unknown): KimiPromptInput {
     ...(attachments.length === 0 ? {} : { attachments }),
     ...(goalObjective === undefined ? {} : { goalObjective: goalObjective.trim() })
   }
+}
+
+export function validateSideChatPromptInput(value: unknown): KimiSideChatPromptInput {
+  const input = validatePromptInput(value)
+  if (input.attachments !== undefined || input.goalObjective !== undefined) {
+    throw new TypeError('Kimi Side Chat only accepts text prompts')
+  }
+  return { text: input.text, controls: input.controls }
 }
 
 export function validatePromptAttachments(value: unknown): KimiUploadedFile[] {

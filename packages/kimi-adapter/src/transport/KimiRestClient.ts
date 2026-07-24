@@ -39,6 +39,7 @@ import {
   backgroundTaskListSchema,
   backgroundTaskCancelResultSchema,
   sessionTranscriptSchema,
+  sideChatStartResultSchema,
   sessionListSchema,
   sessionSummarySchema,
   terminalCloseResultSchema,
@@ -91,6 +92,7 @@ import {
   type BackgroundTaskCancelResult,
   type SessionSummary,
   type SessionTranscript,
+  type SideChatStartResult,
   type Terminal,
   type TerminalCloseResult,
   type SetDefaultModelResult,
@@ -615,6 +617,14 @@ export class KimiRestClient {
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/transcript?${query}`,
       {},
       sessionTranscriptSchema
+    )
+  }
+
+  startSideChat(sessionId: string): Promise<SideChatStartResult> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}:btw`,
+      { method: 'POST', body: JSON.stringify({}) },
+      sideChatStartResultSchema
     )
   }
 

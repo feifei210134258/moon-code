@@ -10,6 +10,7 @@ import type {
   KimiModelCatalogItem,
   KimiPromptControls,
   KimiPromptInput,
+  KimiSideChatPromptInput,
   KimiSessionRuntimeStatus,
   KimiSessionOperationalState,
   KimiSessionWarning,
@@ -59,6 +60,8 @@ export function useRuntimeBridge() {
   const promptError = ref<string | null>(null)
   const conversationActionPending = ref<'compact' | 'undo' | null>(null)
   const conversationActionError = ref<string | null>(null)
+  const sideChatPending = ref(false)
+  const sideChatError = ref<string | null>(null)
   const localPromptDraftsBySession = ref<Record<string, LocalPromptDraft[]>>({})
   const activeQueueSessionId = ref<string | null>(null)
   const sessionRuntimeStatus = ref<KimiSessionRuntimeStatus | null>(null)
@@ -425,6 +428,52 @@ export function useRuntimeBridge() {
       return null
     } finally {
       conversationActionPending.value = null
+    }
+  }
+
+  const startSideChat = async (sessionId: string): Promise<void> => {
+    if (
+      window.kimiAgent === undefined || sideChatPending.value || requestedSessionId !== sessionId ||
+      sessionView.value?.sideChat !== null
+    ) return
+    sideChatPending.value = true
+    sideChatError.value = null
+    try {
+      await window.kimiAgent.startSideChat(sessionId)
+    } catch (error) {
+      if (requestedSessionId === sessionId) sideChatError.value = errorMessage(error)
+    } finally {
+      sideChatPending.value = false
+    }
+  }
+
+  const submitSideChatPrompt = async (
+    sessionId: string,
+    agentId: string,
+    input: KimiSideChatPromptInput
+  ): Promise<void> => {
+    if (
+      window.kimiAgent === undefined || sideChatPending.value || requestedSessionId !== sessionId ||
+      sessionView.value?.sideChat?.agentId !== agentId
+    ) return
+    sideChatPending.value = true
+    sideChatError.value = null
+    try {
+      await window.kimiAgent.submitSideChatPrompt(sessionId, agentId, input)
+    } catch (error) {
+      if (requestedSessionId === sessionId) sideChatError.value = errorMessage(error)
+    } finally {
+      sideChatPending.value = false
+    }
+  }
+
+  const closeSideChat = async (sessionId: string, agentId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || requestedSessionId !== sessionId) return
+    sideChatError.value = null
+    try {
+      await window.kimiAgent.closeSideChat(sessionId, agentId)
+    } catch (error) {
+      if (requestedSessionId === sessionId) sideChatError.value = errorMessage(error)
     }
   }
 
@@ -1046,6 +1095,8 @@ export function useRuntimeBridge() {
     promptError.value = null
     conversationActionPending.value = null
     conversationActionError.value = null
+    sideChatPending.value = false
+    sideChatError.value = null
     interactionGeneration += 1
     interactionPendingKey.value = null
     interactionError.value = null
@@ -1090,6 +1141,8 @@ export function useRuntimeBridge() {
     promptError,
     conversationActionPending,
     conversationActionError,
+    sideChatPending,
+    sideChatError,
     localPromptQueue,
     sessionRuntimeStatus,
     sessionModels,
@@ -1149,6 +1202,9 @@ export function useRuntimeBridge() {
     submitPrompt,
     compactSession,
     undoSession,
+    startSideChat,
+    submitSideChatPrompt,
+    closeSideChat,
     takeLocalPromptDraft,
     removeLocalPrompt,
     moveLocalPrompt,

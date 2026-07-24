@@ -159,6 +159,22 @@ async function undoSession(): Promise<void> {
   if (draft !== null) await conversationPane.value?.loadPromptDraft(draft.text, draft.attachments)
 }
 
+function startSideChat(): void {
+  if (activeSessionId.value.length === 0) return
+  void runtimeBridge.startSideChat(activeSessionId.value)
+}
+
+function sendSideChat(agentId: string, text: string): void {
+  const controls = runtimeBridge.promptControls.value
+  if (activeSessionId.value.length === 0 || controls === null) return
+  void runtimeBridge.submitSideChatPrompt(activeSessionId.value, agentId, { text, controls })
+}
+
+function closeSideChat(agentId: string): void {
+  if (activeSessionId.value.length === 0) return
+  void runtimeBridge.closeSideChat(activeSessionId.value, agentId)
+}
+
 function controlGoal(control: 'pause' | 'resume' | 'cancel'): void {
   if (activeSessionId.value.length === 0) return
   void runtimeBridge.controlGoal(activeSessionId.value, control)
@@ -457,6 +473,9 @@ onBeforeUnmount(() => {
         :markers="activeSessionView?.markers ?? []"
         :conversation-action-pending="runtimeBridge.conversationActionPending.value"
         :conversation-action-error="runtimeBridge.conversationActionError.value"
+        :side-chat="activeSessionView?.sideChat ?? null"
+        :side-chat-pending="runtimeBridge.sideChatPending.value"
+        :side-chat-error="runtimeBridge.sideChatError.value"
         @submit="submitPrompt"
         @abort="runtimeBridge.abortActivePrompt"
         @respond-approval="respondApproval"
@@ -476,6 +495,9 @@ onBeforeUnmount(() => {
         @move-local-prompt="moveLocalPrompt"
         @compact="compactSession"
         @undo="undoSession"
+        @start-side-chat="startSideChat"
+        @send-side-chat="sendSideChat"
+        @close-side-chat="closeSideChat"
       />
 
       <template v-if="rightPanelOpen">
