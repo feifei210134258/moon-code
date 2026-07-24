@@ -18,6 +18,7 @@ import {
   type KimiAttachmentPickResult,
   type KimiSessionRuntimeStatus,
   type KimiSideChatView,
+  type KimiAgentTranscript,
   type KimiSessionGoal,
   type KimiSessionOperationalState,
   type KimiProviderRefreshResult,
@@ -339,6 +340,15 @@ export function registerIpc(
     assertShortId(agentId, 'Side Chat agent')
     sessions.closeSideChat(sessionId, agentId)
   })
+  ipcMain.handle(
+    ipcChannels.agentTranscriptGet,
+    async (event, sessionId?: unknown, agentId?: unknown): Promise<KimiAgentTranscript> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      assertShortId(agentId, 'agent')
+      return await sessions.getAgentTranscript(sessionId, agentId)
+    }
+  )
   ipcMain.handle(
     ipcChannels.sessionGoalControl,
     async (event, sessionId?: unknown, control?: unknown): Promise<KimiSessionGoal | null> => {

@@ -14,12 +14,14 @@ import { useWorkbenchStore } from './stores/workbench'
 import { workspaceFileDestination } from './utils/fileRouting'
 import type {
   BrowserAnnotationSubmitInput,
+  KimiAgentTranscript,
   KimiSessionOperationalState,
   KimiPromptControls,
   KimiSideChatView,
   KimiUploadedFile,
   PetOpenSessionIntent,
   QuestionAnswerInput,
+  SessionAgentView,
   SessionUsageSummary,
   WorkspaceFileEntry
 } from '@shared/contracts'
@@ -49,12 +51,14 @@ const showBrowserFixture = import.meta.env.DEV && new URLSearchParams(window.loc
 const showUsageFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('usage-fixture')
 const showOperationalFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('operational-fixture')
 const showSideChatFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('side-chat-fixture')
+const showAgentFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('agent-fixture')
 const usageOpen = ref(showUsageFixture)
 const usageSessionFixture = ref<SessionUsageSummary | null>(null)
 const operationalStateFixture = ref<KimiSessionOperationalState | null>(null)
 const localPromptQueueFixtureState = ref<LocalPromptDraft[] | null>(null)
 const conversationPane = ref<InstanceType<typeof ConversationPane> | null>(null)
 const pendingPetIntent = ref<PetOpenSessionIntent | null>(null)
+const selectedAgentId = ref<string | null>(null)
 let stopPetOpenListener: (() => void) | null = null
 const activeSessionView = computed(() => (
   runtimeBridge.sessionView.value?.sessionId === activeSessionId.value
@@ -98,6 +102,34 @@ const sideChatFixture: KimiSideChatView = {
   ]
 }
 const visibleSideChat = computed(() => showSideChatFixture ? sideChatFixture : activeSessionView.value?.sideChat ?? null)
+const selectedAgent = computed(() => activeSessionView.value?.agents.find((agent) => agent.id === selectedAgentId.value) ?? null)
+const agentDetailFixture: SessionAgentView = {
+  id: 'fixture-reviewer', role: 'subagent', name: 'Reviewer', description: '检查实现与测试覆盖',
+  status: 'completed', subagentType: 'review', parentAgentId: 'main', parentToolCallId: 'fixture-tool',
+  swarmIndex: 0, runInBackground: false, createdAt: '2026-07-24T07:30:00.000Z',
+  startedAt: '2026-07-24T07:30:01.000Z', completedAt: '2026-07-24T07:30:05.000Z',
+  suspendedReason: null, outputPreview: '核心路径已有覆盖。',
+  usage: { inputTokens: 1084, outputTokens: 216, cacheReadTokens: 640, cacheCreationTokens: 0, contextTokens: 1940 }
+}
+const agentTranscriptFixture: KimiAgentTranscript = {
+  agentId: agentDetailFixture.id,
+  hasMore: false,
+  usage: null,
+  messages: [
+    {
+      id: 'fixture-agent-user', sessionId: 'fixture-session', role: 'user',
+      content: [{ type: 'text', text: '审查 BTW Side Chat 的隔离边界与窄窗口行为。' }],
+      createdAt: '2026-07-24T07:30:01.000Z', promptId: 'fixture-agent-turn', status: 'completed'
+    },
+    {
+      id: 'fixture-agent-assistant', sessionId: 'fixture-session', role: 'assistant',
+      content: [{ type: 'text', text: '主 Transcript 与 BTW Agent 流已隔离；窄窗口层级也通过验收。' }],
+      createdAt: '2026-07-24T07:30:02.000Z', promptId: 'fixture-agent-turn', status: 'completed'
+    }
+  ]
+}
+const visibleAgentDetail = computed(() => showAgentFixture ? agentDetailFixture : selectedAgent.value)
+const visibleAgentTranscript = computed(() => showAgentFixture ? agentTranscriptFixture : runtimeBridge.agentTranscript.value)
 
 function submitPrompt(text: string, attachments: KimiUploadedFile[], controls: KimiPromptControls, goalMode: boolean): void {
   if (activeSessionId.value.length === 0) return
@@ -193,6 +225,17 @@ function sendSideChat(agentId: string, text: string): void {
 function closeSideChat(agentId: string): void {
   if (activeSessionId.value.length === 0) return
   void runtimeBridge.closeSideChat(activeSessionId.value, agentId)
+}
+
+function openAgent(agent: SessionAgentView): void {
+  if (activeSessionId.value.length === 0) return
+  selectedAgentId.value = agent.id
+  void runtimeBridge.loadAgentTranscript(activeSessionId.value, agent.id)
+}
+
+function closeAgent(): void {
+  selectedAgentId.value = null
+  runtimeBridge.clearAgentTranscript()
 }
 
 function controlGoal(control: 'pause' | 'resume' | 'cancel'): void {
@@ -375,6 +418,7 @@ watch(
 watch(
   [activeSessionId, () => runtimeBridge.runtime.value.status],
   ([sessionId, runtimeStatus]) => {
+    closeAgent()
     if (sessionId.length === 0) {
       runtimeBridge.clearActiveSession()
       return
@@ -496,6 +540,10 @@ onBeforeUnmount(() => {
         :side-chat="visibleSideChat"
         :side-chat-pending="runtimeBridge.sideChatPending.value"
         :side-chat-error="runtimeBridge.sideChatError.value"
+        :agent-detail="visibleAgentDetail"
+        :agent-transcript="visibleAgentTranscript"
+        :agent-transcript-pending="runtimeBridge.agentTranscriptPending.value"
+        :agent-transcript-error="runtimeBridge.agentTranscriptError.value"
         @submit="submitPrompt"
         @abort="runtimeBridge.abortActivePrompt"
         @respond-approval="respondApproval"
@@ -518,6 +566,8 @@ onBeforeUnmount(() => {
         @start-side-chat="startSideChat"
         @send-side-chat="sendSideChat"
         @close-side-chat="closeSideChat"
+        @open-agent="openAgent"
+        @close-agent="closeAgent"
       />
 
       <template v-if="rightPanelOpen">

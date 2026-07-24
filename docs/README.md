@@ -40,6 +40,7 @@
 20. [ADR-0012：Attachment、Media 与 Markdown 安全边界](./adr/0012-attachment-media-and-markdown-boundary.md)
 21. [ADR-0013：Conversation Controls 与 Markdown 本地图片边界](./adr/0013-kimi-web-conversation-controls-and-local-image-boundary.md)
 22. [ADR-0014：Kimi Web BTW Side Chat 边界](./adr/0014-kimi-web-btw-side-chat-boundary.md)
+23. [ADR-0015：Kimi Agent 详情与独立 Transcript 边界](./adr/0015-kimi-agent-detail-transcript-boundary.md)
 
 ### Spike 实施记录
 
@@ -48,4 +49,4 @@
 
 ## 当前推进
 
-已完成主工作台视觉基线、Foundation 工程，以及真实 Session 的 snapshot/Transcript/Prompt/Approval/Question/Tool/Thinking/WS resync 垂直切片；Files/Changes/Diff、Session Terminal、Model/Provider/OAuth/Settings、Skills、MCP/Tools 与 Agent roster 也已接入。Browser 现已支持 HTML 一键路由、隔离 WebContentsView、受限 Workspace Preview、localhost、视口、Console/Network、截图，以及元素/区域批注审查后发送到普通 Kimi Prompt；边界见 [ADR 0007](./adr/0007-browser-webcontentsview-preview-boundary.md) 与 [ADR 0010](./adr/0010-browser-annotation-isolated-world-and-prompt-boundary.md)。Usage 已通过官方 `/oauth/usage` 接入套餐、Extra Usage、Session token 与 Context 分区显示，边界见 [ADR 0008](./adr/0008-usage-authority-polling-boundary.md)。Pet 的核心范围已收敛为状态可见、点击打开 App 和返回准确 Session，打包态链路已验证。Attachment/Media 与 GFM、代码、KaTeX、Mermaid 已按 Kimi 官方 file content 接入，安全边界见 [ADR 0012](./adr/0012-attachment-media-and-markdown-boundary.md)。逐项缺口与证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
+已完成主工作台视觉基线、Foundation 工程，以及真实 Session 的 snapshot/Transcript/Prompt/Approval/Question/Tool/Thinking/WS resync 垂直切片；Files/Changes/Diff、Session Terminal、Model/Provider/OAuth/Settings、Skills、MCP/Tools、Agent roster 与独立 Agent Detail 也已接入。Browser 现已支持 HTML 一键路由、隔离 WebContentsView、受限 Workspace Preview、localhost、视口、Console/Network、截图，以及元素/区域批注审查后发送到普通 Kimi Prompt；边界见 [ADR 0007](./adr/0007-browser-webcontentsview-preview-boundary.md) 与 [ADR 0010](./adr/0010-browser-annotation-isolated-world-and-prompt-boundary.md)。Usage 已通过官方 `/oauth/usage` 接入套餐、Extra Usage、Session token 与 Context 分区显示，边界见 [ADR 0008](./adr/0008-usage-authority-polling-boundary.md)。Pet 的核心范围已收敛为状态可见、点击打开 App 和返回准确 Session，打包态链路已验证。Attachment/Media 与 GFM、代码、KaTeX、Mermaid 已按 Kimi 官方 file content 接入，安全边界见 [ADR 0012](./adr/0012-attachment-media-and-markdown-boundary.md)。逐项缺口与证据见 [P0 实现审计](./07-p0-implementation-audit.md)。

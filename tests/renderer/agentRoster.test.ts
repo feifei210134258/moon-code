@@ -31,5 +31,7 @@ describe('AgentRoster', () => {
     await wrapper.get('.agent-roster-summary').trigger('click')
     expect(wrapper.get('.agent-roster-list').text()).toContain('No credential leak found')
     expect(wrapper.get('.agent-roster-list').text()).toContain('150 tokens')
+    await wrapper.get('.agent-row').trigger('click')
+    expect(wrapper.emitted('open')?.[0]?.[0]).toEqual(expect.objectContaining({ id: 'agent-1' }))
   })
 })

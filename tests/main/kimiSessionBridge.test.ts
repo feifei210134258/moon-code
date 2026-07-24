@@ -41,6 +41,10 @@ class FakeRuntime extends EventEmitter {
   readonly compactSession = vi.fn(async () => undefined)
   readonly undoSession = vi.fn(async () => undefined)
   readonly startSideChat = vi.fn(async () => ({ agent_id: 'agent-btw-1' }))
+  readonly getSessionTranscript = vi.fn(async (_sessionId: string, options?: { agentId?: string }) => ({
+    agent_id: options?.agentId ?? 'main', items: [], has_more: false, tasks: [], interactions: [],
+    attachments: [], todos: [], meta: {}, agents: [], pending_interactions: []
+  }))
   readonly readFile = vi.fn(async () => ({
     path: 'assets/preview.png',
     content: 'AA==',
@@ -64,6 +68,7 @@ class FakeRuntime extends EventEmitter {
   readonly openFileIn = vi.fn(async () => ({ opened: true as const }))
   readonly revealFile = vi.fn(async () => ({ revealed: true as const }))
   snapshotMessages: Array<Record<string, unknown>> = []
+  snapshotSubagents: Array<Record<string, unknown>> = []
 
   constructor(readonly socket: FakeSocket) {
     super()
@@ -87,10 +92,7 @@ class FakeRuntime extends EventEmitter {
       openFile: this.openFile,
       openFileIn: this.openFileIn,
       revealFile: this.revealFile,
-      getSessionTranscript: vi.fn(async () => ({
-        agent_id: 'main', items: [], has_more: false, tasks: [], interactions: [],
-        attachments: [], todos: [], meta: {}, agents: [], pending_interactions: []
-      })),
+      getSessionTranscript: this.getSessionTranscript,
       getSessionStatus: vi.fn(async () => ({
         busy: false,
         model: 'kimi-for-coding',
@@ -149,6 +151,7 @@ class FakeRuntime extends EventEmitter {
         },
         messages: { items: this.snapshotMessages, has_more: false },
         in_flight_turn: null,
+        subagents: this.snapshotSubagents,
         pending_approvals: [],
         pending_questions: []
       }))
@@ -157,6 +160,34 @@ class FakeRuntime extends EventEmitter {
 }
 
 describe('KimiSessionBridge terminals', () => {
+  it('only reads transcripts for authoritative subagents in the active Kimi Session', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    runtime.snapshotSubagents = [{
+      id: 'agent-1', session_id: 'session-1', kind: 'subagent', description: 'Review tests',
+      status: 'completed', created_at: '2026-07-23T00:00:00.000Z', subagent_type: 'review'
+    }]
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    runtime.getSessionTranscript.mockClear()
+
+    await expect(bridge.getAgentTranscript('session-1', 'agent-invented'))
+      .rejects.toThrow('Kimi Agent is not part of the active Session')
+    expect(runtime.getSessionTranscript).not.toHaveBeenCalled()
+
+    await expect(bridge.getAgentTranscript('session-1', 'agent-1')).resolves.toEqual({
+      agentId: 'agent-1', messages: [], hasMore: false, usage: null
+    })
+    expect(runtime.getSessionTranscript).toHaveBeenCalledWith('session-1', { agentId: 'agent-1', pageSize: 100 })
+
+    runtime.getSessionTranscript.mockResolvedValueOnce({
+      agent_id: 'agent-other', items: [], has_more: false, tasks: [], interactions: [],
+      attachments: [], todos: [], meta: {}, agents: [], pending_interactions: []
+    })
+    await expect(bridge.getAgentTranscript('session-1', 'agent-1'))
+      .rejects.toThrow('Kimi Agent transcript identity mismatch')
+    await bridge.close()
+  })
+
   it('starts and submits an agent-scoped Kimi BTW Side Chat without creating a main transcript prompt', async () => {
     const runtime = new FakeRuntime(new FakeSocket())
     const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)

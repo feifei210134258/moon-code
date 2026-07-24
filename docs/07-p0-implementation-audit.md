@@ -76,7 +76,7 @@
 | Model / Thinking / Permission / Plan / Swarm | 完成 | 本轮切片；真实状态、动态能力、独立控制与 Prompt 映射 |
 | Goal | 完成 | 真实 Goal Strip、预算摘要、Composer Goal 模式创建与 pause/resume/cancel |
 | Todo | 完成 | Transcript 的 authoritative `todos` 映射至右栏“计划”；同一 Session 的 `todo_list` tool display 实时更新，重同步会回到上游事实 |
-| Subagent / Swarm roster | 部分 | Roster 与事件投影存在；详情、独立输出和用量仍不完整 |
+| Subagent / Swarm roster | 完成 | Kimi snapshot/event roster、状态、详细用量与 agent-scoped Transcript Detail Panel；Main 校验活跃 Session 的 authoritative Agent ID，见 ADR 0015 |
 | BTW side chat | 完成 | 官方 Web `:btw` 创建 agent、同 Session `agent_id` Prompt、独立流式 Panel 与主 Transcript 隔离；见 ADR 0014 |
 | Background tasks | 完成 | `/tasks` 轮询、状态/输出预览和运行中任务取消已替换右栏占位 |
 | Skills / Slash commands | 完成 | Session Skills、slash menu 与 activation |
@@ -111,7 +111,7 @@
 ## 8. 下一实现顺序
 
 1. Conversation 控制的真实 Kimi 0.29.0 回归、Compact token marker 与打包验收。
-2. Mention menu 与完整 Agent 详情。
+2. Mention menu。
 3. Workspace/Config 的完整多客户端全局同步。
 4. Language 与通知声音；Theme 已按产品决策移出 P0。
 

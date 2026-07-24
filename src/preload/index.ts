@@ -40,6 +40,7 @@ const api: KimiAgentDesktopApi = {
   submitSideChatPrompt: (sessionId, agentId, input) =>
     ipcRenderer.invoke(ipcChannels.sideChatPrompt, sessionId, agentId, input),
   closeSideChat: (sessionId, agentId) => ipcRenderer.invoke(ipcChannels.sideChatClose, sessionId, agentId),
+  getAgentTranscript: (sessionId, agentId) => ipcRenderer.invoke(ipcChannels.agentTranscriptGet, sessionId, agentId),
   controlSessionGoal: (sessionId, control) =>
     ipcRenderer.invoke(ipcChannels.sessionGoalControl, sessionId, control),
   cancelBackgroundTask: (sessionId, taskId) => ipcRenderer.invoke(ipcChannels.taskCancel, sessionId, taskId),

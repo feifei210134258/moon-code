@@ -5,6 +5,7 @@ import type { ChatTurn } from '../types'
 import type {
   ApprovalRequestView,
   KimiModelCatalogItem,
+  KimiAgentTranscript,
   KimiPromptQueueState,
   KimiSideChatView,
   KimiPromptControls,
@@ -30,6 +31,7 @@ import MediaBlock from './MediaBlock.vue'
 import MarkdownBlock from './MarkdownBlock.vue'
 import SessionWarnings from './SessionWarnings.vue'
 import SideChatPanel from './SideChatPanel.vue'
+import AgentDetailPanel from './AgentDetailPanel.vue'
 import type { LocalPromptDraft } from '../utils/localPromptQueue'
 
 const props = withDefaults(defineProps<{
@@ -71,10 +73,18 @@ const props = withDefaults(defineProps<{
   sideChat?: KimiSideChatView | null
   sideChatPending?: boolean
   sideChatError?: string | null
+  agentDetail?: SessionAgentView | null
+  agentTranscript?: KimiAgentTranscript | null
+  agentTranscriptPending?: boolean
+  agentTranscriptError?: string | null
 }>(), {
   sideChat: null,
   sideChatPending: false,
-  sideChatError: null
+  sideChatError: null,
+  agentDetail: null,
+  agentTranscript: null,
+  agentTranscriptPending: false,
+  agentTranscriptError: null
 })
 
 const emit = defineEmits<{
@@ -100,6 +110,8 @@ const emit = defineEmits<{
   startSideChat: []
   sendSideChat: [agentId: string, text: string]
   closeSideChat: [agentId: string]
+  openAgent: [agent: SessionAgentView]
+  closeAgent: []
 }>()
 
 const transcriptScroll = ref<HTMLElement | null>(null)
@@ -321,7 +333,7 @@ watch(
       </article>
     </div>
 
-    <AgentRoster :agents="agents" />
+    <AgentRoster :agents="agents" @open="emit('openAgent', $event)" />
 
     <SideChatPanel
       :side-chat="sideChat"
@@ -329,6 +341,14 @@ watch(
       :error="sideChatError"
       @send="(agentId, text) => emit('sendSideChat', agentId, text)"
       @close="emit('closeSideChat', $event)"
+    />
+
+    <AgentDetailPanel
+      :agent="agentDetail"
+      :transcript="agentTranscript"
+      :pending="agentTranscriptPending"
+      :error="agentTranscriptError"
+      @close="emit('closeAgent')"
     />
 
     <TerminalDrawer

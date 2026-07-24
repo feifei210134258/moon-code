@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 import type { SessionAgentView } from '@shared/contracts'
 
 const props = defineProps<{ agents: SessionAgentView[] }>()
+const emit = defineEmits<{ open: [agent: SessionAgentView] }>()
 const expanded = ref(false)
 
 const subagents = computed(() => props.agents.filter((agent) => agent.role === 'subagent'))
@@ -45,7 +46,17 @@ function usageLabel(agent: SessionAgentView): string | null {
       <span>{{ subagents.length }} 个<template v-if="activeCount > 0"> · {{ activeCount }} 个进行中</template></span>
     </button>
     <div v-if="expanded" class="agent-roster-list">
-      <article v-for="agent in subagents" :key="agent.id" class="agent-row">
+      <article
+        v-for="agent in subagents"
+        :key="agent.id"
+        class="agent-row"
+        role="button"
+        tabindex="0"
+        :aria-label="`打开 ${agent.name} 的详情`"
+        @click="emit('open', agent)"
+        @keydown.enter.prevent="emit('open', agent)"
+        @keydown.space.prevent="emit('open', agent)"
+      >
         <span class="agent-state" :class="`is-${agent.status}`" />
         <div>
           <header><strong>{{ agent.name }}</strong><span>{{ statusLabel(agent.status) }}</span></header>

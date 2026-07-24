@@ -26,6 +26,7 @@ export const ipcChannels = {
   sideChatStart: 'side-chat:start',
   sideChatPrompt: 'side-chat:prompt',
   sideChatClose: 'side-chat:close',
+  agentTranscriptGet: 'agent:transcript:get',
   sessionGoalControl: 'session:goal:control',
   taskCancel: 'task:cancel',
   sessionStateChanged: 'session:state-changed',
@@ -244,6 +245,13 @@ export interface KimiSideChatView {
   messages: SessionTranscriptMessage[]
   active: boolean
   error: string | null
+}
+
+export interface KimiAgentTranscript {
+  agentId: string
+  messages: SessionTranscriptMessage[]
+  hasMore: boolean
+  usage: SessionAgentUsage | null
 }
 
 export interface SessionViewState {
@@ -986,6 +994,7 @@ export interface KimiAgentDesktopApi {
     input: KimiSideChatPromptInput
   ): Promise<PromptSubmissionResult>
   closeSideChat(sessionId: string, agentId: string): Promise<void>
+  getAgentTranscript(sessionId: string, agentId: string): Promise<KimiAgentTranscript>
   controlSessionGoal(sessionId: string, control: 'pause' | 'resume' | 'cancel'): Promise<KimiSessionGoal | null>
   cancelBackgroundTask(sessionId: string, taskId: string): Promise<{ cancelled: true }>
   submitPrompt(sessionId: string, input: KimiPromptInput): Promise<PromptSubmissionResult>

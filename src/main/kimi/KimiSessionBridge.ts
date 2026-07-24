@@ -8,6 +8,7 @@ import type { KimiWsClient } from '../../../packages/kimi-adapter/src/transport/
 import type { MessageContentPart, PromptSubmitResult } from '../../../packages/kimi-adapter/src/wire/schemas.js'
 import type { KimiRuntimeManager } from '../runtime/KimiRuntimeManager.js'
 import { KimiTerminalCompatibility } from './KimiTerminalCompatibility.js'
+import { projectAgentTranscript } from './KimiAgentTranscriptProjector.js'
 import type {
   BrowserAnnotationSubmission,
   InteractionResolveResult,
@@ -15,6 +16,7 @@ import type {
   KimiPromptInput,
   KimiSideChatPromptInput,
   KimiSideChatView,
+  KimiAgentTranscript,
   KimiUndoDraft,
   KimiPromptQueueItem,
   KimiSessionGoal,
@@ -235,6 +237,20 @@ export class KimiSessionBridge extends EventEmitter {
   closeSideChat(sessionId: string, agentId: string): void {
     this.#assertActiveSession(sessionId)
     this.#getController().closeSideChat(sessionId, agentId)
+  }
+
+  async getAgentTranscript(sessionId: string, agentId: string): Promise<KimiAgentTranscript> {
+    this.#assertActiveSession(sessionId)
+    const state = this.#getController().getState(sessionId)
+    if (!state?.agents.some((agent) => agent.role === 'subagent' && agent.id === agentId)) {
+      throw new Error('Kimi Agent is not part of the active Session')
+    }
+    const transcript = await this.#runtime.createRestClient().getSessionTranscript(sessionId, {
+      agentId,
+      pageSize: 100
+    })
+    if (transcript.agent_id !== agentId) throw new Error('Kimi Agent transcript identity mismatch')
+    return projectAgentTranscript(sessionId, agentId, transcript)
   }
 
   async submitVisualAnnotation(

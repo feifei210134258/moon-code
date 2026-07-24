@@ -211,6 +211,62 @@ describe('useRuntimeBridge session races', () => {
     wrapper.unmount()
   })
 
+  it('keeps the latest selected Agent transcript when an older request resolves late', async () => {
+    let resolveAgentA!: (value: Awaited<ReturnType<KimiAgentDesktopApi['getAgentTranscript']>>) => void
+    let resolveAgentB!: (value: Awaited<ReturnType<KimiAgentDesktopApi['getAgentTranscript']>>) => void
+    const agentA = new Promise<Awaited<ReturnType<KimiAgentDesktopApi['getAgentTranscript']>>>((resolve) => {
+      resolveAgentA = resolve
+    })
+    const agentB = new Promise<Awaited<ReturnType<KimiAgentDesktopApi['getAgentTranscript']>>>((resolve) => {
+      resolveAgentB = resolve
+    })
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession: vi.fn(async () => sessionState('session-agent')),
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      getAgentTranscript: vi.fn((_sessionId: string, agentId: string) => agentId === 'agent-a' ? agentA : agentB)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-agent')
+
+    const pendingA = bridge.loadAgentTranscript('session-agent', 'agent-a')
+    const pendingB = bridge.loadAgentTranscript('session-agent', 'agent-b')
+    resolveAgentB({ agentId: 'agent-b', messages: [], hasMore: false, usage: null })
+    await pendingB
+    resolveAgentA({ agentId: 'agent-a', messages: [], hasMore: false, usage: null })
+    await pendingA
+
+    expect(bridge.agentTranscript.value?.agentId).toBe('agent-b')
+    expect(bridge.agentTranscriptPending.value).toBe(false)
+    wrapper.unmount()
+  })
+
   it('keeps Files and Git context scoped to the latest selected session', async () => {
     let resolveListA!: (value: Awaited<ReturnType<KimiAgentDesktopApi['listFiles']>>) => void
     let resolveListB!: (value: Awaited<ReturnType<KimiAgentDesktopApi['listFiles']>>) => void

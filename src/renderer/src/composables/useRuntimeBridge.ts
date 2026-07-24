@@ -8,6 +8,7 @@ import {
 } from '../utils/localPromptQueue'
 import type {
   KimiModelCatalogItem,
+  KimiAgentTranscript,
   KimiPromptControls,
   KimiPromptInput,
   KimiSideChatPromptInput,
@@ -62,6 +63,9 @@ export function useRuntimeBridge() {
   const conversationActionError = ref<string | null>(null)
   const sideChatPending = ref(false)
   const sideChatError = ref<string | null>(null)
+  const agentTranscript = ref<KimiAgentTranscript | null>(null)
+  const agentTranscriptPending = ref(false)
+  const agentTranscriptError = ref<string | null>(null)
   const localPromptDraftsBySession = ref<Record<string, LocalPromptDraft[]>>({})
   const activeQueueSessionId = ref<string | null>(null)
   const sessionRuntimeStatus = ref<KimiSessionRuntimeStatus | null>(null)
@@ -121,6 +125,7 @@ export function useRuntimeBridge() {
   let controlsGeneration = 0
   let operationalGeneration = 0
   let warningsGeneration = 0
+  let agentTranscriptGeneration = 0
   let operationalTimer: number | undefined
   let requestedSessionId: string | null = null
   const awaitingPromptCycleAt = new Map<string, number>()
@@ -350,6 +355,7 @@ export function useRuntimeBridge() {
     resetSessionControls()
     resetSessionOperational()
     conversationActionError.value = null
+    clearAgentTranscript()
     interactionGeneration += 1
     interactionPendingKey.value = null
     interactionError.value = null
@@ -475,6 +481,34 @@ export function useRuntimeBridge() {
     } catch (error) {
       if (requestedSessionId === sessionId) sideChatError.value = errorMessage(error)
     }
+  }
+
+  const loadAgentTranscript = async (sessionId: string, agentId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || requestedSessionId !== sessionId) return
+    const generation = ++agentTranscriptGeneration
+    agentTranscript.value = null
+    agentTranscriptPending.value = true
+    agentTranscriptError.value = null
+    try {
+      const transcript = await window.kimiAgent.getAgentTranscript(sessionId, agentId)
+      if (generation === agentTranscriptGeneration && requestedSessionId === sessionId) {
+        agentTranscript.value = transcript
+      }
+    } catch (error) {
+      if (generation === agentTranscriptGeneration && requestedSessionId === sessionId) {
+        agentTranscript.value = null
+        agentTranscriptError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === agentTranscriptGeneration) agentTranscriptPending.value = false
+    }
+  }
+
+  const clearAgentTranscript = (): void => {
+    agentTranscriptGeneration += 1
+    agentTranscript.value = null
+    agentTranscriptPending.value = false
+    agentTranscriptError.value = null
   }
 
   const sendPromptNow = async (sessionId: string, input: KimiPromptInput): Promise<boolean> => {
@@ -1097,6 +1131,7 @@ export function useRuntimeBridge() {
     conversationActionError.value = null
     sideChatPending.value = false
     sideChatError.value = null
+    clearAgentTranscript()
     interactionGeneration += 1
     interactionPendingKey.value = null
     interactionError.value = null
@@ -1143,6 +1178,9 @@ export function useRuntimeBridge() {
     conversationActionError,
     sideChatPending,
     sideChatError,
+    agentTranscript,
+    agentTranscriptPending,
+    agentTranscriptError,
     localPromptQueue,
     sessionRuntimeStatus,
     sessionModels,
@@ -1205,6 +1243,8 @@ export function useRuntimeBridge() {
     startSideChat,
     submitSideChatPrompt,
     closeSideChat,
+    loadAgentTranscript,
+    clearAgentTranscript,
     takeLocalPromptDraft,
     removeLocalPrompt,
     moveLocalPrompt,
