@@ -16,6 +16,7 @@ import type {
   BrowserAnnotationSubmitInput,
   KimiSessionOperationalState,
   KimiPromptControls,
+  KimiSideChatView,
   KimiUploadedFile,
   PetOpenSessionIntent,
   QuestionAnswerInput,
@@ -47,6 +48,7 @@ const showActivityFixture = import.meta.env.DEV && new URLSearchParams(window.lo
 const showBrowserFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('browser-fixture')
 const showUsageFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('usage-fixture')
 const showOperationalFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('operational-fixture')
+const showSideChatFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('side-chat-fixture')
 const usageOpen = ref(showUsageFixture)
 const usageSessionFixture = ref<SessionUsageSummary | null>(null)
 const operationalStateFixture = ref<KimiSessionOperationalState | null>(null)
@@ -78,6 +80,24 @@ const activeWorkspaceName = computed(() => projects.value.find((project) =>
 )?.name ?? '项目文件')
 const visibleOperational = computed(() => operationalStateFixture.value ?? runtimeBridge.sessionOperational.value)
 const visibleLocalPromptQueue = computed(() => localPromptQueueFixtureState.value ?? runtimeBridge.localPromptQueue.value)
+const sideChatFixture: KimiSideChatView = {
+  agentId: 'fixture-btw-agent',
+  active: true,
+  error: null,
+  messages: [
+    {
+      id: 'fixture-btw-user', sessionId: 'fixture-session', role: 'user',
+      content: [{ type: 'text', text: '只检查这次改动有没有遗漏，不要影响主任务。' }],
+      createdAt: '2026-07-24T07:30:00.000Z', promptId: 'fixture-prompt', status: 'completed'
+    },
+    {
+      id: 'fixture-btw-assistant', sessionId: 'fixture-session', role: 'assistant',
+      content: [{ type: 'text', text: '正在核对 Side Chat 的消息隔离、流式状态与关闭行为。' }],
+      createdAt: '2026-07-24T07:30:01.000Z', promptId: 'fixture-prompt', status: 'pending'
+    }
+  ]
+}
+const visibleSideChat = computed(() => showSideChatFixture ? sideChatFixture : activeSessionView.value?.sideChat ?? null)
 
 function submitPrompt(text: string, attachments: KimiUploadedFile[], controls: KimiPromptControls, goalMode: boolean): void {
   if (activeSessionId.value.length === 0) return
@@ -473,7 +493,7 @@ onBeforeUnmount(() => {
         :markers="activeSessionView?.markers ?? []"
         :conversation-action-pending="runtimeBridge.conversationActionPending.value"
         :conversation-action-error="runtimeBridge.conversationActionError.value"
-        :side-chat="activeSessionView?.sideChat ?? null"
+        :side-chat="visibleSideChat"
         :side-chat-pending="runtimeBridge.sideChatPending.value"
         :side-chat-error="runtimeBridge.sideChatError.value"
         @submit="submitPrompt"

@@ -913,7 +913,7 @@ select:focus-visible {
 
 .side-chat-panel {
   position: absolute;
-  z-index: 12;
+  z-index: 32;
   top: 46px;
   right: 18px;
   bottom: 18px;
