@@ -1,0 +1,93 @@
+// @vitest-environment happy-dom
+
+import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { KimiAgentDesktopApi } from '../../src/shared/contracts.js'
+import ComposerBar from '../../src/renderer/src/components/ComposerBar.vue'
+
+const controls = {
+  model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
+  planMode: false, swarmMode: false
+}
+const models = [{
+  id: 'kimi-for-coding', providerId: 'kimi', displayName: 'Kimi for Coding',
+  maxContextSize: 262_144, capabilities: ['thinking'], supportEfforts: ['off', 'high'], defaultEffort: 'high'
+}]
+
+afterEach(() => {
+  delete window.kimiAgent
+})
+
+describe('ComposerBar Skills menu', () => {
+  it('inserts a Kimi Skill command and activates it with arguments on submit', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models, controls,
+        skills: [{
+          name: 'review', description: 'Review current changes', source: 'project',
+          type: null, userInvocableOnly: false
+        }]
+      }
+    })
+
+    await wrapper.get('.slash-button').trigger('click')
+    expect(wrapper.get('.command-popover').text()).toContain('/review')
+    await wrapper.get('.command-popover button').trigger('click')
+    await wrapper.get('textarea').setValue('/review --fix src')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+
+    expect(wrapper.emitted('activateSkill')).toEqual([['review', '--fix src']])
+    expect(wrapper.emitted('submit')).toBeUndefined()
+  })
+
+  it('keeps unknown slash text as a normal Kimi prompt', async () => {
+    const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
+    await wrapper.get('textarea').setValue('/unknown continue')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([['/unknown continue', [], controls, false]])
+  })
+
+  it('keeps Stop available and allows a follow-up to enter the Kimi prompt queue', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: { skills: [], models, controls, running: true }
+    })
+
+    expect(wrapper.get('textarea').attributes('disabled')).toBeUndefined()
+    await wrapper.get('textarea').setValue('继续检查测试')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([['继续检查测试', [], controls, false]])
+    await wrapper.get('.stop-button').trigger('click')
+    expect(wrapper.emitted('abort')).toEqual([[]])
+  })
+
+  it('uses the real model catalog and exposes independent Plan and Swarm controls', async () => {
+    const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
+    await wrapper.get('.model-summary').trigger('click')
+    expect(wrapper.get('.composer-popover').text()).toContain('Kimi for Coding')
+    const toggles = wrapper.findAll('.composer-toggle-row input')
+    await toggles[0]!.setValue(true)
+    await toggles[2]!.setValue(true)
+    expect(wrapper.emitted('updateControls')).toEqual([
+      [{ ...controls, planMode: true }],
+      [{ ...controls, swarmMode: true }]
+    ])
+    await toggles[1]!.setValue(true)
+    expect(wrapper.emitted('updateGoalMode')).toEqual([[true]])
+  })
+
+  it('uploads through Kimi, shows removable chips, and submits attachment descriptors', async () => {
+    const attachment = { fileId: 'file-1', name: 'design.png', mediaType: 'image/png', size: 2048 }
+    window.kimiAgent = {
+      pickAttachments: vi.fn(async () => ({ cancelled: false, files: [attachment] })),
+      discardAttachment: vi.fn(async () => {})
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
+
+    await wrapper.get('[aria-label="添加附件"]').trigger('click')
+    await Promise.resolve()
+    expect(wrapper.get('.composer-attachment-chip').text()).toContain('design.png')
+    await wrapper.get('textarea').setValue('看看这里')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([['看看这里', [attachment], controls, false]])
+  })
+})

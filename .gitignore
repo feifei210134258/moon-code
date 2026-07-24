@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors and local IDE state
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node / Electron
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+dist/
+out/
+release/
+build/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Logs and crash output
+*.log
+logs/
+crash-dumps/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local Kimi / Codex runtime data and indexes
+.kimi/
+.codegraph/
+
+# Local app state and generated research artifacts
+.local/
+tmp/
+artifacts/

@@ -1,0 +1,117 @@
+# Kimi Web P0 实现审计
+
+更新时间：2026-07-24
+
+本文件是 [Kimi Web 功能对照表](./02-kimi-web-parity.md) 的执行台账。状态只按当前代码和测试证据填写：
+
+- **完成：** 已有真实 Kimi 接口、可见入口和自动化或打包态证据。
+- **部分：** 主链路存在，但官方可见操作、完整状态或回归证据尚未齐全。
+- **缺失：** 当前没有可用入口或仍是占位。
+- **上游阻塞：** 固定 Kimi 版本没有安全接口，客户端不会伪造。
+
+## 1. 已完成核心切片：Session Controls 与生命周期
+
+| 能力 | 状态 | 实现位置 | 证据 |
+| --- | --- | --- | --- |
+| Session `/status` | 完成 | `KimiRestClient.getSessionStatus`、`KimiSessionBridge.getRuntimeStatus`、`useRuntimeBridge.loadSessionControls` | `KimiRestClient.test.ts`、`kimiSessionBridge.test.ts` |
+| Model picker | 完成 | `ComposerBar.vue` 使用真实 `/models` 目录与当前 Session model | `composerSkills.test.ts` |
+| Thinking effort | 完成 | 根据选中模型 `support_efforts/default_effort` 动态呈现 | `composerSkills.test.ts`、类型检查 |
+| Permission mode | 完成 | `manual/auto/yolo` 独立选择，并在 Main 信任边界验证 | `promptInputs.test.ts` |
+| Plan mode | 完成 | 独立 boolean 控制，不并入 Permission | `composerSkills.test.ts` |
+| Swarm mode | 完成 | 独立 boolean 控制并随 Prompt 提交 | `composerSkills.test.ts`、`KimiRestClient.test.ts` |
+| Prompt 参数映射 | 完成 | 普通文本和浏览器批注均提交 `model/thinking/permission_mode/plan_mode/swarm_mode` | `KimiRestClient.test.ts`、`kimiSessionBridge.test.ts`、`browserBridge.test.ts` |
+| 运行中继续发送 | 完成 | Kimi Server active/queued 与可编辑、重排、逐条派发的官方式本地 Draft 队列分层呈现 | `runtimeBridge.test.ts`、`operationalPanels.test.ts`、ADR 0011 |
+| Goal 创建与控制 | 完成 | 显式 Goal 模式先写入 Session profile `goal_objective`，再提交首个 Prompt；Strip 提供 pause/resume/cancel | `KimiRestClient.test.ts`、`kimiSessionBridge.test.ts`、`operationalPanels.test.ts` |
+
+这里没有引入 Codex 协议；全部字段均来自 Kimi Code `0.29.0` 官方 Prompt 和 Session Status 契约。
+
+## 2. 系统、认证与同步
+
+| 能力 | 状态 | 当前证据或缺口 |
+| --- | --- | --- |
+| Health / Meta | 完成 | 托管 Runtime 启动、版本门禁、健康与 Meta 验证 |
+| Bearer auth | 完成 | token 仅保留在 Main/adapter；REST 与 WS 测试覆盖 |
+| Server auth gate | 部分 | Runtime 鉴权存在，独立受保护实例连接对话框未完成 |
+| OAuth 登录/轮询/取消/登出 | 完成 | Settings Bridge、IPC 与设置页真实链路 |
+| Auth readiness | 完成 | `/auth` 与 Provider/默认模型提示已接入 |
+| WS 断线重连 | 完成 | `KimiWsClient` 与 `SessionSyncController` |
+| Snapshot/resync | 完成 | cursor、epoch、gap 后 snapshot 原子重建测试 |
+| 多客户端同步 | 部分 | 当前 Session 实时同步完成；Workspace/全局配置事件的 UI 刷新仍需补齐 |
+| Graceful shutdown | 完成 | 仅托管 loopback Runtime 调用 shutdown |
+
+## 3. Workspace 与 Session
+
+| 能力 | 状态 | 当前证据或缺口 |
+| --- | --- | --- |
+| Workspace 列表与分组 | 完成 | 左栏按 Workspace 分组，Kimi 数据为事实源 |
+| Session 列表、历史继续对话 | 完成 | 读取 Kimi Session 并直接打开 snapshot/transcript |
+| 添加/重命名/移除 Workspace、文件夹选择 | 完成 | 原生文件夹选择、Kimi REST mutation 与左栏操作菜单已接入 |
+| Session 搜索、分页、创建 | 完成 | 左栏跨 Workspace 搜索、创建与官方 `before_id` 增量分页 |
+| 标题/Profile、Archive/Restore、Fork/Children/Export | 完成 | 重命名、归档/恢复、分叉、按需 Children 层级与官方 ZIP 导出 |
+| Session warnings | 完成 | 打开 Session 后读取 `/warnings`，按上游 severity 呈现 |
+| Runtime status | 完成 | 本轮真实 Session Controls 切片 |
+| Current goal | 完成 | `/goal`、Goal Strip、显式 Goal 模式创建与 pause/resume/cancel 已接入 |
+
+## 4. Prompt、消息与交互
+
+| 能力 | 状态 | 当前证据或缺口 |
+| --- | --- | --- |
+| Prompt 提交 | 完成 | 普通 Kimi Prompt；所有当前控制字段均透传并验证 |
+| Prompt Queue | 完成 | 官方式 Session 本地 Draft 队列支持编辑、移除、重排与逐条派发；`/prompts` 已接收队列独立显示并支持 abort/Steer，见 ADR 0011 |
+| Steering | 完成 | 队列面板可将指定 queued Prompt steer 到当前 Turn |
+| Abort Prompt/Session | 完成 | 优先 abort active prompt，无 ID 时使用 Session abort |
+| 流式 Assistant / Thinking / Tool / Turn | 完成 | WS projector、snapshot 恢复与 Activity UI |
+| Approval / Question | 完成 | 独立结构化卡片、resolve/dismiss 与 pending 状态 |
+| Attachment / Media | 完成 | 原生多选、Kimi `/files` multipart 上传、官方 image/video/file content 映射、Bearer Blob 预览与 Draft 保留；见 ADR 0012 |
+| Markdown GFM / KaTeX / Mermaid | 完成 | raw HTML 禁用、DOMPurify、代码高亮、公式与 strict Mermaid SVG；文件路径内部路由 |
+| 文件路径链接 / HTML 路由 | 完成 | 蓝色文件入口；HTML 打开内置浏览器 |
+| 本地图片引用 | 缺失 | 尚未做 bearer/Blob 或源文本预解析 |
+| Conversation TOC / Compact / Undo / Cron notice | 缺失 | 尚无入口与投影 |
+| 声音与系统通知 | 缺失 | Usage 通知偏好不能替代 Turn 通知 |
+
+## 5. Agent、任务与运行模式
+
+| 能力 | 状态 | 当前证据或缺口 |
+| --- | --- | --- |
+| Model / Thinking / Permission / Plan / Swarm | 完成 | 本轮切片；真实状态、动态能力、独立控制与 Prompt 映射 |
+| Goal | 完成 | 真实 Goal Strip、预算摘要、Composer Goal 模式创建与 pause/resume/cancel |
+| Todo | 缺失 | Transcript 数据存在但未投影到计划面板 |
+| Subagent / Swarm roster | 部分 | Roster 与事件投影存在；详情、独立输出和用量仍不完整 |
+| BTW side chat | 缺失 | 尚无独立 agent-scoped Side Chat |
+| Background tasks | 完成 | `/tasks` 轮询、状态/输出预览和运行中任务取消已替换右栏占位 |
+| Skills / Slash commands | 完成 | Session Skills、slash menu 与 activation |
+| Mention menu | 缺失 | `@` 按钮无行为 |
+| MCP / Tools | 完成 | 真实列表、状态与 MCP restart |
+
+## 6. 文件、Git、Diff 与终端
+
+| 能力 | 状态 | 当前证据或缺口 |
+| --- | --- | --- |
+| 文件树与读取/预览 | 完成 | Session FS list/read；二进制降级 |
+| 文件搜索与 grep | 缺失 | 尚无接口或 UI |
+| Git status / 单文件 Diff / Changed Files | 完成 | 右栏真实状态、按需 Diff、独立滚动区 |
+| Tool Diff | 部分 | Tool 输出存在，专用 Tool Diff 视图未完成 |
+| 下载 / Open / Reveal / Open in IDE | 缺失 | 内部预览与 HTML 路由已有，系统动作未完成 |
+| Terminal | 完成 | 多标签、输入、resize、replay、detach、关闭与打包 smoke |
+
+## 7. Provider、设置与产品增强
+
+| 能力 | 状态 | 当前证据或缺口 |
+| --- | --- | --- |
+| Provider/Model/Auth/Config | 完成 | 真实目录、添加、刷新、默认模型、OAuth 与白名单设置 |
+| Provider 删除 | 上游阻塞 | 见 ADR 0005；Kimi `0.29.0` 无安全 REST mutation |
+| Theme / Language / 通知声音 | 缺失 | 设置页尚未提供完整产品配置 |
+| Archived Sessions | 完成 | 设置页读取 Kimi 归档列表并恢复至原 Workspace |
+| Usage 实时监控 | 完成 | `/oauth/usage`、阈值、轮询、stale/backoff 与顶部 UI |
+| 内置开发浏览器 / HTML 路由 | 完成 | `WebContentsView`、preview server、console/network、viewport |
+| HTML 画面批注 | 完成 | 隔离 World、元素/区域、裁剪截图、发送前编辑与普通 Kimi Prompt |
+| 多 Session 桌宠 | 完成（收敛范围） | 状态可见、点击打开 App 并返回准确 Session；美术精修不作 P0 门禁 |
+
+## 8. 下一实现顺序
+
+1. Conversation TOC、Compact、Undo、Cron notice 与本地图片源重写。
+2. 文件搜索、grep、下载和系统 Open/Reveal。
+3. Todo、BTW Side Chat、Mention menu 与完整 Agent 详情。
+4. Theme、Language 与通知声音。
+
+每个切片完成后更新本表，并运行 `pnpm typecheck`、`pnpm test` 和相关 packaged smoke；公开 Beta 仍要求所有非“上游阻塞”的 P0 行完成。

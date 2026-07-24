@@ -1,0 +1,333 @@
+// @vitest-environment happy-dom
+
+import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useRuntimeBridge } from '../../src/renderer/src/composables/useRuntimeBridge'
+import type {
+  KimiAgentDesktopApi,
+  SessionViewState
+} from '../../src/shared/contracts.js'
+
+function sessionState(sessionId: string): SessionViewState {
+  return {
+    sessionId,
+    title: sessionId,
+    workspaceRoot: '/tmp/project',
+    busy: false,
+    mainTurnActive: false,
+    activePromptId: null,
+    activePromptStatus: null,
+    phase: 'ready',
+    cursor: { seq: 1, epoch: 'epoch-1' },
+    messages: [],
+    markers: [],
+    pendingApprovals: [],
+    pendingQuestions: [],
+    agents: [],
+    usage: {
+      inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
+      totalCostUsd: null, contextTokens: 0, contextLimit: 0, turnCount: null
+    },
+    hasMoreMessages: false,
+    resyncCount: 0,
+    unknownEventCount: 0,
+    error: null
+  }
+}
+
+afterEach(() => {
+  delete window.kimiAgent
+})
+
+describe('useRuntimeBridge session races', () => {
+  it('matches Kimi Web by keeping active-turn follow-ups local, reorderable, and flushing one at a time', async () => {
+    let stateListener!: (state: SessionViewState) => void
+    const active = { ...sessionState('session-queue'), busy: true, mainTurnActive: true, activePromptStatus: 'running' as const }
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn((listener: (state: SessionViewState) => void) => {
+        stateListener = listener
+        return () => {}
+      }),
+      openSession: vi.fn(async () => active),
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      submitPrompt: vi.fn(async () => ({ promptId: 'p-next', userMessageId: 'm-next', status: 'running' as const }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-queue')
+
+    const controls = {
+      model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
+      planMode: false, swarmMode: false
+    }
+    await bridge.submitPrompt('session-queue', { text: '先执行 A', controls })
+    await bridge.submitPrompt('session-queue', { text: '再执行 B', controls })
+    expect(api.submitPrompt).not.toHaveBeenCalled()
+    expect(bridge.localPromptQueue.value.map((draft) => draft.input.text)).toEqual(['先执行 A', '再执行 B'])
+
+    bridge.moveLocalPrompt('session-queue', bridge.localPromptQueue.value[1]!.id, -1)
+    expect(bridge.localPromptQueue.value.map((draft) => draft.input.text)).toEqual(['再执行 B', '先执行 A'])
+    bridge.setPromptControls({ ...controls, permissionMode: 'auto' })
+    stateListener({ ...active, busy: false, mainTurnActive: false, activePromptStatus: null })
+    await flushPromises()
+
+    expect(api.submitPrompt).toHaveBeenCalledWith('session-queue', expect.objectContaining({
+      text: '再执行 B', controls: expect.objectContaining({ permissionMode: 'auto' })
+    }))
+    expect(bridge.localPromptQueue.value.map((draft) => draft.input.text)).toEqual(['先执行 A'])
+    wrapper.unmount()
+  })
+
+  it('stops a skill turn through session abort when Kimi has no prompt id', async () => {
+    let stateListener!: (state: SessionViewState) => void
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn((listener: (state: SessionViewState) => void) => {
+        stateListener = listener
+        return () => {}
+      }),
+      abortSession: vi.fn(async () => ({ aborted: true })),
+      abortPrompt: vi.fn()
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    stateListener({
+      ...sessionState('session-skill'),
+      busy: true,
+      mainTurnActive: true,
+      activePromptStatus: 'running'
+    })
+
+    await bridge.abortActivePrompt()
+
+    expect(api.abortSession).toHaveBeenCalledWith('session-skill')
+    expect(api.abortPrompt).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('keeps the latest selected session when an older open or event arrives late', async () => {
+    let resolveA!: (state: SessionViewState) => void
+    let resolveB!: (state: SessionViewState) => void
+    let stateListener!: (state: SessionViewState) => void
+    const openA = new Promise<SessionViewState>((resolve) => { resolveA = resolve })
+    const openB = new Promise<SessionViewState>((resolve) => { resolveB = resolve })
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0',
+        platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn((listener: (state: SessionViewState) => void) => {
+        stateListener = listener
+        return () => {}
+      }),
+      openSession: vi.fn((sessionId: string) => sessionId === 'session-a' ? openA : openB),
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      readFile: vi.fn(),
+      getFileDiff: vi.fn()
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+
+    const pendingA = bridge.openSession('session-a')
+    const pendingB = bridge.openSession('session-b')
+    resolveB(sessionState('session-b'))
+    await pendingB
+    resolveA(sessionState('session-a'))
+    await pendingA
+
+    expect(bridge.sessionView.value?.sessionId).toBe('session-b')
+    stateListener(sessionState('session-a'))
+    expect(bridge.sessionView.value?.sessionId).toBe('session-b')
+    wrapper.unmount()
+  })
+
+  it('keeps Files and Git context scoped to the latest selected session', async () => {
+    let resolveListA!: (value: Awaited<ReturnType<KimiAgentDesktopApi['listFiles']>>) => void
+    let resolveListB!: (value: Awaited<ReturnType<KimiAgentDesktopApi['listFiles']>>) => void
+    const listA = new Promise<Awaited<ReturnType<KimiAgentDesktopApi['listFiles']>>>((resolve) => { resolveListA = resolve })
+    const listB = new Promise<Awaited<ReturnType<KimiAgentDesktopApi['listFiles']>>>((resolve) => { resolveListB = resolve })
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0',
+        platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
+      listFiles: vi.fn((sessionId: string) => sessionId === 'session-a' ? listA : listB),
+      getGitStatus: vi.fn(async (sessionId: string) => ({
+        branch: sessionId, ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      readFile: vi.fn(),
+      getFileDiff: vi.fn()
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-a')
+    await bridge.openSession('session-b')
+    resolveListB({
+      path: '.',
+      items: [{
+        path: 'b.ts', name: 'b.ts', kind: 'file', size: 1, modifiedAt: null,
+        mime: 'text/plain', languageId: 'typescript', isBinary: false, gitStatus: null, childCount: null
+      }],
+      truncated: false
+    })
+    await flushPromises()
+    resolveListA({
+      path: '.',
+      items: [{
+        path: 'a.ts', name: 'a.ts', kind: 'file', size: 1, modifiedAt: null,
+        mime: 'text/plain', languageId: 'typescript', isBinary: false, gitStatus: null, childCount: null
+      }],
+      truncated: false
+    })
+    await flushPromises()
+
+    expect(bridge.fileList.value?.items[0]?.path).toBe('b.ts')
+    expect(bridge.gitStatus.value?.branch).toBe('session-b')
+    bridge.clearActiveSession()
+    expect(bridge.sessionView.value).toBeNull()
+    expect(bridge.fileList.value).toBeNull()
+    expect(bridge.gitStatus.value).toBeNull()
+    await bridge.openFile('b.ts')
+    expect(api.readFile).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('merges authoritative paged Session navigation without duplicating workspaces', async () => {
+    const session = (id: string) => ({
+      id, title: id, updatedAt: null, busy: false, pendingInteraction: 'none' as const,
+      lastTurnReason: null, lastPrompt: null, parentSessionId: null
+    })
+    const getWorkspaceTreePage = vi.fn()
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Project', root: '/tmp/project', sessions: [session('session-new')] }],
+        hasMoreSessions: true,
+        nextBeforeId: 'session-new'
+      })
+      .mockResolvedValueOnce({
+        workspaces: [{ id: 'workspace-1', name: 'Project', root: '/tmp/project', sessions: [session('session-old')] }],
+        hasMoreSessions: false,
+        nextBeforeId: 'session-old'
+      })
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:1234', error: null },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTreePage,
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    expect(bridge.sessionPageHasMore.value).toBe(true)
+
+    await bridge.loadMoreSessions()
+    expect(getWorkspaceTreePage).toHaveBeenLastCalledWith('session-new')
+    expect(bridge.workspaceTree.value?.[0]?.sessions.map((item) => item.id)).toEqual([
+      'session-new', 'session-old'
+    ])
+    expect(bridge.sessionPageHasMore.value).toBe(false)
+    wrapper.unmount()
+  })
+})

@@ -1,0 +1,1068 @@
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  appendLocalPromptDraft,
+  moveLocalPromptDraft,
+  prependLocalPromptDraft,
+  removeLocalPromptDraft,
+  type LocalPromptDraft
+} from '../utils/localPromptQueue'
+import type {
+  KimiModelCatalogItem,
+  KimiPromptControls,
+  KimiPromptInput,
+  KimiSessionRuntimeStatus,
+  KimiSessionOperationalState,
+  KimiSessionWarning,
+  KimiUndoDraft,
+  QuestionAnswerInput,
+  KimiSkill,
+  RuntimeDiscovery,
+  RuntimePublicState,
+  SessionCreateResult,
+  SessionExportResult,
+  SessionNavigationItem,
+  SessionViewState,
+  WorkspaceFileDiff,
+  WorkspaceFileList,
+  WorkspaceFilePreview,
+  WorkspaceGitStatus,
+  WorkspaceNavigationItem
+} from '@shared/contracts'
+
+const stoppedState: RuntimePublicState = {
+  status: 'stopped',
+  mode: null,
+  version: null,
+  serverId: null,
+  origin: null,
+  error: null
+}
+
+export function useRuntimeBridge() {
+  const runtime = ref<RuntimePublicState>({ ...stoppedState })
+  const discovery = ref<RuntimeDiscovery | null>(null)
+  const pending = ref(false)
+  const workspaceTree = ref<WorkspaceNavigationItem[] | null>(null)
+  const workspaceError = ref<string | null>(null)
+  const sessionPagePending = ref(false)
+  const sessionPageError = ref<string | null>(null)
+  const sessionPageHasMore = ref(false)
+  const sessionPageBeforeId = ref<string | null>(null)
+  const lifecyclePending = ref<string | null>(null)
+  const lifecycleError = ref<string | null>(null)
+  const sessionView = ref<SessionViewState | null>(null)
+  const sessionError = ref<string | null>(null)
+  const promptPending = ref(false)
+  const promptError = ref<string | null>(null)
+  const conversationActionPending = ref<'compact' | 'undo' | null>(null)
+  const conversationActionError = ref<string | null>(null)
+  const localPromptDraftsBySession = ref<Record<string, LocalPromptDraft[]>>({})
+  const activeQueueSessionId = ref<string | null>(null)
+  const sessionRuntimeStatus = ref<KimiSessionRuntimeStatus | null>(null)
+  const sessionModels = ref<KimiModelCatalogItem[]>([])
+  const promptControls = ref<KimiPromptControls | null>(null)
+  const sessionControlsPending = ref(false)
+  const sessionControlsError = ref<string | null>(null)
+  const goalMode = ref(false)
+  const sessionOperational = ref<KimiSessionOperationalState | null>(null)
+  const sessionOperationalPending = ref(false)
+  const sessionOperationalError = ref<string | null>(null)
+  const sessionWarnings = ref<KimiSessionWarning[]>([])
+  const sessionWarningsError = ref<string | null>(null)
+  const childrenPendingSessionId = ref<string | null>(null)
+  const childrenError = ref<string | null>(null)
+  const operationalActionPending = ref<string | null>(null)
+  const interactionPendingKey = ref<string | null>(null)
+  const interactionError = ref<string | null>(null)
+  const sessionSkills = ref<KimiSkill[]>([])
+  const sessionSkillsPending = ref(false)
+  const sessionSkillsError = ref<string | null>(null)
+  const skillActivationPending = ref(false)
+  const skillActivationError = ref<string | null>(null)
+  const fileList = ref<WorkspaceFileList | null>(null)
+  const fileListPending = ref(false)
+  const fileListError = ref<string | null>(null)
+  const filePreview = ref<WorkspaceFilePreview | null>(null)
+  const filePreviewPending = ref(false)
+  const filePreviewError = ref<string | null>(null)
+  const gitStatus = ref<WorkspaceGitStatus | null>(null)
+  const gitStatusPending = ref(false)
+  const gitStatusError = ref<string | null>(null)
+  const fileDiff = ref<WorkspaceFileDiff | null>(null)
+  const fileDiffPending = ref(false)
+  const fileDiffError = ref<string | null>(null)
+  let unsubscribeRuntime: (() => void) | undefined
+  let unsubscribeSession: (() => void) | undefined
+  let interactionGeneration = 0
+  let sessionOpenGeneration = 0
+  let workspaceGeneration = 0
+  let directoryGeneration = 0
+  let previewGeneration = 0
+  let diffGeneration = 0
+  let skillsGeneration = 0
+  let controlsGeneration = 0
+  let operationalGeneration = 0
+  let warningsGeneration = 0
+  let operationalTimer: number | undefined
+  let requestedSessionId: string | null = null
+  const awaitingPromptCycleAt = new Map<string, number>()
+  const localPromptQueue = computed(() => {
+    const sessionId = activeQueueSessionId.value
+    return sessionId === null ? [] : localPromptDraftsBySession.value[sessionId] ?? []
+  })
+
+  const label = computed(() => {
+    if (runtime.value.status === 'running') return `Kimi ${runtime.value.version ?? ''}`.trim()
+    if (runtime.value.status === 'starting') return 'Kimi 启动中'
+    if (runtime.value.status === 'error') return 'Kimi 连接异常'
+    return 'Kimi 未连接'
+  })
+
+  const load = async (): Promise<void> => {
+    if (window.kimiAgent === undefined) return
+    const bootstrap = await window.kimiAgent.getBootstrapState()
+    runtime.value = bootstrap.runtime
+    discovery.value = bootstrap.discovery
+    unsubscribeRuntime = window.kimiAgent.onRuntimeStateChanged((state) => {
+      runtime.value = state
+      if (state.status === 'running') void refreshWorkspaceTree()
+      else {
+        sessionView.value = null
+        requestedSessionId = null
+        activeQueueSessionId.value = null
+        localPromptDraftsBySession.value = {}
+        awaitingPromptCycleAt.clear()
+        sessionOpenGeneration += 1
+        interactionGeneration += 1
+        interactionPendingKey.value = null
+        interactionError.value = null
+        resetSessionSkills()
+        resetSessionControls()
+        resetSessionOperational()
+        warningsGeneration += 1
+        sessionWarnings.value = []
+        sessionWarningsError.value = null
+        resetWorkspaceContext()
+      }
+    })
+    unsubscribeSession = window.kimiAgent.onSessionStateChanged((state) => {
+      if (requestedSessionId !== null && state.sessionId !== requestedSessionId) return
+      const previous = sessionView.value
+      sessionView.value = state
+      sessionError.value = state.error
+      if (
+        previous?.sessionId === state.sessionId &&
+        previous.mainTurnActive &&
+        !state.mainTurnActive
+      ) {
+        awaitingPromptCycleAt.delete(state.sessionId)
+        void flushLocalPromptQueue(state.sessionId)
+      }
+    })
+    if (runtime.value.status === 'running') await refreshWorkspaceTree()
+  }
+
+  const refreshWorkspaceTree = async (): Promise<void> => {
+    if (window.kimiAgent === undefined || runtime.value.status !== 'running') return
+    try {
+      if (typeof window.kimiAgent.getWorkspaceTreePage === 'function') {
+        const snapshot = await window.kimiAgent.getWorkspaceTreePage()
+        workspaceTree.value = snapshot.workspaces
+        sessionPageHasMore.value = snapshot.hasMoreSessions
+        sessionPageBeforeId.value = snapshot.nextBeforeId
+      } else {
+        workspaceTree.value = await window.kimiAgent.getWorkspaceTree()
+        sessionPageHasMore.value = false
+        sessionPageBeforeId.value = null
+      }
+      workspaceError.value = null
+    } catch (error) {
+      workspaceError.value = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  const loadMoreSessions = async (): Promise<void> => {
+    const api = window.kimiAgent
+    const beforeId = sessionPageBeforeId.value
+    if (
+      api === undefined ||
+      typeof api.getWorkspaceTreePage !== 'function' ||
+      !sessionPageHasMore.value ||
+      beforeId === null ||
+      sessionPagePending.value
+    ) return
+    sessionPagePending.value = true
+    sessionPageError.value = null
+    try {
+      const snapshot = await api.getWorkspaceTreePage(beforeId)
+      workspaceTree.value = mergeWorkspacePages(workspaceTree.value ?? [], snapshot.workspaces)
+      sessionPageHasMore.value = snapshot.hasMoreSessions
+      sessionPageBeforeId.value = snapshot.nextBeforeId
+    } catch (error) {
+      sessionPageError.value = errorMessage(error)
+    } finally {
+      sessionPagePending.value = false
+    }
+  }
+
+  const loadSessionChildren = async (sessionId: string): Promise<SessionNavigationItem[]> => {
+    const api = window.kimiAgent
+    if (api === undefined || childrenPendingSessionId.value !== null) return []
+    childrenPendingSessionId.value = sessionId
+    childrenError.value = null
+    try {
+      return await api.listChildSessions(sessionId)
+    } catch (error) {
+      childrenError.value = errorMessage(error)
+      return []
+    } finally {
+      childrenPendingSessionId.value = null
+    }
+  }
+
+  const runLifecycleAction = async <T>(key: string, action: () => Promise<T>): Promise<T | null> => {
+    if (window.kimiAgent === undefined || runtime.value.status !== 'running' || lifecyclePending.value !== null) {
+      return null
+    }
+    lifecyclePending.value = key
+    lifecycleError.value = null
+    try {
+      return await action()
+    } catch (error) {
+      lifecycleError.value = errorMessage(error)
+      return null
+    } finally {
+      lifecyclePending.value = null
+    }
+  }
+
+  const addWorkspace = async (): Promise<string | null> => {
+    const result = await runLifecycleAction('workspace:add', () => window.kimiAgent!.addWorkspace())
+    if (result === null || result.cancelled || result.workspaceId === null) return null
+    await refreshWorkspaceTree()
+    return result.workspaceId
+  }
+
+  const renameWorkspace = async (workspaceId: string, name: string): Promise<boolean> => {
+    const result = await runLifecycleAction(`workspace:rename:${workspaceId}`, async () => {
+      await window.kimiAgent!.renameWorkspace(workspaceId, name)
+      return true
+    })
+    if (result !== true) return false
+    await refreshWorkspaceTree()
+    return true
+  }
+
+  const deleteWorkspace = async (workspaceId: string): Promise<boolean> => {
+    const result = await runLifecycleAction(`workspace:delete:${workspaceId}`, async () => {
+      await window.kimiAgent!.deleteWorkspace(workspaceId)
+      return true
+    })
+    if (result !== true) return false
+    await refreshWorkspaceTree()
+    return true
+  }
+
+  const createSession = async (workspaceId: string): Promise<SessionCreateResult | null> => {
+    const result = await runLifecycleAction(`session:create:${workspaceId}`, () =>
+      window.kimiAgent!.createSession(workspaceId)
+    )
+    if (result === null) return null
+    await refreshWorkspaceTree()
+    return result
+  }
+
+  const renameSession = async (sessionId: string, title: string): Promise<boolean> => {
+    const result = await runLifecycleAction(`session:rename:${sessionId}`, async () => {
+      await window.kimiAgent!.renameSession(sessionId, title)
+      return true
+    })
+    if (result !== true) return false
+    if (sessionView.value?.sessionId === sessionId) {
+      sessionView.value = { ...sessionView.value, title }
+    }
+    await refreshWorkspaceTree()
+    return true
+  }
+
+  const archiveSession = async (sessionId: string): Promise<boolean> => {
+    const result = await runLifecycleAction(`session:archive:${sessionId}`, async () => {
+      await window.kimiAgent!.archiveSession(sessionId)
+      return true
+    })
+    if (result !== true) return false
+    if (requestedSessionId === sessionId) clearActiveSession()
+    await refreshWorkspaceTree()
+    return true
+  }
+
+  const forkSession = async (sessionId: string): Promise<SessionCreateResult | null> => {
+    const result = await runLifecycleAction(`session:fork:${sessionId}`, () =>
+      window.kimiAgent!.forkSession(sessionId)
+    )
+    if (result === null) return null
+    await refreshWorkspaceTree()
+    return result
+  }
+
+  const exportSession = async (sessionId: string): Promise<SessionExportResult | null> => (
+    runLifecycleAction(`session:export:${sessionId}`, () => window.kimiAgent!.exportSession(sessionId))
+  )
+
+  const toggle = async (): Promise<void> => {
+    if (window.kimiAgent === undefined || pending.value) return
+    pending.value = true
+    try {
+      runtime.value = runtime.value.status === 'running'
+        ? await window.kimiAgent.stopRuntime()
+        : await window.kimiAgent.startRuntime('managed')
+      if (runtime.value.status === 'running') await refreshWorkspaceTree()
+    } finally {
+      pending.value = false
+    }
+  }
+
+  const openSession = async (sessionId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || runtime.value.status !== 'running' || sessionId.length === 0) return
+    const generation = ++sessionOpenGeneration
+    requestedSessionId = sessionId
+    activeQueueSessionId.value = sessionId
+    resetWorkspaceContext()
+    resetSessionSkills()
+    resetSessionControls()
+    resetSessionOperational()
+    conversationActionError.value = null
+    interactionGeneration += 1
+    interactionPendingKey.value = null
+    interactionError.value = null
+    try {
+      const state = await window.kimiAgent.openSession(sessionId)
+      if (generation !== sessionOpenGeneration) return
+      sessionView.value = state
+      sessionError.value = state.error
+      void refreshWorkspaceContext(sessionId)
+      void loadSessionSkills(sessionId)
+      void loadSessionControls(sessionId)
+      void refreshSessionOperational(sessionId)
+      void loadSessionWarnings(sessionId)
+      if (!state.mainTurnActive) void flushLocalPromptQueue(sessionId)
+    } catch (error) {
+      if (generation === sessionOpenGeneration) {
+        sessionError.value = error instanceof Error ? error.message : String(error)
+      }
+    }
+  }
+
+  const loadSessionWarnings = async (sessionId: string): Promise<void> => {
+    const api = window.kimiAgent
+    if (api === undefined) return
+    const generation = ++warningsGeneration
+    sessionWarnings.value = []
+    sessionWarningsError.value = null
+    try {
+      const warnings = await api.getSessionWarnings(sessionId)
+      if (generation === warningsGeneration && sessionId === requestedSessionId) {
+        sessionWarnings.value = warnings
+      }
+    } catch (error) {
+      if (generation === warningsGeneration && sessionId === requestedSessionId) {
+        sessionWarningsError.value = errorMessage(error)
+      }
+    }
+  }
+
+  const submitPrompt = async (sessionId: string, input: KimiPromptInput): Promise<void> => {
+    if (window.kimiAgent === undefined) return
+    if (shouldQueueLocally(sessionId)) {
+      enqueueLocalPrompt(sessionId, input)
+      if (!isSessionExecuting(sessionId)) void flushLocalPromptQueue(sessionId)
+      return
+    }
+    await sendPromptNow(sessionId, input)
+  }
+
+  const compactSession = async (sessionId: string, instruction?: string): Promise<boolean> => {
+    if (window.kimiAgent === undefined || conversationActionPending.value !== null) return false
+    conversationActionPending.value = 'compact'
+    conversationActionError.value = null
+    try {
+      await window.kimiAgent.compactSession(sessionId, instruction)
+      void loadSessionControls(sessionId)
+      return true
+    } catch (error) {
+      conversationActionError.value = errorMessage(error)
+      return false
+    } finally {
+      conversationActionPending.value = null
+    }
+  }
+
+  const undoSession = async (sessionId: string): Promise<KimiUndoDraft | null> => {
+    if (window.kimiAgent === undefined || conversationActionPending.value !== null) return null
+    conversationActionPending.value = 'undo'
+    conversationActionError.value = null
+    try {
+      const draft = await window.kimiAgent.undoSession(sessionId, 1)
+      void refreshSessionOperational(sessionId, true)
+      return draft
+    } catch (error) {
+      conversationActionError.value = errorMessage(error)
+      return null
+    } finally {
+      conversationActionPending.value = null
+    }
+  }
+
+  const sendPromptNow = async (sessionId: string, input: KimiPromptInput): Promise<boolean> => {
+    if (window.kimiAgent === undefined || promptPending.value) return false
+    promptPending.value = true
+    promptError.value = null
+    try {
+      const result = await window.kimiAgent.submitPrompt(sessionId, input)
+      if (result.status === 'running' || result.status === 'queued') {
+        awaitingPromptCycleAt.set(sessionId, Date.now())
+      }
+      if (input.goalObjective !== undefined) goalMode.value = false
+      return true
+    } catch (error) {
+      promptError.value = error instanceof Error ? error.message : String(error)
+      return false
+    } finally {
+      promptPending.value = false
+      if (sessionId === requestedSessionId) void refreshSessionOperational(sessionId, true)
+    }
+  }
+
+  const enqueueLocalPrompt = (sessionId: string, input: KimiPromptInput): void => {
+    const queue = localPromptDraftsBySession.value[sessionId] ?? []
+    const id = typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    localPromptDraftsBySession.value = {
+      ...localPromptDraftsBySession.value,
+      [sessionId]: appendLocalPromptDraft(queue, {
+        id,
+        sessionId,
+        input,
+        createdAt: new Date().toISOString()
+      })
+    }
+  }
+
+  const flushLocalPromptQueue = async (sessionId: string): Promise<void> => {
+    if (sessionId !== requestedSessionId || isSessionExecuting(sessionId)) return
+    const queue = localPromptDraftsBySession.value[sessionId] ?? []
+    const draft = queue[0]
+    if (draft === undefined) return
+    localPromptDraftsBySession.value = {
+      ...localPromptDraftsBySession.value,
+      [sessionId]: queue.slice(1)
+    }
+    const controls = sessionId === requestedSessionId && promptControls.value !== null
+      ? promptControls.value
+      : draft.input.controls
+    if (await sendPromptNow(sessionId, { ...draft.input, controls })) return
+    localPromptDraftsBySession.value = {
+      ...localPromptDraftsBySession.value,
+      [sessionId]: prependLocalPromptDraft(localPromptDraftsBySession.value[sessionId] ?? [], draft)
+    }
+  }
+
+  const takeLocalPromptDraft = (sessionId: string, draftId: string): LocalPromptDraft | null => {
+    const result = removeLocalPromptDraft(localPromptDraftsBySession.value[sessionId] ?? [], draftId)
+    if (result.removed === null) return null
+    localPromptDraftsBySession.value = {
+      ...localPromptDraftsBySession.value,
+      [sessionId]: result.queue
+    }
+    return result.removed
+  }
+
+  const removeLocalPrompt = (sessionId: string, draftId: string): void => {
+    const result = removeLocalPromptDraft(localPromptDraftsBySession.value[sessionId] ?? [], draftId)
+    if (result.removed === null) return
+    localPromptDraftsBySession.value = {
+      ...localPromptDraftsBySession.value,
+      [sessionId]: result.queue
+    }
+    for (const attachment of result.removed?.input.attachments ?? []) {
+      void window.kimiAgent?.discardAttachment(attachment.fileId).catch(() => {
+        // Draft removal is authoritative locally; Kimi file cleanup is best-effort.
+      })
+    }
+  }
+
+  const moveLocalPrompt = (sessionId: string, draftId: string, direction: -1 | 1): void => {
+    const queue = localPromptDraftsBySession.value[sessionId] ?? []
+    const next = moveLocalPromptDraft(queue, draftId, direction)
+    if (next === queue) return
+    localPromptDraftsBySession.value = { ...localPromptDraftsBySession.value, [sessionId]: next }
+  }
+
+  const shouldQueueLocally = (sessionId: string): boolean => (
+    isSessionExecuting(sessionId) || (localPromptDraftsBySession.value[sessionId]?.length ?? 0) > 0
+  )
+
+  const isSessionExecuting = (sessionId: string): boolean => {
+    if (promptPending.value || awaitingPromptCycleAt.has(sessionId)) return true
+    if (sessionView.value?.sessionId === sessionId && sessionView.value.mainTurnActive) return true
+    if (sessionId === requestedSessionId && sessionOperational.value !== null) {
+      return sessionOperational.value.prompts.active !== null || sessionOperational.value.prompts.queued.length > 0
+    }
+    return false
+  }
+
+  const activateSkill = async (sessionId: string, skillName: string, args?: string): Promise<void> => {
+    if (window.kimiAgent === undefined || skillActivationPending.value) return
+    skillActivationPending.value = true
+    skillActivationError.value = null
+    try {
+      await window.kimiAgent.activateSkill(sessionId, skillName, args)
+    } catch (error) {
+      skillActivationError.value = errorMessage(error)
+    } finally {
+      skillActivationPending.value = false
+    }
+  }
+
+  const steerPrompts = async (sessionId: string, promptIds: string[]): Promise<void> => {
+    if (
+      window.kimiAgent === undefined ||
+      promptIds.length === 0 ||
+      operationalActionPending.value !== null
+    ) return
+    operationalActionPending.value = `prompt:${promptIds.join(',')}`
+    promptError.value = null
+    try {
+      await window.kimiAgent.steerPrompts(sessionId, promptIds)
+      void refreshSessionOperational(sessionId, true)
+    } catch (error) {
+      promptError.value = error instanceof Error ? error.message : String(error)
+    } finally {
+      operationalActionPending.value = null
+    }
+  }
+
+  const abortActivePrompt = async (): Promise<void> => {
+    const current = sessionView.value
+    if (
+      window.kimiAgent === undefined ||
+      current === null ||
+      !current.mainTurnActive ||
+      promptPending.value
+    ) return
+    promptPending.value = true
+    promptError.value = null
+    try {
+      if (current.activePromptId === null) await window.kimiAgent.abortSession(current.sessionId)
+      else await window.kimiAgent.abortPrompt(current.sessionId, current.activePromptId)
+    } catch (error) {
+      promptError.value = error instanceof Error ? error.message : String(error)
+    } finally {
+      promptPending.value = false
+      void refreshSessionOperational(current.sessionId, true)
+    }
+  }
+
+  const abortPrompt = async (sessionId: string, promptId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || operationalActionPending.value !== null) return
+    operationalActionPending.value = `prompt:${promptId}`
+    sessionOperationalError.value = null
+    try {
+      await window.kimiAgent.abortPrompt(sessionId, promptId)
+      await refreshSessionOperational(sessionId, true)
+    } catch (error) {
+      sessionOperationalError.value = errorMessage(error)
+    } finally {
+      operationalActionPending.value = null
+    }
+  }
+
+  const respondApproval = async (
+    sessionId: string,
+    approvalId: string,
+    response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }
+  ): Promise<void> => {
+    if (window.kimiAgent === undefined || interactionPendingKey.value !== null) return
+    const generation = ++interactionGeneration
+    interactionPendingKey.value = `approval:${approvalId}`
+    interactionError.value = null
+    try {
+      await window.kimiAgent.respondApproval(sessionId, approvalId, response)
+    } catch (error) {
+      if (generation === interactionGeneration) {
+        interactionError.value = error instanceof Error ? error.message : String(error)
+      }
+    } finally {
+      if (generation === interactionGeneration) interactionPendingKey.value = null
+    }
+  }
+
+  const respondQuestion = async (
+    sessionId: string,
+    questionId: string,
+    answers: Record<string, QuestionAnswerInput>
+  ): Promise<void> => {
+    if (window.kimiAgent === undefined || interactionPendingKey.value !== null) return
+    const generation = ++interactionGeneration
+    interactionPendingKey.value = `question:${questionId}:answer`
+    interactionError.value = null
+    try {
+      await window.kimiAgent.respondQuestion(sessionId, questionId, answers)
+    } catch (error) {
+      if (generation === interactionGeneration) {
+        interactionError.value = error instanceof Error ? error.message : String(error)
+      }
+    } finally {
+      if (generation === interactionGeneration) interactionPendingKey.value = null
+    }
+  }
+
+  const dismissQuestion = async (sessionId: string, questionId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || interactionPendingKey.value !== null) return
+    const generation = ++interactionGeneration
+    interactionPendingKey.value = `question:${questionId}:dismiss`
+    interactionError.value = null
+    try {
+      await window.kimiAgent.dismissQuestion(sessionId, questionId)
+    } catch (error) {
+      if (generation === interactionGeneration) {
+        interactionError.value = error instanceof Error ? error.message : String(error)
+      }
+    } finally {
+      if (generation === interactionGeneration) interactionPendingKey.value = null
+    }
+  }
+
+  const loadDirectory = async (path = '.'): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (sessionId === null) return
+    await loadDirectoryForSession(sessionId, path, workspaceGeneration)
+  }
+
+  const openFile = async (path: string): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null) return
+    const generation = ++previewGeneration
+    filePreviewPending.value = true
+    filePreviewError.value = null
+    try {
+      const preview = await window.kimiAgent.readFile(sessionId, path)
+      if (generation !== previewGeneration || sessionId !== requestedSessionId) return
+      filePreview.value = preview
+    } catch (error) {
+      if (generation === previewGeneration && sessionId === requestedSessionId) {
+        filePreview.value = null
+        filePreviewError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === previewGeneration) filePreviewPending.value = false
+    }
+  }
+
+  const loadFileDiff = async (path: string): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null) return
+    const generation = ++diffGeneration
+    fileDiffPending.value = true
+    fileDiffError.value = null
+    try {
+      const diff = await window.kimiAgent.getFileDiff(sessionId, path)
+      if (generation !== diffGeneration || sessionId !== requestedSessionId) return
+      fileDiff.value = diff
+    } catch (error) {
+      if (generation === diffGeneration && sessionId === requestedSessionId) {
+        fileDiff.value = null
+        fileDiffError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === diffGeneration) fileDiffPending.value = false
+    }
+  }
+
+  const refreshWorkspaceContext = async (sessionId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || sessionId !== requestedSessionId) return
+    const generation = ++workspaceGeneration
+    gitStatusPending.value = true
+    gitStatusError.value = null
+    const directoryPromise = loadDirectoryForSession(sessionId, '.', generation)
+    const gitPromise = window.kimiAgent.getGitStatus(sessionId)
+      .then((status) => {
+        if (generation === workspaceGeneration && sessionId === requestedSessionId) gitStatus.value = status
+      })
+      .catch((error: unknown) => {
+        if (generation === workspaceGeneration && sessionId === requestedSessionId) {
+          gitStatus.value = null
+          gitStatusError.value = errorMessage(error)
+        }
+      })
+      .finally(() => {
+        if (generation === workspaceGeneration) gitStatusPending.value = false
+      })
+    await Promise.all([directoryPromise, gitPromise])
+    const firstChangedPath = gitStatus.value === null
+      ? undefined
+      : Object.keys(gitStatus.value.entries).find((path) => gitStatus.value?.entries[path] !== 'clean')
+    if (firstChangedPath !== undefined && generation === workspaceGeneration) void loadFileDiff(firstChangedPath)
+  }
+
+  const loadDirectoryForSession = async (
+    sessionId: string,
+    path: string,
+    workspaceAtStart: number
+  ): Promise<void> => {
+    if (window.kimiAgent === undefined) return
+    const generation = ++directoryGeneration
+    fileListPending.value = true
+    fileListError.value = null
+    try {
+      const listing = await window.kimiAgent.listFiles(sessionId, path)
+      if (
+        generation !== directoryGeneration ||
+        workspaceAtStart !== workspaceGeneration ||
+        sessionId !== requestedSessionId
+      ) return
+      fileList.value = listing
+      filePreview.value = null
+      filePreviewError.value = null
+    } catch (error) {
+      if (
+        generation === directoryGeneration &&
+        workspaceAtStart === workspaceGeneration &&
+        sessionId === requestedSessionId
+      ) {
+        fileList.value = null
+        fileListError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === directoryGeneration) fileListPending.value = false
+    }
+  }
+
+  const resetWorkspaceContext = (): void => {
+    workspaceGeneration += 1
+    directoryGeneration += 1
+    previewGeneration += 1
+    diffGeneration += 1
+    fileList.value = null
+    fileListPending.value = false
+    fileListError.value = null
+    filePreview.value = null
+    filePreviewPending.value = false
+    filePreviewError.value = null
+    gitStatus.value = null
+    gitStatusPending.value = false
+    gitStatusError.value = null
+    fileDiff.value = null
+    fileDiffPending.value = false
+    fileDiffError.value = null
+  }
+
+  const loadSessionSkills = async (sessionId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || sessionId !== requestedSessionId) return
+    const generation = ++skillsGeneration
+    sessionSkillsPending.value = true
+    sessionSkillsError.value = null
+    try {
+      const skills = await window.kimiAgent.listSessionSkills(sessionId)
+      if (generation !== skillsGeneration || sessionId !== requestedSessionId) return
+      sessionSkills.value = skills
+    } catch (error) {
+      if (generation === skillsGeneration && sessionId === requestedSessionId) {
+        sessionSkills.value = []
+        sessionSkillsError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === skillsGeneration) sessionSkillsPending.value = false
+    }
+  }
+
+  const resetSessionSkills = (): void => {
+    skillsGeneration += 1
+    sessionSkills.value = []
+    sessionSkillsPending.value = false
+    sessionSkillsError.value = null
+    skillActivationPending.value = false
+    skillActivationError.value = null
+  }
+
+  const loadSessionControls = async (sessionId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || sessionId !== requestedSessionId) return
+    const generation = ++controlsGeneration
+    sessionControlsPending.value = true
+    sessionControlsError.value = null
+    try {
+      const [status, settings] = await Promise.all([
+        window.kimiAgent.getSessionRuntimeStatus(sessionId),
+        window.kimiAgent.getKimiSettings()
+      ])
+      if (generation !== controlsGeneration || sessionId !== requestedSessionId) return
+      const model = status.model ?? settings.preferences.defaultModel ?? settings.models[0]?.id ?? null
+      if (model === null) throw new Error('Kimi 没有可用模型，请先在设置中配置 Provider 与默认模型')
+      const descriptor = settings.models.find((item) => item.id === model)
+      const thinking = status.thinking.trim() || descriptor?.defaultEffort || descriptor?.supportEfforts[0] || 'off'
+      sessionRuntimeStatus.value = status
+      sessionModels.value = settings.models
+      promptControls.value = {
+        model,
+        thinking,
+        permissionMode: status.permissionMode,
+        planMode: status.planMode,
+        swarmMode: status.swarmMode
+      }
+    } catch (error) {
+      if (generation === controlsGeneration && sessionId === requestedSessionId) {
+        sessionRuntimeStatus.value = null
+        sessionModels.value = []
+        promptControls.value = null
+        sessionControlsError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === controlsGeneration) sessionControlsPending.value = false
+    }
+  }
+
+  const setPromptControls = (controls: KimiPromptControls): void => {
+    promptControls.value = { ...controls }
+  }
+
+  const setGoalMode = (enabled: boolean): void => {
+    goalMode.value = enabled
+  }
+
+  const resetSessionControls = (): void => {
+    controlsGeneration += 1
+    sessionRuntimeStatus.value = null
+    sessionModels.value = []
+    promptControls.value = null
+    sessionControlsPending.value = false
+    sessionControlsError.value = null
+    goalMode.value = false
+  }
+
+  const refreshSessionOperational = async (
+    sessionId: string | null = requestedSessionId,
+    quiet = false
+  ): Promise<void> => {
+    if (
+      window.kimiAgent === undefined ||
+      sessionId === null ||
+      sessionId !== requestedSessionId ||
+      sessionOperationalPending.value
+    ) return
+    const generation = ++operationalGeneration
+    if (!quiet) sessionOperationalPending.value = true
+    try {
+      const state = await window.kimiAgent.getSessionOperationalState(sessionId)
+      if (generation !== operationalGeneration || sessionId !== requestedSessionId) return
+      sessionOperational.value = state
+      sessionOperationalError.value = null
+      if (
+        state.prompts.active === null &&
+        state.prompts.queued.length === 0 &&
+        sessionView.value?.sessionId === sessionId &&
+        !sessionView.value.mainTurnActive
+      ) {
+        const awaitingSince = awaitingPromptCycleAt.get(sessionId)
+        if (awaitingSince === undefined || Date.now() - awaitingSince >= 2_000) {
+          awaitingPromptCycleAt.delete(sessionId)
+          void flushLocalPromptQueue(sessionId)
+        }
+      }
+    } catch (error) {
+      if (generation === operationalGeneration && sessionId === requestedSessionId) {
+        sessionOperationalError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === operationalGeneration) sessionOperationalPending.value = false
+    }
+  }
+
+  const controlGoal = async (
+    sessionId: string,
+    control: 'pause' | 'resume' | 'cancel'
+  ): Promise<void> => {
+    if (window.kimiAgent === undefined || operationalActionPending.value !== null) return
+    operationalActionPending.value = `goal:${control}`
+    sessionOperationalError.value = null
+    try {
+      const goal = await window.kimiAgent.controlSessionGoal(sessionId, control)
+      if (sessionId === requestedSessionId && sessionOperational.value !== null) {
+        sessionOperational.value = { ...sessionOperational.value, goal }
+      }
+      void refreshSessionOperational(sessionId, true)
+    } catch (error) {
+      sessionOperationalError.value = errorMessage(error)
+    } finally {
+      operationalActionPending.value = null
+    }
+  }
+
+  const cancelTask = async (sessionId: string, taskId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || operationalActionPending.value !== null) return
+    operationalActionPending.value = `task:${taskId}`
+    sessionOperationalError.value = null
+    try {
+      await window.kimiAgent.cancelBackgroundTask(sessionId, taskId)
+      await refreshSessionOperational(sessionId, true)
+    } catch (error) {
+      sessionOperationalError.value = errorMessage(error)
+    } finally {
+      operationalActionPending.value = null
+    }
+  }
+
+  const resetSessionOperational = (): void => {
+    operationalGeneration += 1
+    sessionOperational.value = null
+    sessionOperationalPending.value = false
+    sessionOperationalError.value = null
+    operationalActionPending.value = null
+  }
+
+  const clearActiveSession = (): void => {
+    requestedSessionId = null
+    activeQueueSessionId.value = null
+    sessionOpenGeneration += 1
+    sessionView.value = null
+    sessionError.value = null
+    promptError.value = null
+    conversationActionPending.value = null
+    conversationActionError.value = null
+    interactionGeneration += 1
+    interactionPendingKey.value = null
+    interactionError.value = null
+    resetSessionSkills()
+    resetSessionControls()
+    resetSessionOperational()
+    warningsGeneration += 1
+    sessionWarnings.value = []
+    sessionWarningsError.value = null
+    resetWorkspaceContext()
+  }
+
+  onMounted(() => {
+    void load()
+    operationalTimer = window.setInterval(() => {
+      if (runtime.value.status === 'running' && requestedSessionId !== null) {
+        void refreshSessionOperational(requestedSessionId, true)
+      }
+    }, 2_500)
+  })
+  onBeforeUnmount(() => {
+    unsubscribeRuntime?.()
+    unsubscribeSession?.()
+    if (operationalTimer !== undefined) window.clearInterval(operationalTimer)
+  })
+
+  return {
+    runtime,
+    discovery,
+    pending,
+    label,
+    workspaceTree,
+    workspaceError,
+    sessionPagePending,
+    sessionPageError,
+    sessionPageHasMore,
+    lifecyclePending,
+    lifecycleError,
+    sessionView,
+    sessionError,
+    promptPending,
+    promptError,
+    conversationActionPending,
+    conversationActionError,
+    localPromptQueue,
+    sessionRuntimeStatus,
+    sessionModels,
+    promptControls,
+    sessionControlsPending,
+    sessionControlsError,
+    goalMode,
+    sessionOperational,
+    sessionOperationalPending,
+    sessionOperationalError,
+    sessionWarnings,
+    sessionWarningsError,
+    childrenPendingSessionId,
+    childrenError,
+    operationalActionPending,
+    interactionPendingKey,
+    interactionError,
+    sessionSkills,
+    sessionSkillsPending,
+    sessionSkillsError,
+    skillActivationPending,
+    skillActivationError,
+    fileList,
+    fileListPending,
+    fileListError,
+    filePreview,
+    filePreviewPending,
+    filePreviewError,
+    gitStatus,
+    gitStatusPending,
+    gitStatusError,
+    fileDiff,
+    fileDiffPending,
+    fileDiffError,
+    refreshWorkspaceTree,
+    loadMoreSessions,
+    loadSessionChildren,
+    addWorkspace,
+    renameWorkspace,
+    deleteWorkspace,
+    createSession,
+    renameSession,
+    archiveSession,
+    forkSession,
+    exportSession,
+    openSession,
+    clearActiveSession,
+    submitPrompt,
+    compactSession,
+    undoSession,
+    takeLocalPromptDraft,
+    removeLocalPrompt,
+    moveLocalPrompt,
+    setPromptControls,
+    setGoalMode,
+    refreshSessionOperational,
+    controlGoal,
+    cancelTask,
+    abortPrompt,
+    activateSkill,
+    steerPrompts,
+    abortActivePrompt,
+    respondApproval,
+    respondQuestion,
+    dismissQuestion,
+    loadDirectory,
+    openFile,
+    loadFileDiff,
+    refreshWorkspaceContext,
+    toggle
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function mergeWorkspacePages(
+  current: WorkspaceNavigationItem[],
+  incoming: WorkspaceNavigationItem[]
+): WorkspaceNavigationItem[] {
+  const currentById = new Map(current.map((workspace) => [workspace.id, workspace]))
+  return incoming.map((workspace) => {
+    const existing = currentById.get(workspace.id)
+    if (existing === undefined) return workspace
+    const sessions = [...existing.sessions]
+    const seen = new Set(sessions.map((session) => session.id))
+    for (const session of workspace.sessions) {
+      if (!seen.has(session.id)) sessions.push(session)
+    }
+    return { ...workspace, sessions }
+  })
+}

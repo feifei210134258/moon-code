@@ -1,0 +1,49 @@
+# Kimi Agent Desktop 调研与设计索引
+
+> 工作名称：Kimi Agent Desktop；调研基线：2026-07-22，Kimi Code `0.29.0`（本机当前为 `0.28.0`）
+> 当前阶段：Foundation 实现与 Spike A/B 验证；尚未达到公开 Beta 门槛
+
+这个项目不是通用 Agent 聚合器，也不是 Codex 协议客户端。它是一个以 Kimi Code 为唯一 Agent 内核的 macOS 桌面客户端；“Codex 风格”只描述 UI、任务工作台和桌宠交互。
+
+## 已确认的产品决策
+
+- Kimi Code Web 当前可见功能必须完整覆盖。
+- macOS 首发，架构为后续 Windows/Linux 留出空间。
+- 客户端管理一套经过兼容验证的 Kimi Code 运行时，同时允许高级用户选择系统已安装版本。
+- 内置开发浏览器包含地址栏、项目预览、Console、Network、设备尺寸和截图。
+- HTML 画面批注是可行的增强目标：用户在网页元素或区域上写反馈，客户端把截图、元素定位和文字反馈作为普通 Kimi Prompt 附件发送。
+- 提供类似 Codex 的桌面悬浮宠物，用来表达 Session 状态并跳回对应 Session；不使用 Codex 协议，也不复制 Codex 自带素材。
+- Kimi 套餐用量通过官方 `/api/v1/oauth/usage` 准实时监控。
+- Kimi 的 Workspace、Session、Transcript 是消息和会话的唯一事实源，不再建立第二套聊天数据库。
+
+## 文档
+
+1. [调研结论与竞品分析](./00-research-conclusions.md)
+2. [产品需求文档](./01-product-requirements.md)
+3. [Kimi Web 功能对照表](./02-kimi-web-parity.md)
+4. [信息架构与 UX 规格](./03-ux-and-information-architecture.md)
+5. [技术架构](./04-technical-architecture.md)
+6. [技术验证与交付路线](./05-spikes-and-roadmap.md)
+7. [视觉基线](./06-visual-baseline.md)
+8. [Kimi Web P0 实现审计](./07-p0-implementation-audit.md)
+9. [ADR-0001：使用 Kimi 官方 Server API](./adr/0001-use-kimi-server-api.md)
+10. [ADR-0002：Electron + Vue 桌面架构](./adr/0002-electron-vue-desktop.md)
+11. [ADR-0003：Kimi 数据为唯一事实源](./adr/0003-kimi-data-source-of-truth.md)
+12. [ADR-0004：Kimi 0.29 v2 Terminal 兼容层](./adr/0004-kimi-v2-terminal-compatibility.md)
+13. [ADR-0005：Kimi 0.29 v2 Provider 变更边界](./adr/0005-kimi-v2-provider-mutation-boundary.md)
+14. [ADR-0006：Skills、MCP 与 Agent roster 事实源](./adr/0006-kimi-skills-mcp-agent-projection.md)
+15. [ADR-0007：Browser WebContentsView 与 Preview 安全边界](./adr/0007-browser-webcontentsview-preview-boundary.md)
+16. [ADR-0008：Usage 权威接口与轮询边界](./adr/0008-usage-authority-polling-boundary.md)
+17. [ADR-0009：桌宠多 Session 状态与窗口权限边界](./adr/0009-pet-multi-session-window-boundary.md)
+18. [ADR-0010：HTML 批注隔离 World 与普通 Prompt 边界](./adr/0010-browser-annotation-isolated-world-and-prompt-boundary.md)
+19. [ADR-0011：Prompt Queue 本地草稿边界](./adr/0011-prompt-queue-local-draft-boundary.md)
+20. [ADR-0012：Attachment、Media 与 Markdown 安全边界](./adr/0012-attachment-media-and-markdown-boundary.md)
+
+### Spike 实施记录
+
+- [Spike A：托管 Kimi 运行时](./spikes/0001-managed-runtime.md)
+- [Spike B：Kimi API 契约基线](./spikes/0002-kimi-contract.md)
+
+## 当前推进
+
+已完成主工作台视觉基线、Foundation 工程，以及真实 Session 的 snapshot/Transcript/Prompt/Approval/Question/Tool/Thinking/WS resync 垂直切片；Files/Changes/Diff、Session Terminal、Model/Provider/OAuth/Settings、Skills、MCP/Tools 与 Agent roster 也已接入。Browser 现已支持 HTML 一键路由、隔离 WebContentsView、受限 Workspace Preview、localhost、视口、Console/Network、截图，以及元素/区域批注审查后发送到普通 Kimi Prompt；边界见 [ADR 0007](./adr/0007-browser-webcontentsview-preview-boundary.md) 与 [ADR 0010](./adr/0010-browser-annotation-isolated-world-and-prompt-boundary.md)。Usage 已通过官方 `/oauth/usage` 接入套餐、Extra Usage、Session token 与 Context 分区显示，边界见 [ADR 0008](./adr/0008-usage-authority-polling-boundary.md)。Pet 的核心范围已收敛为状态可见、点击打开 App 和返回准确 Session，打包态链路已验证。Attachment/Media 与 GFM、代码、KaTeX、Mermaid 已按 Kimi 官方 file content 接入，安全边界见 [ADR 0012](./adr/0012-attachment-media-and-markdown-boundary.md)。逐项缺口与证据见 [P0 实现审计](./07-p0-implementation-audit.md)。

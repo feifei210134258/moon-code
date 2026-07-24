@@ -1,0 +1,63 @@
+{
+  "name": "kimi-agent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Kimi Code-native desktop agent client.",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "packageManager": "pnpm@10.12.4",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:renderer": "vite --config vite.renderer.config.ts",
+    "postinstall": "node scripts/ensure-node-pty.mjs",
+    "build": "pnpm typecheck && electron-vite build",
+    "package:dir": "pnpm build && electron-builder --mac --dir",
+    "package:mac": "pnpm build && electron-builder --mac",
+    "smoke:packaged-pty": "node scripts/smoke-packaged-node-pty.mjs",
+    "smoke:packaged-browser": "node scripts/smoke-packaged-browser.mjs",
+    "smoke:packaged-pet": "node scripts/smoke-packaged-pet.mjs",
+    "capture:kimi-contracts": "node scripts/capture-kimi-contracts.mjs",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "@moonshot-ai/kimi-code": "0.29.0",
+    "@phosphor-icons/vue": "2.2.1",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/xterm": "5.5.0",
+    "dompurify": "^3.4.12",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.18.1",
+    "markdown-it": "^14.3.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "markdown-it-texmath": "^1.0.0",
+    "mermaid": "^11.16.0",
+    "mime-types": "^3.0.2",
+    "node-pty": "1.1.0",
+    "pinia": "4.0.2",
+    "semver": "7.8.5",
+    "vue": "3.5.40",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/mime-types": "^3.0.1",
+    "@types/node": "26.1.1",
+    "@types/semver": "7.7.1",
+    "@vitejs/plugin-vue": "6.0.8",
+    "@vue/test-utils": "2.4.11",
+    "electron": "43.2.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "happy-dom": "20.11.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "vitest": "4.1.10",
+    "vue-tsc": "3.3.7"
+  }
+}
