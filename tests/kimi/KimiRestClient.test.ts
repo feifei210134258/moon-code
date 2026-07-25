@@ -72,6 +72,34 @@ describe('KimiRestClient', () => {
     expect(new Headers(init?.headers).get('authorization')).toBe('Bearer secret')
   })
 
+  it('sends the same client identity used by the realtime connection', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ code: 0, msg: 'ok', data: { server_id: 'srv-1' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    )
+    const client = new KimiRestClient({
+      origin: 'http://127.0.0.1:1234',
+      token: 'secret',
+      fetchImpl,
+      identity: {
+        clientId: 'desktop-1',
+        clientName: 'moon-code-desktop',
+        clientVersion: '0.1.0',
+        clientUiMode: 'desktop'
+      }
+    })
+
+    await client.request('/api/v1/meta')
+
+    const headers = new Headers(fetchImpl.mock.calls[0]?.[1]?.headers)
+    expect(headers.get('X-Kimi-Client-Id')).toBe('desktop-1')
+    expect(headers.get('X-Kimi-Client-Name')).toBe('moon-code-desktop')
+    expect(headers.get('X-Kimi-Client-Version')).toBe('0.1.0')
+    expect(headers.get('X-Kimi-Client-Ui-Mode')).toBe('desktop')
+  })
+
   it('accepts legacy workspaces with an empty display name', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(

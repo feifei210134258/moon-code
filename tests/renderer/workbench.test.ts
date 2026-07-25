@@ -220,6 +220,40 @@ describe('workbench transcript hydration', () => {
     ])
   })
 
+  it('clears a completed indicator when selected and only restores it for a newer completion', () => {
+    const store = useWorkbenchStore()
+    const project = (updatedAt: string) => [{
+      id: 'workspace-a', name: 'A', root: '/a', sessions: [{
+        id: 'session-completed', title: 'Completed', updatedAt, busy: false,
+        pendingInteraction: 'none' as const, lastTurnReason: 'completed' as const, lastPrompt: null
+      }]
+    }]
+
+    store.hydrateProjects(project('2026-07-25T10:00:00.000Z'))
+    expect(store.projects[0]?.sessions[0]?.tone).toBe('completed')
+
+    store.selectSession('session-completed')
+    expect(store.projects[0]?.sessions[0]?.tone).toBe('neutral')
+
+    store.hydrateProjects(project('2026-07-25T10:00:00.000Z'))
+    expect(store.projects[0]?.sessions[0]?.tone).toBe('neutral')
+
+    store.hydrateProjects(project('2026-07-25T10:05:00.000Z'))
+    expect(store.projects[0]?.sessions[0]?.tone).toBe('completed')
+  })
+
+  it('does not show a status for an idle session without a completion', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects([{
+      id: 'workspace-a', name: 'A', root: '/a', sessions: [{
+        id: 'session-idle', title: 'Idle', updatedAt: null, busy: false,
+        pendingInteraction: 'none', lastTurnReason: null, lastPrompt: null
+      }]
+    }])
+
+    expect(store.projects[0]?.sessions[0]?.tone).toBe('neutral')
+  })
+
   it('moves workspace selection with an explicitly selected session', () => {
     const store = useWorkbenchStore()
     store.hydrateProjects([

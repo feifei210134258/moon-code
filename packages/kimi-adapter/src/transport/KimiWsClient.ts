@@ -114,7 +114,7 @@ export class KimiWsClient extends EventEmitter {
       }
     }
 
-    const socket = this.#factory(this.#url, [`kimi-code.bearer.${this.#token}`])
+    const socket = this.#factory(withClientId(this.#url, this.#clientId), [`kimi-code.bearer.${this.#token}`])
     this.#socket = socket
     socket.addEventListener('open', () => this.emit('open'))
     socket.addEventListener('message', (event) => void this.#handleMessage(event.data))
@@ -392,6 +392,12 @@ function toWebSocketUrl(origin: string): string {
   url.search = ''
   url.hash = ''
   return url.toString()
+}
+
+function withClientId(url: string, clientId: string): string {
+  const identifiedUrl = new URL(url)
+  identifiedUrl.searchParams.set('client_id', clientId)
+  return identifiedUrl.toString()
 }
 
 function defaultWebSocketFactory(url: string, protocols: string[]): WebSocketLike {

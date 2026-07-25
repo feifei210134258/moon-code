@@ -230,6 +230,7 @@ onBeforeUnmount(() => {
               >
                 <span class="session-title">
                   <span
+                    v-if="session.tone !== undefined && session.tone !== 'neutral'"
                     class="session-status"
                     :class="`is-${session.tone ?? 'neutral'}`"
                     :title="sessionStatusLabel(session)"

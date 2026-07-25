@@ -71,7 +71,7 @@ describe('KimiWsClient', () => {
     })
     await connecting
 
-    expect(factory).toHaveBeenCalledWith('ws://127.0.0.1:54959/api/v1/ws', [
+    expect(factory).toHaveBeenCalledWith('ws://127.0.0.1:54959/api/v1/ws?client_id=test-client', [
       'kimi-code.bearer.secret-token'
     ])
     expect(hello.type).toBe('client_hello')

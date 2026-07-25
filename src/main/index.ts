@@ -19,7 +19,7 @@ import { PACKAGED_PET_SMOKE_MARKER, runPackagedPetSmoke } from './packagedPetSmo
 import { ipcChannels, type KimiUsageState, type PetOpenSessionIntent } from '../shared/contracts.js'
 
 let mainWindow: BrowserWindow | null = null
-const runtime = new KimiRuntimeManager()
+const runtime = new KimiRuntimeManager({ clientVersion: app.getVersion() })
 const sessions = new KimiSessionBridge(runtime)
 const settings = new KimiSettingsBridge(runtime)
 const capabilities = new KimiCapabilitiesBridge(runtime)
