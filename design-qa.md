@@ -245,3 +245,36 @@ final result: passed
 - `pnpm typecheck` 通过；`pnpm test`：325 passed / 2 skipped / 0 failed（`SessionSyncController.test.ts` 新增用例：真实 v2 帧形状 args.todos 无 display → 替换同 id hydrate 条目；子代理 TodoList 不覆盖主计划；`topBarUsage.test.ts` 改为 header 压缩按钮 + 撤销按钮用例）。
 - 截图：`r7-context-popover.png`——header 右侧"压缩"按钮、会话操作区仅剩"撤销上一轮"（fixture 无 ready 会话，按钮禁用为正确态）。
 - 备注：todo 实时刷新涉及真实服务端 WS 帧，dev fixture 无法端到端复现，靠单测覆盖，需在真实会话复核。
+
+---
+
+# Round 8: Right-rail De-card / Composer Flatten (feat/right-rail-sections)
+
+## 本轮改动
+
+1. **右栏去卡片化（核心）**：用户反馈右栏白卡与左栏/中栏表面语言不统一、视觉突兀。Changes 视图（`.changed-files-panel/.todo-panel/.plan-panel`）从"白底+描边+圆角卡片"改为平铺区块：内容直接落在面板底色上，区块间发丝分隔线（`section + section` border-top），空态从 72px 居中大块收成左对齐单行。区块标题统一复用侧栏"项目"的灰色小标题系统（11px / weight 590 / letter-spacing 0.08em），左右两栏同一套标题语言；`.changes-view` 的 grid 行（`minmax(260px,1fr)` 撑大空计划卡）改为自然流。
+2. **文件 tab 同步**：`.file-search-results` 去卡片（白底+边框 → 平铺 + 底部分隔线），结果按钮加圆角 hover；`.file-preview-panel` 保留白底代码画布但圆角 11→10px。
+3. **面板文案中文化**：EXTENSIONS→扩展、Changes→更改、Background Tasks→后台任务（任务数胶囊样式与计划计数统一）。
+4. **输入框扁平化**：`.composer-wrap` 去 `0 10px 30px` 投影和 backdrop blur，圆角 15→12px，focus-within 只留蓝色 ring——靠描边定义边界，与扁平化后的右栏同一语言。
+5. **字号地板（右栏 + 输入框范围）**：changed-file-row 10.5→11、git-summary 9.5→10、todo 状态 chip 9→10、plan-empty 10→10.5、后台任务 strong 10.5→11 / em 8.5→10 / code 9→10、搜索结果行 10→11 / small 8.5→10 / grep code 8.5→10、附件 chip strong 10.5→11 / small 9→10.5。分段 tab 激活块去投影；侧栏 `.section-heading` 颜色 #98a1ae→#767e8c（2.47:1→≈4.5:1，与右栏标题同值）。
+
+## 验证
+
+- `pnpm typecheck` 通过；`pnpm test`：334 passed / 2 skipped / 0 failed（修一处模板 v-if/v-else 链断裂：更改区 h2 常显后状态行改独立条件）。
+- 截图：`r8-rail-changes.png`（平铺区块 + 分隔线 + 单行空态）、`r8-rail-files.png`、`r8-composer.png`（无投影、12px 圆角）。右栏三区块实测背景均为 transparent。
+- 备注：fixture 无 git/todo/task 数据，有数据的行级渲染靠类名不变的单测兜底；真实会话里建议复核长文件列表的内部滚动。
+
+### Round 8b 修正：轮廓卡方案（用户反馈全平铺也不好看）
+
+- 全平铺区块改为"轮廓卡"：保留卡片的分组轮廓，但 `background: transparent` + 描边弱化为 `rgba(15,23,42,0.07)`——去掉的是白底亮度冲击，保留的是分组边界。区块内边距恢复（section padding 10px 11px 12px），`.changes-view` 恢复 gap:10px，分隔线规则删除。
+- 文件 tab `.file-search-results` 同样改透明轮廓卡（描边同色，header 分隔线同步弱化）。
+- 灰色小标题系统、中文化文案、字号地板、输入框扁平化均保留不变。
+- A/B 截图对比：`r8b-variantA-transparent.png`（透明底，已落地）vs `r8b-variantB-halfwhite.png`（注入 rgba(255,255,255,0.55) 半白底）——空态下两者差异很小，透明底更干净。
+- 测试：334 passed / 2 skipped，无回归。
+
+### Round 8c 修正：标题外置 + 内容驱动容器（自选方案）
+
+- 原则：标题放卡片外面建立节奏（macOS 设置式）；空态只留标题 + 一行灰字，不画框；框只给需要边界的滚动内容，线性阅读列表永不加框。
+- 落地：`.changes-view` 区块完全去框（gap 18px 留白分隔）；文件列表的轮廓卡从 section 下沉到 `.changed-files-list`（只在有更改文件时渲染，max-height 30vh 内部滚动，行间 0.05 发丝分隔线）；计划/后台任务平铺列表（任务行间分隔线，首行去顶线）；标题行（灰小标题 + 右侧计数/摘要）外置于内容之上。
+- 截图：`r8c-empty.png`（空态无框，干净）、`r8c-populated.png` / `r8c-full-populated.png`（注入 4 文件 + 5 计划 + 3 任务验证填充态；填充态为 DOM 注入示意，非真实数据）。
+- 测试：334 passed / 2 skipped，无回归。

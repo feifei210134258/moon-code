@@ -192,7 +192,7 @@ function statusLabel(status: string): string {
 <template>
   <aside class="extensions-panel glass-panel" :style="{ width: `${width}px` }">
     <header class="extensions-header">
-      <span>EXTENSIONS</span>
+      <span>扩展</span>
       <span class="extensions-header-actions">
         <button class="icon-button" type="button" aria-label="刷新文件和更改" @click="emit('refresh')">
           <PhArrowClockwise :size="17" />
@@ -210,7 +210,7 @@ function statusLabel(status: string): string {
         role="tab"
         :aria-selected="activeTab === 'changes'"
         @click="emit('selectTab', 'changes')"
-      >Changes</button>
+      >更改</button>
       <button
         :class="{ 'is-active': activeTab === 'files' }"
         type="button"
@@ -232,13 +232,13 @@ function statusLabel(status: string): string {
       class="extension-content changes-view"
     >
       <section class="changed-files-panel">
-        <h2 v-if="gitStatus">
-          {{ changedFiles.length }} 个文件已更改
-          <span class="git-summary">{{ gitStatus.branch || 'detached' }} · <b class="diff-add">+{{ gitStatus.additions }}</b> <b class="diff-remove">-{{ gitStatus.deletions }}</b></span>
+        <h2>
+          {{ gitStatus ? `${changedFiles.length} 个文件已更改` : '更改' }}
+          <span v-if="gitStatus" class="git-summary">{{ gitStatus.branch || 'detached' }} · <b class="diff-add">+{{ gitStatus.additions }}</b> <b class="diff-remove">-{{ gitStatus.deletions }}</b></span>
         </h2>
-        <div v-else-if="gitStatusPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Git 状态…</div>
-        <div v-else-if="gitStatusError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ gitStatusError }}</div>
-        <div v-else class="extension-state">选择一个 Kimi Session 后读取更改。</div>
+        <div v-if="!gitStatus && gitStatusPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Git 状态…</div>
+        <div v-else-if="!gitStatus && gitStatusError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ gitStatusError }}</div>
+        <div v-else-if="!gitStatus" class="extension-state">选择一个 Kimi Session 后读取更改。</div>
         <div v-if="changedFiles.length > 0" class="changed-files-list" aria-label="已更改文件">
           <div v-for="file in changedFiles" :key="file.path" class="changed-file-row">
             <PhFile :size="16" />
@@ -265,7 +265,7 @@ function statusLabel(status: string): string {
       </section>
 
       <section class="plan-panel">
-        <header><h2>Background Tasks</h2><span>{{ tasks.length }}</span></header>
+        <header><h2>后台任务</h2><span>{{ tasks.length }}</span></header>
         <div v-if="tasksPending && tasks.length === 0" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Kimi Tasks…</div>
         <div v-else-if="tasksError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ tasksError }}</div>
         <article v-for="task in tasks" :key="task.id" class="background-task-row" :class="`is-${task.status}`">
