@@ -162,6 +162,67 @@ describe('SessionSyncController', () => {
     controller.close()
   })
 
+  it('updates the Todo list live from agent-core-v2 TodoList frames that carry args.todos without a display', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: {
+        getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)),
+        getSessionTranscript: vi.fn().mockResolvedValue({
+          agent_id: 'main',
+          items: [], has_more: false,
+          tasks: [], interactions: [], attachments: [],
+          todos: [{
+            todoId: 'todo',
+            items: [{ title: 'Old hydrated plan', status: 'in_progress' }],
+            updatedAt: '2026-07-23T00:02:00.000Z'
+          }],
+          meta: {}, agents: [], pending_interactions: []
+        })
+      },
+      socket
+    })
+    await controller.openSession('session-1')
+    expect(controller.getState('session-1')?.todos).toHaveLength(1)
+
+    // 真实服务端帧：tool.call.started + name=TodoList + args.todos，无 display
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.call.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:03:00.000Z',
+      payload: {
+        toolCallId: 'tool-todo-1', name: 'TodoList', agentId: 'main',
+        args: {
+          todos: [{ title: 'Collect Kimi state', status: 'done' }, { title: 'Render it in Plan', status: 'in_progress' }]
+        }
+      }
+    } satisfies SessionEventFrame)
+
+    // 无显式 todoId 时回退到服务端常量 'todo'，替换 hydrate 的条目而非追加
+    expect(controller.getState('session-1')?.todos).toEqual([{
+      todoId: 'todo',
+      items: [{ title: 'Collect Kimi state', status: 'done' }, { title: 'Render it in Plan', status: 'in_progress' }],
+      updatedAt: '2026-07-23T00:03:00.000Z'
+    }])
+
+    // 子代理自己的 TodoList 不覆盖主计划
+    socket.cursors['session-1'] = { seq: 12, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.call.started', seq: 12, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:03:30.000Z',
+      payload: {
+        toolCallId: 'tool-todo-2', name: 'TodoList', agentId: 'subagent-1',
+        args: { todos: [{ title: 'Sub-agent private plan', status: 'in_progress' }] }
+      }
+    } satisfies SessionEventFrame)
+
+    expect(controller.getState('session-1')?.todos).toEqual([{
+      todoId: 'todo',
+      items: [{ title: 'Collect Kimi state', status: 'done' }, { title: 'Render it in Plan', status: 'in_progress' }],
+      updatedAt: '2026-07-23T00:03:00.000Z'
+    }])
+    controller.close()
+  })
+
   it('keeps a BTW Side Chat agent-scoped and projects its streamed reply outside the main transcript', async () => {
     const socket = new FakeSocket()
     const controller = new SessionSyncController({

@@ -881,17 +881,25 @@ function mapTodo(todo: SessionTodo): SessionTodoView {
 }
 
 function liveTodo(frame: SessionEventFrame): SessionTodoView | null {
+  // 与服务端 hydrate 路径保持一致：实时帧替换同 id 的条目，而不是追加第二条
+  const todoId = recordString(frame.payload, 'todoId')
+    ?? recordString(frame.payload, 'todo_id')
+    ?? 'todo'
+  const updatedAt = typeof frame.timestamp === 'string' ? frame.timestamp : null
   const display = recordValue(frame.payload.display)
-  if (display?.kind !== 'todo_list') return null
-  const items = parseTodoItems(display.items)
-  if (items === null) return null
-  return {
-    todoId: recordString(frame.payload, 'todoId')
-      ?? recordString(frame.payload, 'todo_id')
-      ?? `live:${frame.session_id ?? 'session'}`,
-    items,
-    updatedAt: typeof frame.timestamp === 'string' ? frame.timestamp : null
+  if (display?.kind === 'todo_list') {
+    const items = parseTodoItems(display.items)
+    return items === null ? null : { todoId, items, updatedAt }
   }
+  // agent-core-v2 的 TodoList 帧不带 display，全量清单在 args.todos
+  if (frame.type === 'tool.call.started' && (frame.payload.name === 'TodoList' || frame.payload.name === 'TodoWrite')) {
+    const agentId = recordString(frame.payload, 'agentId') ?? recordString(frame.payload, 'agent_id')
+    // 子代理自己的 todo 不覆盖主计划
+    if (agentId !== null && agentId !== 'main') return null
+    const items = parseTodoItems(recordValue(frame.payload.args)?.todos)
+    return items === null ? null : { todoId, items, updatedAt }
+  }
+  return null
 }
 
 function parseTodoItems(value: unknown): SessionTodoItemView[] | null {

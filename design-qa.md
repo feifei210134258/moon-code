@@ -230,3 +230,18 @@ final result: passed
 
 - `pnpm typecheck` 通过；`pnpm test`：324 passed / 2 skipped / 0 failed（重写 `conversationControls.test.ts`：删会话操作用例、加刻度轨布局/跳转用例（attachTo + 模拟布局指标）；新增 TopBar 压缩/撤销、侧栏 BTW 菜单、行内代码路径点击用例）。
 - 截图：`r6-toc-rail.png`（左缘蓝色刻度）、`r6-context-popover.png`（会话操作区，fixture 下按钮禁用为正确态）、`r6-session-menu.png`（BTW 菜单项）。fixture 只有 1 个 user 回合，多刻度分布与行内代码点击由单测覆盖。
+
+---
+
+# Round 7: Context-card Compact Button / Live Plan Refresh (feat/context-compact-button)
+
+## 本轮改动
+
+1. **压缩按钮放进上下文卡 header 右侧**（TopBar.vue）：`.context-compact-button`（PhArrowsIn 图标 + "压缩"文字），点击直接 `emit('compact')` 执行，无需再填说明；`conversationActionPending === 'compact'` 时显 spinner。禁用条件 `sessionReady !== true || promptRunning === true || conversationActionPending != null`。原"会话操作"区里的压缩说明输入框与压缩按钮删除（`compactInstruction` ref、`requestCompact` 移除），该区只剩"撤销上一轮"，`.context-action-row` 由 grid 两列改 flex。
+2. **计划面板实时刷新修复（核心）**：根因两条——① `liveTodo()`（SessionSyncController.ts）只认 `payload.display.kind === 'todo_list'`，但真实服务端（agent-core-v2，kimi-code 0.29.0）的 TodoList 帧是 `tool.call.started` + `args.todos` 全量清单、**没有 display**，所以实时帧全部丢弃，只有重进会话走 REST transcript hydrate 才看到计划；② hydrate 条目 todoId 恒为服务端常量 `'todo'`，而 liveTodo 无显式 id 时 fallback 是 `live:${session_id}`，即使解析成功也会 append 成第二条而非替换。修复：display 路径保留；新增 args 回退——`tool.call.started` 且 name 为 TodoList/TodoWrite 时解析 `args.todos`（复用 `parseTodoItems`），`agentId` 非 main 的子代理帧忽略（不覆盖主计划）；todoId fallback 改为 `'todo'` 对齐 hydrate。
+
+## 验证
+
+- `pnpm typecheck` 通过；`pnpm test`：325 passed / 2 skipped / 0 failed（`SessionSyncController.test.ts` 新增用例：真实 v2 帧形状 args.todos 无 display → 替换同 id hydrate 条目；子代理 TodoList 不覆盖主计划；`topBarUsage.test.ts` 改为 header 压缩按钮 + 撤销按钮用例）。
+- 截图：`r7-context-popover.png`——header 右侧"压缩"按钮、会话操作区仅剩"撤销上一轮"（fixture 无 ready 会话，按钮禁用为正确态）。
+- 备注：todo 实时刷新涉及真实服务端 WS 帧，dev fixture 无法端到端复现，靠单测覆盖，需在真实会话复核。

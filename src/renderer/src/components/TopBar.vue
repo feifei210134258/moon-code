@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import {
   PhCaretDown,
   PhFolderSimple,
   PhGitBranch,
   PhSidebarSimple,
   PhArrowClockwise,
+  PhArrowsIn,
   PhSpinnerGap
 } from '@phosphor-icons/vue'
 import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary } from '@shared/contracts'
@@ -38,14 +39,6 @@ const emit = defineEmits<{
   compact: [instruction?: string]
   undo: []
 }>()
-
-const compactInstruction = ref('')
-
-function requestCompact(): void {
-  const instruction = compactInstruction.value.trim()
-  if (instruction.length === 0) emit('compact')
-  else emit('compact', instruction)
-}
 
 const contextRatio = computed(() => {
   const usage = props.sessionUsage
@@ -174,6 +167,17 @@ function resetHintLabel(hint: string): string {
             <strong>上下文窗口</strong>
             <span>当前会话的上下文占用</span>
           </div>
+          <button
+            class="context-compact-button"
+            type="button"
+            :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null"
+            title="压缩当前会话上下文"
+            @click="emit('compact')"
+          >
+            <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="13" />
+            <PhArrowsIn v-else :size="14" />
+            压缩
+          </button>
         </header>
         <div class="usage-section">
           <div class="usage-token-grid">
@@ -192,19 +196,7 @@ function resetHintLabel(hint: string): string {
         </div>
         <div class="usage-section context-session-actions">
           <span class="usage-section-label">会话操作</span>
-          <label class="context-compact-field">
-            <span>压缩说明（可选）</span>
-            <input v-model="compactInstruction" type="text" maxlength="4000" placeholder="例如：保留当前实现约束" />
-          </label>
           <div class="context-action-row">
-            <button
-              type="button"
-              :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null"
-              @click="requestCompact"
-            >
-              <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="13" />
-              压缩上下文
-            </button>
             <button
               type="button"
               :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null || hasTurns !== true"

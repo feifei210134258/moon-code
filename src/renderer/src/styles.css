@@ -382,38 +382,33 @@ select:focus-visible {
   gap: 9px;
 }
 
-.context-compact-field {
-  display: grid;
+.context-compact-button {
+  flex: none;
+  min-height: 27px;
+  display: inline-flex;
+  align-items: center;
   gap: 5px;
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.context-compact-field input {
-  min-width: 0;
-  height: 30px;
-  padding: 0 9px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  outline: none;
-  color: var(--text);
-  background: #ffffff;
+  color: var(--blue);
+  background: var(--blue-soft);
+  cursor: pointer;
   font: inherit;
   font-size: 11px;
+  white-space: nowrap;
 }
 
-.context-compact-field input:focus {
-  border-color: var(--input-focus-border);
-  box-shadow: var(--focus-ring);
-}
+.context-compact-button:hover { border-color: rgba(48, 133, 250, 0.38); }
+.context-compact-button:disabled { opacity: 0.45; cursor: default; }
 
 .context-action-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 8px;
 }
 
 .context-action-row > button {
+  flex: 1;
   min-height: 30px;
   display: flex;
   align-items: center;
