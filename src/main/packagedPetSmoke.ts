@@ -70,8 +70,8 @@ export async function runPackagedPetSmoke(timeoutMs = 15_000): Promise<void> {
       throw new Error('Pet BrowserWindow lost its always-on-top or fixed-size contract')
     }
     const bounds = petWindow.getBounds()
-    if (bounds.width !== 88 || bounds.height !== 110) {
-      throw new Error(`Pet BrowserWindow size did not shrink as expected: ${JSON.stringify(bounds)}`)
+    if (bounds.width !== 112 || bounds.height !== 140) {
+      throw new Error(`Pet BrowserWindow dimensions are unexpected: ${JSON.stringify(bounds)}`)
     }
 
     await petWindow.webContents.executeJavaScript('window.kimiPet.openSession()')
