@@ -1,21 +1,30 @@
 // @vitest-environment happy-dom
 
 import { shallowMount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import ConversationPane from '../../src/renderer/src/components/ConversationPane.vue'
+
+const turns = [
+  {
+    id: 'turn-1', role: 'user' as const, author: 'You', time: '10:24',
+    blocks: [{ id: 'turn-1:text:0', type: 'text' as const, text: '实现 Compact、Undo 和会话目录' }]
+  },
+  {
+    id: 'turn-2', role: 'assistant' as const, author: 'Kimi', time: '10:25',
+    blocks: [{ id: 'turn-2:text:0', type: 'text' as const, text: '已完成。' }]
+  },
+  {
+    id: 'turn-3', role: 'user' as const, author: 'You', time: '10:30',
+    blocks: [{ id: 'turn-3:text:0', type: 'text' as const, text: '再补一个左侧目录' }]
+  }
+]
 
 function mountConversation() {
   return shallowMount(ConversationPane, {
-    global: {
-      stubs: {
-        ComposerBar: { template: '<div class="composer-bar-stub"><slot name="session-actions" /></div>' }
-      }
-    },
+    attachTo: document.body,
     props: {
-      turns: [{
-        id: 'turn-1', role: 'user' as const, author: 'You', time: '10:24',
-        blocks: [{ id: 'turn-1:text:0', type: 'text' as const, text: '实现 Compact、Undo 和会话目录' }]
-      }],
+      turns,
       phase: 'ready' as const,
       error: null,
       composerEnabled: true,
@@ -57,6 +66,22 @@ function mountConversation() {
   })
 }
 
+function stubRailLayout(wrapper: ReturnType<typeof mountConversation>): void {
+  const scrollEl = wrapper.find('.transcript-scroll').element as HTMLElement
+  Object.defineProperty(scrollEl, 'clientHeight', { configurable: true, value: 500 })
+  Object.defineProperty(scrollEl, 'scrollHeight', { configurable: true, value: 2000 })
+  Object.defineProperty(scrollEl, 'offsetTop', { configurable: true, value: 0 })
+  scrollEl.getBoundingClientRect = () => ({ top: 0, bottom: 500 }) as DOMRect
+  const positions: Record<string, { top: number; height: number }> = {
+    'conversation-turn-turn-1': { top: 40, height: 300 },
+    'conversation-turn-turn-3': { top: 900, height: 420 }
+  }
+  for (const [id, rect] of Object.entries(positions)) {
+    const node = document.getElementById(id) as HTMLElement
+    node.getBoundingClientRect = () => ({ top: rect.top, height: rect.height }) as DOMRect
+  }
+}
+
 describe('Conversation controls', () => {
   it('keeps user identity and time above the right-aligned message bubble', () => {
     const wrapper = mountConversation()
@@ -64,50 +89,44 @@ describe('Conversation controls', () => {
     expect(wrapper.find('.turn.is-user .turn-content').exists()).toBe(true)
     expect(wrapper.find('.turn.is-user .turn-header').element.parentElement?.className).toContain('turn-body')
     expect(wrapper.find('.turn.is-user .turn-content .turn-header').exists()).toBe(false)
+    wrapper.unmount()
   })
 
-  it('removes the top conversation bar and keeps its actions with the composer', () => {
+  it('no longer carries 目录/BTW/会话操作 inside the composer', () => {
     const wrapper = mountConversation()
-    expect(wrapper.find('.conversation-toolbar').exists()).toBe(false)
-    expect(wrapper.get('.composer-session-actions').text()).toContain('目录')
-    expect(wrapper.get('.composer-session-actions').text()).toContain('BTW')
-    expect(wrapper.get('.composer-session-actions').text()).toContain('会话操作')
+    expect(wrapper.find('.composer-session-actions').exists()).toBe(false)
+    expect(wrapper.find('.conversation-action-menu').exists()).toBe(false)
+    expect(wrapper.find('.conversation-toc').exists()).toBe(false)
+    wrapper.unmount()
   })
 
-  it('provides TOC navigation and projects authoritative transcript markers', async () => {
+  it('projects authoritative transcript markers', () => {
     const wrapper = mountConversation()
     expect(wrapper.text()).toContain('上下文已压缩')
     expect(wrapper.text()).toContain('48,000 → 12,500 tokens')
-    await wrapper.get('.conversation-tool-button[aria-expanded="false"]').trigger('click')
-    expect(wrapper.get('.conversation-toc').text()).toContain('实现 Compact、Undo 和会话目录')
+    wrapper.unmount()
   })
 
-  it('closes the table of contents and conversation actions with Escape', async () => {
+  it('renders a Codex-style TOC rail for user turns and scrolls to a turn on click', async () => {
     const wrapper = mountConversation()
-    await wrapper.get('.conversation-tool-button[aria-expanded="false"]').trigger('click')
-    const actionMenu = wrapper.get('.conversation-action-menu').element as HTMLDetailsElement
-    actionMenu.open = true
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await wrapper.vm.$nextTick()
-    expect(wrapper.find('.conversation-toc').exists()).toBe(false)
-    expect(actionMenu.open).toBe(false)
-  })
+    stubRailLayout(wrapper)
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
 
-  it('emits Compact instructions and Undo from the lightweight action menu', async () => {
-    const wrapper = mountConversation()
-    await wrapper.get('.conversation-action-popover input').setValue('保留安全边界')
-    const buttons = wrapper.findAll('.conversation-action-popover > button')
-    await buttons[0]!.trigger('click')
-    await buttons[1]!.trigger('click')
+    const rail = wrapper.get('.toc-rail')
+    expect(rail.attributes('style')).toContain('height: 500px')
+    const ticks = wrapper.findAll('.toc-tick')
+    expect(ticks).toHaveLength(2)
+    expect(ticks[0]!.attributes('title')).toBe('实现 Compact、Undo 和会话目录')
+    expect(ticks[1]!.attributes('title')).toBe('再补一个左侧目录')
+    /* 刻度纵向位置 ∝ 回合位置：turn-3 在 2000px 内容的 900px 处 → 500px 轨道的 225px 附近 */
+    expect(ticks[1]!.attributes('style')).toContain('top: 221px')
+    expect(ticks[0]!.classes()).toContain('is-active')
 
-    expect(wrapper.emitted('compact')).toEqual([['保留安全边界']])
-    expect(wrapper.emitted('undo')).toEqual([[]])
-  })
-
-  it('opens a BTW Side Chat without coupling it to the main conversation actions', async () => {
-    const wrapper = mountConversation()
-    const buttons = wrapper.findAll('.conversation-tool-button')
-    await buttons.find((button) => button.text().includes('BTW'))!.trigger('click')
-    expect(wrapper.emitted('startSideChat')).toEqual([[]])
+    const turn = document.getElementById('conversation-turn-turn-3') as HTMLElement
+    turn.scrollIntoView = vi.fn()
+    await ticks[1]!.trigger('click')
+    expect(turn.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+    wrapper.unmount()
   })
 })

@@ -532,12 +532,18 @@ onBeforeUnmount(() => {
       :context-open="contextOpen"
       :usage-open="usageOpen"
       :extensions-open="rightPanelOpen"
+      :session-ready="transcriptPhase === 'ready'"
+      :prompt-running="activeSessionView?.mainTurnActive === true"
+      :has-turns="visibleTurns.length > 0"
+      :conversation-action-pending="runtimeBridge.conversationActionPending.value"
       @toggle-runtime="toggleRuntime"
       @choose-workspace="addWorkspace"
       @toggle-context="toggleContext"
       @toggle-usage="toggleUsage"
       @toggle-extensions="toggleExtensions"
       @refresh-usage="usageBridge.refresh"
+      @compact="compactSession"
+      @undo="undoSession"
     />
 
     <main class="workbench">
@@ -563,6 +569,7 @@ onBeforeUnmount(() => {
         @export-session="runtimeBridge.exportSession"
         @load-more-sessions="runtimeBridge.loadMoreSessions"
         @load-session-children="loadSessionChildren"
+        @start-side-chat="startSideChat"
         @open-settings="openSettings"
       />
 
@@ -628,9 +635,6 @@ onBeforeUnmount(() => {
         @edit-local-prompt="editLocalPrompt"
         @remove-local-prompt="removeLocalPrompt"
         @move-local-prompt="moveLocalPrompt"
-        @compact="compactSession"
-        @undo="undoSession"
-        @start-side-chat="startSideChat"
         @send-side-chat="sendSideChat"
         @close-side-chat="closeSideChat"
         @open-agent="openAgent"

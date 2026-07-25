@@ -91,6 +91,22 @@ describe('ProjectSidebar', () => {
     wrapper.unmount()
   })
 
+  it('offers BTW side chat only on the active session menu', async () => {
+    const wrapper = mountSidebar()
+    await wrapper.get('[aria-label="完善浏览器批注 任务操作"]').trigger('click')
+    let menu = [...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)!
+    expect(menu.textContent).not.toContain('BTW 侧边会话')
+
+    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    menu = [...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)!
+    const btw = [...menu.querySelectorAll('button')].find((item) => item.textContent?.includes('BTW 侧边会话'))
+    expect(btw).toBeDefined()
+    ;(btw as HTMLButtonElement).click()
+    await nextTick()
+    expect(wrapper.emitted('startSideChat')).toEqual([[]])
+    wrapper.unmount()
+  })
+
   it('exposes a per-project new-task button next to the project menu', async () => {
     const wrapper = mountSidebar()
     await wrapper.get('[aria-label="Website 新建任务"]').trigger('click')

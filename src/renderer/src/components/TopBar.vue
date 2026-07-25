@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   PhCaretDown,
   PhFolderSimple,
   PhGitBranch,
   PhSidebarSimple,
-  PhArrowClockwise
+  PhArrowClockwise,
+  PhSpinnerGap
 } from '@phosphor-icons/vue'
 import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary } from '@shared/contracts'
 import { rendererLocale } from '../i18n/rendererLocale'
@@ -21,16 +22,30 @@ const props = defineProps<{
   contextOpen: boolean
   usageOpen: boolean
   extensionsOpen: boolean
+  sessionReady?: boolean
+  promptRunning?: boolean
+  hasTurns?: boolean
+  conversationActionPending?: 'compact' | 'undo' | null
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   toggleRuntime: []
   chooseWorkspace: []
   toggleContext: []
   toggleUsage: []
   toggleExtensions: []
   refreshUsage: []
+  compact: [instruction?: string]
+  undo: []
 }>()
+
+const compactInstruction = ref('')
+
+function requestCompact(): void {
+  const instruction = compactInstruction.value.trim()
+  if (instruction.length === 0) emit('compact')
+  else emit('compact', instruction)
+}
 
 const contextRatio = computed(() => {
   const usage = props.sessionUsage
@@ -173,6 +188,31 @@ function resetHintLabel(hint: string): string {
             <span>上下文</span>
             <strong>{{ percent(contextRatio) }}</strong>
             <span>{{ compactNumber(sessionUsage?.contextTokens ?? 0) }} / {{ compactNumber(sessionUsage?.contextLimit ?? 0) }}</span>
+          </div>
+        </div>
+        <div class="usage-section context-session-actions">
+          <span class="usage-section-label">会话操作</span>
+          <label class="context-compact-field">
+            <span>压缩说明（可选）</span>
+            <input v-model="compactInstruction" type="text" maxlength="4000" placeholder="例如：保留当前实现约束" />
+          </label>
+          <div class="context-action-row">
+            <button
+              type="button"
+              :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null"
+              @click="requestCompact"
+            >
+              <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="13" />
+              压缩上下文
+            </button>
+            <button
+              type="button"
+              :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null || hasTurns !== true"
+              @click="emit('undo')"
+            >
+              <PhSpinnerGap v-if="conversationActionPending === 'undo'" class="spin" :size="13" />
+              撤销上一轮
+            </button>
           </div>
         </div>
       </section>

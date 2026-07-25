@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { PhCaretDown, PhChatCircleText, PhListBullets, PhSpinnerGap } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ChatTurn } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
@@ -108,9 +107,6 @@ const emit = defineEmits<{
   editLocalPrompt: [draftId: string]
   removeLocalPrompt: [draftId: string]
   moveLocalPrompt: [draftId: string, direction: -1 | 1]
-  compact: [instruction?: string]
-  undo: []
-  startSideChat: []
   sendSideChat: [agentId: string, text: string]
   closeSideChat: [agentId: string]
   openAgent: [agent: SessionAgentView]
@@ -121,9 +117,6 @@ const transcriptScroll = ref<HTMLElement | null>(null)
 const interactionDock = ref<HTMLElement | null>(null)
 const stickToBottom = ref(true)
 const composer = ref<InstanceType<typeof ComposerBar> | null>(null)
-const tocOpen = ref(false)
-const compactInstruction = ref('')
-const conversationActionMenu = ref<HTMLDetailsElement | null>(null)
 const tocItems = computed(() => props.turns.flatMap((turn) => {
   if (turn.role !== 'user') return []
   const text = turn.blocks
@@ -135,9 +128,67 @@ const tocItems = computed(() => props.turns.flatMap((turn) => {
   return [{ id: turn.id, label: text.length > 0 ? compactTocLabel(text) : '附件消息', time: turn.time }]
 }))
 
+/* Codex 式左侧刻度轨：每个 user 回合一枚刻度，纵向位置 ∝ 回合在全文中的位置，
+   横向长度 ∝ 回合高度；当前视口所在回合高亮。 */
+interface TocMeasurement {
+  railTop: number
+  railHeight: number
+  scrollHeight: number
+  ticks: { id: string; label: string; contentTop: number; turnHeight: number }[]
+}
+const tocMeasure = ref<TocMeasurement>({ railTop: 0, railHeight: 0, scrollHeight: 0, ticks: [] })
+const transcriptScrollTop = ref(0)
+let railObserver: ResizeObserver | null = null
+
+const tocRailLayout = computed(() => ({ top: tocMeasure.value.railTop, height: tocMeasure.value.railHeight }))
+const tocTicks = computed(() => {
+  const { railHeight, scrollHeight, ticks } = tocMeasure.value
+  if (railHeight < 1 || scrollHeight < 1) return []
+  const activeId = activeTocId.value
+  return ticks.map((tick) => ({
+    id: tick.id,
+    label: tick.label,
+    top: Math.max(0, Math.min(railHeight - 6, (tick.contentTop / scrollHeight) * railHeight)),
+    length: Math.max(6, Math.min(15, (tick.turnHeight / scrollHeight) * railHeight * 2.4)),
+    active: tick.id === activeId
+  }))
+})
+const activeTocId = computed(() => {
+  const { ticks } = tocMeasure.value
+  if (ticks.length === 0) return null
+  const threshold = transcriptScrollTop.value + 56
+  let active = ticks[0]!.id
+  for (const tick of ticks) {
+    if (tick.contentTop <= threshold) active = tick.id
+    else break
+  }
+  return active
+})
+
+function measureTocRail(): void {
+  const element = transcriptScroll.value
+  if (element === null) return
+  const railHeight = element.clientHeight
+  const scrollHeight = element.scrollHeight
+  const containerTop = element.getBoundingClientRect().top
+  const ticks = tocItems.value.flatMap((item) => {
+    const node = document.getElementById(turnDomId(item.id))
+    if (node === null) return []
+    const rect = node.getBoundingClientRect()
+    return [{
+      id: item.id,
+      label: item.label,
+      contentTop: rect.top - containerTop + element.scrollTop,
+      turnHeight: rect.height
+    }]
+  })
+  tocMeasure.value = { railTop: element.offsetTop, railHeight, scrollHeight, ticks }
+}
+
 function onTranscriptScroll(): void {
   const element = transcriptScroll.value
   if (element === null) return
+  transcriptScrollTop.value = element.scrollTop
   stickToBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 96
 }
 
@@ -164,7 +215,6 @@ async function loadPromptDraft(text: string, attachments: KimiUploadedFile[] = [
 
 function scrollToTurn(turnId: string): void {
   document.getElementById(turnDomId(turnId))?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  tocOpen.value = false
 }
 
 function turnDomId(turnId: string): string {
@@ -198,21 +248,18 @@ function formatTokenCount(value: number): string {
   return new Intl.NumberFormat(rendererLocale(), { maximumFractionDigits: 0 }).format(value)
 }
 
-function requestCompact(): void {
-  const instruction = compactInstruction.value.trim()
-  if (instruction.length === 0) emit('compact')
-  else emit('compact', instruction)
-}
-
-function onWindowKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || (!tocOpen.value && conversationActionMenu.value?.open !== true)) return
-  event.preventDefault()
-  tocOpen.value = false
-  if (conversationActionMenu.value !== null) conversationActionMenu.value.open = false
-}
-
-onMounted(() => window.addEventListener('keydown', onWindowKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
+onMounted(() => {
+  if (typeof ResizeObserver !== 'undefined') {
+    railObserver = new ResizeObserver(() => measureTocRail())
+    if (transcriptScroll.value !== null) railObserver.observe(transcriptScroll.value)
+  }
+  window.addEventListener('resize', measureTocRail)
+  void nextTick(measureTocRail)
+})
+onBeforeUnmount(() => {
+  railObserver?.disconnect()
+  window.removeEventListener('resize', measureTocRail)
+})
 
 defineExpose({ focusFromPet, loadPromptDraft })
 
@@ -250,6 +297,7 @@ watch(
   },
   () => {
     if (stickToBottom.value) void scrollToBottom()
+    void nextTick(measureTocRail)
   }
 )
 
@@ -319,6 +367,25 @@ watch(
           </div>
         </div>
       </article>
+    </div>
+
+    <div
+      v-if="tocTicks.length > 0"
+      class="toc-rail"
+      :style="{ top: `${tocRailLayout.top}px`, height: `${tocRailLayout.height}px` }"
+      aria-label="会话目录"
+    >
+      <button
+        v-for="tick in tocTicks"
+        :key="tick.id"
+        type="button"
+        class="toc-tick"
+        :class="{ 'is-active': tick.active }"
+        :style="{ top: `${tick.top - 4}px`, width: `${tick.length}px` }"
+        :title="tick.label"
+        :aria-label="`跳转到：${tick.label}`"
+        @click="scrollToTurn(tick.id)"
+      />
     </div>
 
     <AgentRoster :agents="agents" @open="emit('openAgent', $event)" />
@@ -408,58 +475,7 @@ watch(
         @activate-skill="(skillName, args) => emit('activateSkill', skillName, args)"
         @update-controls="emit('updatePromptControls', $event)"
         @update-goal-mode="emit('updateGoalMode', $event)"
-      >
-        <template #session-actions>
-          <div class="composer-session-actions" aria-label="会话操作">
-            <button
-              type="button"
-              class="conversation-tool-button"
-              :aria-expanded="tocOpen"
-              :disabled="turns.length === 0"
-              title="会话目录"
-              @click="tocOpen = !tocOpen"
-            ><PhListBullets :size="14" /><span>目录</span></button>
-            <button
-              type="button"
-              class="conversation-tool-button"
-              :disabled="phase !== 'ready' || sideChatPending || sideChat !== null"
-              title="发起 BTW 侧边会话"
-              @click="emit('startSideChat')"
-            ><PhChatCircleText :size="14" /><span>BTW</span></button>
-            <details ref="conversationActionMenu" class="conversation-action-menu">
-              <summary class="conversation-tool-button" title="会话操作"><span>会话操作</span><PhCaretDown :size="12" /></summary>
-              <div class="conversation-action-popover">
-                <label>
-                  <span>压缩说明（可选）</span>
-                  <input v-model="compactInstruction" type="text" maxlength="4000" placeholder="例如：保留当前实现约束" />
-                </label>
-                <button
-                  type="button"
-                  :disabled="phase !== 'ready' || promptRunning || conversationActionPending !== null"
-                  @click="requestCompact"
-                >
-                  <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="13" />
-                  压缩上下文
-                </button>
-                <button
-                  type="button"
-                  :disabled="phase !== 'ready' || promptRunning || conversationActionPending !== null || turns.length === 0"
-                  @click="emit('undo')"
-                >
-                  <PhSpinnerGap v-if="conversationActionPending === 'undo'" class="spin" :size="13" />
-                  撤销上一轮
-                </button>
-              </div>
-            </details>
-            <div v-if="tocOpen" class="conversation-toc" role="dialog" aria-label="会话目录">
-              <strong>会话目录</strong>
-              <button v-for="item in tocItems" :key="item.id" type="button" @click="scrollToTurn(item.id)">
-                <span>{{ item.label }}</span><small>{{ item.time }}</small>
-              </button>
-            </div>
-          </div>
-        </template>
-      </ComposerBar>
+      />
     </div>
   </section>
 </template>

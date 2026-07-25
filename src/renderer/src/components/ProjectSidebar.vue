@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   PhArchive,
+  PhChatCircleText,
   PhCopy,
   PhDotsThree,
   PhDownloadSimple,
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   exportSession: [sessionId: string]
   loadMoreSessions: []
   loadSessionChildren: [sessionId: string]
+  startSideChat: []
   openSettings: []
 }>()
 
@@ -254,6 +256,7 @@ onBeforeUnmount(() => {
     <div v-else-if="menuSession" class="tree-menu tree-menu-overlay session-menu" :style="menuPosition" @click.stop>
       <button type="button" @click="beginSessionRename(menuSession)"><PhPencilSimple :size="14" />重命名</button>
       <button type="button" :disabled="childrenPendingSessionId != null" @click="emit('loadSessionChildren', menuSession.id); closeMenu()"><PhGitFork :size="14" />查看子任务</button>
+      <button v-if="menuSession.id === activeSessionId" type="button" @click="emit('startSideChat'); closeMenu()"><PhChatCircleText :size="14" />BTW 侧边会话</button>
       <button type="button" @click="emit('forkSession', menuSession.id); closeMenu()"><PhCopy :size="14" />创建分叉</button>
       <button type="button" @click="emit('exportSession', menuSession.id); closeMenu()"><PhDownloadSimple :size="14" />导出 ZIP</button>
       <button class="is-danger" type="button" @click="confirmArchiveSession(menuSession)"><PhArchive :size="14" />归档</button>
