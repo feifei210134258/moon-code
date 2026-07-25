@@ -10,17 +10,22 @@
     "height": 208
   },
   "atlas": {
-    "columns": 8,
+    "columns": 16,
     "rows": 2,
-    "width": 1536,
+    "width": 3072,
     "height": 416
   },
   "states": {
     "running": {
       "row": 0,
-      "frames": 8,
+      "frames": 16,
       "playback_frames": 16,
-      "playback_sequence": [0, 1, 0, 1, 0, 1, 2, 3, 4, 5, 4, 5, 4, 5, 6, 7],
+      "playback_sequence": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      "durations_ms": [170, 170, 170, 170, 170, 170, 230, 230, 170, 170, 170, 170, 170, 170, 230, 230],
+      "cycle_duration_ms": 3240,
+      "running_right_source": "decoded/running-right-full-cycle.png",
+      "running_left_source": "decoded/running-left-full-cycle.png",
+      "turn_source": "decoded/running.png",
       "loop": true
     },
     "completed": {

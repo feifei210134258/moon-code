@@ -18,17 +18,17 @@ export interface PetSpriteAnimation {
 }
 
 const RUNNING_COLUMNS = [
-  0, 1, 0, 1, 0, 1,
-  2, 3,
-  4, 5, 4, 5, 4, 5,
-  6, 7
+  0, 1, 2, 3, 4, 5,
+  6, 7,
+  8, 9, 10, 11, 12, 13,
+  14, 15
 ] as const
 
 const TWO_STATE_ANIMATIONS = {
   running: {
     row: 0,
     frames: RUNNING_COLUMNS.length,
-    durations: [120, 120, 120, 120, 120, 120, 160, 160, 120, 120, 120, 120, 120, 120, 160, 160],
+    durations: [170, 170, 170, 170, 170, 170, 230, 230, 170, 170, 170, 170, 170, 170, 230, 230],
     columns: RUNNING_COLUMNS,
     loop: true
   },

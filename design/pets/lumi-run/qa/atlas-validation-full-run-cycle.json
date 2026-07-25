@@ -1,0 +1,355 @@
+{
+  "ok": true,
+  "atlas": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/final/lumi-spritesheet.png",
+  "width": 3072,
+  "height": 416,
+  "cell": {
+    "width": 192,
+    "height": 208
+  },
+  "running_frames": 16,
+  "completed_frames": 1,
+  "cells": [
+    {
+      "row": 0,
+      "column": 0,
+      "used": true,
+      "bbox": [
+        5,
+        8,
+        187,
+        200
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 1,
+      "used": true,
+      "bbox": [
+        5,
+        20,
+        187,
+        188
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 2,
+      "used": true,
+      "bbox": [
+        5,
+        40,
+        187,
+        167
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 3,
+      "used": true,
+      "bbox": [
+        6,
+        5,
+        186,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 4,
+      "used": true,
+      "bbox": [
+        5,
+        17,
+        187,
+        190
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 5,
+      "used": true,
+      "bbox": [
+        5,
+        12,
+        187,
+        196
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 6,
+      "used": true,
+      "bbox": [
+        21,
+        5,
+        170,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 7,
+      "used": true,
+      "bbox": [
+        20,
+        5,
+        171,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 8,
+      "used": true,
+      "bbox": [
+        7,
+        5,
+        185,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 9,
+      "used": true,
+      "bbox": [
+        5,
+        6,
+        187,
+        202
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 10,
+      "used": true,
+      "bbox": [
+        5,
+        29,
+        187,
+        179
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 11,
+      "used": true,
+      "bbox": [
+        9,
+        5,
+        183,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 12,
+      "used": true,
+      "bbox": [
+        5,
+        7,
+        187,
+        200
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 13,
+      "used": true,
+      "bbox": [
+        10,
+        5,
+        182,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 14,
+      "used": true,
+      "bbox": [
+        13,
+        5,
+        179,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 15,
+      "used": true,
+      "bbox": [
+        7,
+        5,
+        184,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 0,
+      "used": true,
+      "bbox": [
+        5,
+        7,
+        187,
+        201
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 1,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 2,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 3,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 4,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 5,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 6,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 7,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 8,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 9,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 10,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 11,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 12,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 13,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 14,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 15,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    }
+  ]
+}

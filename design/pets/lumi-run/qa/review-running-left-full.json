@@ -1,0 +1,112 @@
+{
+  "ok": true,
+  "frames_root": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/frames",
+  "states": [
+    "running-left-full"
+  ],
+  "errors": [],
+  "warnings": [],
+  "rows": [
+    {
+      "state": "running-left-full",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/frames/running-left-full/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23518,
+          "bbox": [
+            7,
+            5,
+            185,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 535
+        },
+        {
+          "index": 1,
+          "file": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/frames/running-left-full/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23629,
+          "bbox": [
+            5,
+            6,
+            187,
+            202
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 566
+        },
+        {
+          "index": 2,
+          "file": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/frames/running-left-full/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 15087,
+          "bbox": [
+            5,
+            29,
+            187,
+            179
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 323
+        },
+        {
+          "index": 3,
+          "file": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/frames/running-left-full/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22779,
+          "bbox": [
+            9,
+            5,
+            183,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 506
+        },
+        {
+          "index": 4,
+          "file": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/frames/running-left-full/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20441,
+          "bbox": [
+            5,
+            7,
+            187,
+            200
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 500
+        },
+        {
+          "index": 5,
+          "file": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/frames/running-left-full/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23698,
+          "bbox": [
+            10,
+            5,
+            182,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 527
+        }
+      ]
+    }
+  ]
+}

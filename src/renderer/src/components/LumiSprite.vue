@@ -94,7 +94,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: calc(var(--lumi-row) * -104px);
   left: calc(var(--lumi-column) * -96px);
-  width: 768px;
+  width: 1536px;
   height: 208px;
   max-width: none;
   pointer-events: none;

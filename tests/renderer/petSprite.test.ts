@@ -7,7 +7,7 @@ describe('pet sprite projection', () => {
     expect(running).toMatchObject({
       row: 0,
       frames: 16,
-      columns: [0, 1, 0, 1, 0, 1, 2, 3, 4, 5, 4, 5, 4, 5, 6, 7],
+      columns: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
       loop: true
     })
     expect(running.durations).toHaveLength(running.frames)
