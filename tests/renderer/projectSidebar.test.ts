@@ -56,7 +56,18 @@ describe('ProjectSidebar', () => {
 
     await wrapper.get('.new-task-button').trigger('click')
     expect(wrapper.emitted('createSession')).toEqual([['workspace-a']])
-    expect(wrapper.find('.project-row-wrap.is-active .project-action-area').exists()).toBe(true)
+    expect(wrapper.find('.project-row-wrap.is-active').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps the project visually inactive when one of its sessions is selected and closes tree menus with Escape', async () => {
+    const wrapper = mountSidebar()
+    expect(wrapper.find('.project-row-wrap.is-active').exists()).toBe(false)
+    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    expect(document.querySelector('.tree-menu-overlay.session-menu')).not.toBeNull()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(document.querySelector('.tree-menu-overlay.session-menu')).toBeNull()
     wrapper.unmount()
   })
 
@@ -77,6 +88,13 @@ describe('ProjectSidebar', () => {
     await clickSessionMenuAction('归档')
     expect(confirm).toHaveBeenCalledOnce()
     expect(wrapper.emitted('archiveSession')).toEqual([['session-a']])
+    wrapper.unmount()
+  })
+
+  it('exposes a per-project new-task button next to the project menu', async () => {
+    const wrapper = mountSidebar()
+    await wrapper.get('[aria-label="Website 新建任务"]').trigger('click')
+    expect(wrapper.emitted('createSession')).toEqual([['workspace-b']])
     wrapper.unmount()
   })
 

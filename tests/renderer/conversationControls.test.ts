@@ -82,6 +82,17 @@ describe('Conversation controls', () => {
     expect(wrapper.get('.conversation-toc').text()).toContain('实现 Compact、Undo 和会话目录')
   })
 
+  it('closes the table of contents and conversation actions with Escape', async () => {
+    const wrapper = mountConversation()
+    await wrapper.get('.conversation-tool-button[aria-expanded="false"]').trigger('click')
+    const actionMenu = wrapper.get('.conversation-action-menu').element as HTMLDetailsElement
+    actionMenu.open = true
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.conversation-toc').exists()).toBe(false)
+    expect(actionMenu.open).toBe(false)
+  })
+
   it('emits Compact instructions and Undo from the lightweight action menu', async () => {
     const wrapper = mountConversation()
     await wrapper.get('.conversation-action-popover input').setValue('保留安全边界')

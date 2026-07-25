@@ -42,6 +42,36 @@ describe('BrowserPanel', () => {
     expect(wrapper.get('.browser-capture-popover').text()).toContain('390 × 844')
   })
 
+  it('closes browser overlays with Escape', async () => {
+    const wrapper = mount(BrowserPanel, {
+      props: {
+        state, pending: false, error: null,
+        capture: { dataUrl: 'data:image/png;base64,AA==', width: 390, height: 844, fullPage: false }
+      }
+    })
+    expect(wrapper.find('.browser-capture-popover').exists()).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.find('.browser-capture-popover').exists()).toBe(false)
+  })
+
+  it('emits overlay state so the host can hide the occluding native view', async () => {
+    const wrapper = mount(BrowserPanel, {
+      props: { state, pending: false, error: null, capture: null }
+    })
+    expect(wrapper.emitted('overlay')).toEqual([[false]])
+
+    await wrapper.setProps({
+      capture: { dataUrl: 'data:image/png;base64,AA==', width: 390, height: 844, fullPage: false }
+    })
+    expect(wrapper.emitted('overlay')).toEqual([[false], [true]])
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.emitted('overlay')).toEqual([[false], [true], [false]])
+    wrapper.unmount()
+  })
+
   it('previews editable annotations and emits only the reviewed submission options', async () => {
     const wrapper = mount(BrowserPanel, {
       props: {
@@ -83,6 +113,7 @@ describe('BrowserPanel', () => {
     })
     window.dispatchEvent(new Event('resize'))
     await nextTick()
+    expect(wrapper.emitted('overlay')).toEqual([[true]])
     expect(wrapper.get('.browser-annotation-popover').text()).toContain('元素批注')
     expect(wrapper.get('.browser-guest-host').classes()).not.toContain('has-overlay')
     expect(wrapper.get('.browser-annotation-popover').attributes('style')).toContain('top:')

@@ -83,19 +83,7 @@ export const useWorkbenchStore = defineStore('workbench', {
   actions: {
     toggleProject(projectId: string) {
       const project = this.projects.find((item) => item.id === projectId)
-      if (project !== undefined) {
-        this.activeWorkspaceId = project.id
-        if (!project.sessions.some((session) => session.id === this.activeSessionId)) {
-          this.activeSessionId = project.sessions[0]?.id ?? ''
-          if (this.activeSessionId.length === 0) {
-            this.turns = []
-            this.transcriptPhase = 'idle'
-            this.transcriptError = null
-            this.transcriptHasMore = false
-          }
-        }
-        project.expanded = !project.expanded
-      }
+      if (project !== undefined) project.expanded = !project.expanded
     },
     selectWorkspace(workspaceId: string) {
       const workspace = this.projects.find((project) => project.id === workspaceId)
@@ -116,7 +104,7 @@ export const useWorkbenchStore = defineStore('workbench', {
       this.rightPanelOpen = true
     },
     setRightPanelWidth(width: number) {
-      this.rightPanelWidth = Math.min(520, Math.max(320, width))
+      this.rightPanelWidth = Math.min(1040, Math.max(320, width))
     },
     toggleTerminal(force?: boolean) {
       this.terminalOpen = force ?? !this.terminalOpen

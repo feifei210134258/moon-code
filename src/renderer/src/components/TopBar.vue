@@ -189,7 +189,7 @@ function resetHintLabel(hint: string): string {
 
         <div v-if="usageWindows.length" class="usage-section">
           <span class="usage-section-label">套餐限额</span>
-          <div v-for="window in usageWindows" :key="window.key" class="usage-detail-row">
+          <div v-for="window in usageWindows" :key="window.key" class="usage-detail-row" :class="usageTone(window.ratio)">
             <div>
               <strong>{{ usageWindowLabel(window.label) }}</strong>
               <span>{{ compactNumber(window.used) }} / {{ compactNumber(window.limit) }}</span>
@@ -198,6 +198,7 @@ function resetHintLabel(hint: string): string {
               <strong>{{ percent(window.ratio) }}</strong>
               <span>{{ window.resetHint === null ? '暂无重置时间' : resetHintLabel(window.resetHint) }}</span>
             </div>
+            <span class="usage-track usage-detail-track"><span :style="{ width: percent(window.ratio) }" /></span>
           </div>
         </div>
 

@@ -18,4 +18,14 @@ describe('RuntimeConnectDialog', () => {
     await wrapper.get('.primary-button').trigger('click')
     expect(wrapper.emitted('retry')).toEqual([[]])
   })
+
+  it('can be dismissed with Escape until the runtime state changes', async () => {
+    const wrapper = mount(RuntimeConnectDialog, {
+      props: { open: true, pending: false, error: '未发现系统 Kimi Code', missing: true },
+      global: { stubs: { Teleport: true } }
+    })
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.runtime-connect-dialog').exists()).toBe(false)
+  })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { PhDownloadSimple, PhFile, PhSpinnerGap } from '@phosphor-icons/vue'
-import { ref } from 'vue'
+import { PhDownloadSimple, PhFile, PhSpinnerGap, PhX } from '@phosphor-icons/vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps<{
   fileId: string
@@ -11,6 +11,10 @@ const props = defineProps<{
 
 const pending = ref(false)
 const error = ref<string | null>(null)
+const previewOpen = ref(false)
+const previewKind = ref<'html' | 'text' | 'document' | null>(null)
+const previewUrl = ref<string | null>(null)
+const previewText = ref('')
 
 async function activate(): Promise<void> {
   const api = window.kimiAgent
@@ -19,15 +23,24 @@ async function activate(): Promise<void> {
   error.value = null
   try {
     const result = await api.readAttachment(props.fileId, props.mediaType)
+    if (isHtml(props.name, props.mediaType)) {
+      openUrlPreview('html', result.bytes, result.mediaType)
+      return
+    }
+    if (isText(props.name, props.mediaType)) {
+      previewKind.value = 'text'
+      previewText.value = new TextDecoder().decode(result.bytes)
+      previewOpen.value = true
+      return
+    }
+    if (/^(image\/|application\/pdf$)/i.test(result.mediaType)) {
+      openUrlPreview('document', result.bytes, result.mediaType)
+      return
+    }
     const url = URL.createObjectURL(new Blob([new Uint8Array(result.bytes)], { type: props.mediaType }))
     const anchor = document.createElement('a')
     anchor.href = url
-    if (isPreviewable(props.name, props.mediaType)) {
-      anchor.target = '_blank'
-      anchor.rel = 'noopener noreferrer'
-    } else {
-      anchor.download = props.name
-    }
+    anchor.download = props.name
     anchor.click()
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
   } catch (reason) {
@@ -37,9 +50,34 @@ async function activate(): Promise<void> {
   }
 }
 
-function isPreviewable(name: string, mediaType: string): boolean {
-  return /^(image\/|video\/|audio\/|application\/pdf$|text\/)/i.test(mediaType)
-    || /\.(?:md|markdown|json|ya?ml|csv|tsv|log)$/i.test(name)
+function openUrlPreview(kind: 'html' | 'document', bytes: Uint8Array, mediaType: string): void {
+  closePreview()
+  previewKind.value = kind
+  previewUrl.value = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: mediaType }))
+  previewOpen.value = true
+}
+
+function closePreview(): void {
+  previewOpen.value = false
+  previewKind.value = null
+  previewText.value = ''
+  if (previewUrl.value !== null) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = null
+}
+
+function isHtml(name: string, mediaType: string): boolean {
+  return /^text\/html$/i.test(mediaType) || /\.html?$/i.test(name)
+}
+
+function isText(name: string, mediaType: string): boolean {
+  return /^text\//i.test(mediaType)
+    || /(?:json|ya?ml|xml|csv|tsv|log|md|markdown|txt)$/i.test(name)
+}
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !previewOpen.value) return
+  event.preventDefault()
+  closePreview()
 }
 
 function formattedSize(): string {
@@ -47,6 +85,12 @@ function formattedSize(): string {
   if (props.size < 1_048_576) return `${Math.round(props.size / 1_024)} KB`
   return `${(props.size / 1_048_576).toFixed(1)} MB`
 }
+
+onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKeydown)
+  closePreview()
+})
 </script>
 
 <template>
@@ -58,4 +102,14 @@ function formattedSize(): string {
       <PhDownloadSimple v-else :size="15" />
     </button>
   </div>
+  <Teleport to="body">
+    <div v-if="previewOpen" class="attachment-preview-backdrop" @click.self="closePreview">
+      <section class="attachment-preview-dialog" role="dialog" aria-modal="true" :aria-label="`预览 ${name}`">
+        <header><strong>{{ name }}</strong><button type="button" aria-label="关闭文件预览" @click="closePreview"><PhX :size="16" /></button></header>
+        <iframe v-if="previewKind === 'html'" :src="previewUrl ?? undefined" sandbox="" title="HTML 文件预览" />
+        <iframe v-else-if="previewKind === 'document'" :src="previewUrl ?? undefined" :title="`${name} 预览`" />
+        <pre v-else>{{ previewText }}</pre>
+      </section>
+    </div>
+  </Teleport>
 </template>

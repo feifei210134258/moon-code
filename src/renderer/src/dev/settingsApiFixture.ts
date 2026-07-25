@@ -141,6 +141,7 @@ export function installSettingsApiFixture(): void {
     browserStop: async () => browserState(),
     setBrowserBounds: async () => undefined,
     setBrowserVisible: async (visible: boolean) => ({ ...browserState(), visible }),
+    setBrowserOverlay: async () => undefined,
     setBrowserViewport: async () => browserState(),
     clearBrowserConsole: async () => browserState(),
     clearBrowserNetwork: async () => browserState(),

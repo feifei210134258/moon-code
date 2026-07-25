@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import {
   PhArchive,
-  PhCaretDown,
-  PhCaretRight,
   PhCopy,
   PhDotsThree,
   PhDownloadSimple,
@@ -12,6 +10,7 @@ import {
   PhMagnifyingGlass,
   PhNotePencil,
   PhPencilSimple,
+  PhPlus,
   PhTrash,
   PhX
 } from '@phosphor-icons/vue'
@@ -147,8 +146,21 @@ function closeMenuOnOutsideClick(event: MouseEvent): void {
   if (!(event.target as HTMLElement).closest('.tree-action-area, .tree-menu-overlay')) closeMenu()
 }
 
-onMounted(() => document.addEventListener('click', closeMenuOnOutsideClick))
-onBeforeUnmount(() => document.removeEventListener('click', closeMenuOnOutsideClick))
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || (menuKey.value === null && editingKey.value === null)) return
+  event.preventDefault()
+  closeMenu()
+  editingKey.value = null
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeMenuOnOutsideClick)
+  window.addEventListener('keydown', onWindowKeydown)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeMenuOnOutsideClick)
+  window.removeEventListener('keydown', onWindowKeydown)
+})
 </script>
 
 <template>
@@ -170,19 +182,21 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenuOnOutsideCl
 
     <nav class="project-tree" aria-label="项目和任务">
       <section v-for="project in filteredProjects" :key="project.id" class="project-group">
-        <div class="project-row-wrap" :class="{ 'is-active': activeWorkspaceId === project.id, 'is-menu-open': menuKey === `workspace:${project.id}` }">
+        <div class="project-row-wrap" :class="{ 'is-active': activeWorkspaceId === project.id && activeSessionId.length === 0, 'is-menu-open': menuKey === `workspace:${project.id}` }">
           <button
             class="project-row"
             type="button"
             @click="$emit('toggleProject', project.id)"
           >
-            <component :is="project.expanded || searchQuery ? PhCaretDown : PhCaretRight" :size="13" />
             <PhFolderSimple :size="17" />
             <span>{{ project.name }}</span>
           </button>
           <div class="tree-action-area project-action-area">
             <button class="tree-more-button" type="button" :aria-label="`${project.name} 项目操作`" @click.stop="toggleMenu(`workspace:${project.id}`, $event)">
               <PhDotsThree :size="17" weight="bold" />
+            </button>
+            <button class="tree-more-button" type="button" :aria-label="`${project.name} 新建任务`" title="新建任务" @click.stop="emit('createSession', project.id)">
+              <PhPlus :size="16" weight="bold" />
             </button>
           </div>
         </div>

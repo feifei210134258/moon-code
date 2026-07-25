@@ -15,6 +15,7 @@ import MarkdownIt from 'markdown-it'
 import taskLists from 'markdown-it-task-lists'
 import texmath from 'markdown-it-texmath'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { workspaceFilePathFromHref } from '../utils/fileRouting'
 import 'katex/dist/katex.min.css'
 import 'highlight.js/styles/github.css'
 
@@ -144,6 +145,12 @@ function onClick(event: MouseEvent): void {
     return
   }
   const href = anchor.getAttribute('href') ?? ''
+  const linkedPath = workspaceFilePathFromHref(href)
+  if (linkedPath !== null) {
+    event.preventDefault()
+    emit('openFile', linkedPath)
+    return
+  }
   if (!/^https?:\/\//i.test(href)) event.preventDefault()
 }
 

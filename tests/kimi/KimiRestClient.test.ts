@@ -101,6 +101,24 @@ describe('KimiRestClient', () => {
     ])
   })
 
+  it('does not combine the mutually exclusive archived session filters', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ code: 0, msg: 'ok', data: { items: [], has_more: false } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.listSessionPage({ archivedOnly: true, includeArchive: true })).resolves.toEqual({
+      items: [], hasMore: false
+    })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/sessions?page_size=100&include_archive=false&exclude_empty=false&archived_only=true',
+      expect.any(Object)
+    )
+  })
+
   it('submits text prompts with bearer auth and validates the authoritative response', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({

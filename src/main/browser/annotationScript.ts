@@ -109,6 +109,13 @@ export function annotationPickScript(mode: BrowserAnnotationMode): string {
     };
     function onMove(event) {
       if (mode === 'region' && dragging && start) {
+        if (event.buttons === 0) {
+          /* 在 webview 外松开鼠标时 mouseup 不会送达，靠下一次 mousemove 复位本次拖拽 */
+          dragging = false;
+          start = null;
+          box.style.display = 'none';
+          return;
+        }
         const x = Math.min(start.x, event.clientX);
         const y = Math.min(start.y, event.clientY);
         showRect({ x, y, width: Math.abs(event.clientX - start.x), height: Math.abs(event.clientY - start.y) });

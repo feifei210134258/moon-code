@@ -418,11 +418,16 @@ export class KimiRestClient {
     afterId?: string
     pageSize?: number
   } = {}): Promise<{ items: SessionSummary[]; hasMore: boolean }> {
+    const archivedOnly = options.archivedOnly ?? false
+    // Kimi Code 0.29 rejects `include_archive=true` together with
+    // `archived_only=true`. An archived-only listing is already inclusive of
+    // archived sessions, so it must use the normal (false) include flag.
+    const includeArchive = archivedOnly ? false : (options.includeArchive ?? false)
     const query = new URLSearchParams({
       page_size: String(options.pageSize ?? 100),
-      include_archive: String(options.includeArchive ?? false),
+      include_archive: String(includeArchive),
       exclude_empty: String(options.excludeEmpty ?? false),
-      archived_only: String(options.archivedOnly ?? false)
+      archived_only: String(archivedOnly)
     })
     if (options.workspaceId !== undefined) query.set('workspace_id', options.workspaceId)
     if (options.busy !== undefined) query.set('busy', String(options.busy))

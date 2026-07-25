@@ -12,7 +12,7 @@ import { useBrowserBridge } from './composables/useBrowserBridge'
 import { useUsageBridge } from './composables/useUsageBridge'
 import { activityFixtureTurns, approvalFixture, questionFixture, sessionWarningFixture } from './dev/interactionFixtures'
 import { useWorkbenchStore } from './stores/workbench'
-import { workspaceFileDestination } from './utils/fileRouting'
+import { normalizeWorkspaceFileReference, workspaceFileDestination } from './utils/fileRouting'
 import { setRendererLocale } from './i18n/rendererLocale'
 import type {
   BrowserAnnotationSubmitInput,
@@ -340,7 +340,9 @@ function openWorkspaceEntry(entry: WorkspaceFileEntry): void {
   else openWorkspaceFile(entry.path)
 }
 
-function openWorkspaceFile(path: string): void {
+function openWorkspaceFile(reference: string): void {
+  const { path } = normalizeWorkspaceFileReference(reference)
+  if (path.length === 0) return
   if (workspaceFileDestination(path) === 'browser') {
     if (activeSessionId.value.length === 0) return
     store.setExtension('browser')
@@ -357,10 +359,11 @@ function selectChangedFile(path: string): void {
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && (usageOpen.value || contextOpen.value)) {
+  if (event.key === 'Escape' && (usageOpen.value || contextOpen.value || settingsOpen.value)) {
     event.preventDefault()
     usageOpen.value = false
     contextOpen.value = false
+    settingsOpen.value = false
     return
   }
   if (event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
@@ -698,6 +701,7 @@ onBeforeUnmount(() => {
           @browser-pick-annotation="browserBridge.pickAnnotation"
           @browser-delete-annotation="browserBridge.deleteAnnotation"
           @browser-submit-annotation="submitBrowserAnnotation"
+          @browser-overlay="browserBridge.setOverlay"
           @cancel-task="cancelTask"
           @collapse="store.rightPanelOpen = false"
         />

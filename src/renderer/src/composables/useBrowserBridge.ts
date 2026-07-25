@@ -72,6 +72,16 @@ export function useBrowserBridge() {
     }
   }
 
+  /* 弹层（批注编辑/截图预览）打开时让主进程摘下原生 guest 视图，避免 DOM 被遮挡。 */
+  const setOverlay = async (open: boolean): Promise<void> => {
+    if (window.kimiAgent === undefined) return
+    try {
+      await window.kimiAgent.setBrowserOverlay(open)
+    } catch (reason) {
+      error.value = errorMessage(reason)
+    }
+  }
+
   const setVisible = async (visible: boolean): Promise<void> => {
     if (window.kimiAgent === undefined) return
     try {
@@ -226,6 +236,7 @@ export function useBrowserBridge() {
     reload,
     stop,
     setBounds,
+    setOverlay,
     setVisible,
     setWorkspaceScope,
     setViewport,

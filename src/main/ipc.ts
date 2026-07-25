@@ -261,7 +261,6 @@ export function registerIpc(
   ipcMain.handle(ipcChannels.sessionsArchivedList, async (event): Promise<WorkspaceNavigationItem['sessions']> => {
     assertTrustedSender(event)
     const page = await runtime.createRestClient().listSessionPage({
-      includeArchive: true,
       archivedOnly: true,
       pageSize: 100
     })
@@ -859,6 +858,11 @@ export function registerIpc(
       return await browser.setVisible(visible)
     }
   )
+  ipcMain.handle(ipcChannels.browserSetOverlay, (event, open?: unknown): void => {
+    assertTrustedSender(event)
+    if (typeof open !== 'boolean') throw new TypeError('Invalid browser overlay state')
+    browser.setOverlayOpen(open)
+  })
   ipcMain.handle(
     ipcChannels.browserSetWorkspace,
     async (event, scope?: unknown): Promise<BrowserViewState> => {
