@@ -259,7 +259,6 @@ export function registerIpc(
   ipcMain.handle(ipcChannels.sessionsArchivedList, async (event): Promise<WorkspaceNavigationItem['sessions']> => {
     assertTrustedSender(event)
     const page = await runtime.createRestClient().listSessionPage({
-      includeArchive: true,
       archivedOnly: true,
       pageSize: 100
     })
