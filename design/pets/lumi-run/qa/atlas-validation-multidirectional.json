@@ -1,0 +1,187 @@
+{
+  "ok": true,
+  "atlas": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/final/lumi-spritesheet.png",
+  "width": 1536,
+  "height": 416,
+  "cell": {
+    "width": 192,
+    "height": 208
+  },
+  "running_frames": 8,
+  "completed_frames": 1,
+  "cells": [
+    {
+      "row": 0,
+      "column": 0,
+      "used": true,
+      "bbox": [
+        7,
+        5,
+        185,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 1,
+      "used": true,
+      "bbox": [
+        12,
+        5,
+        179,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 2,
+      "used": true,
+      "bbox": [
+        21,
+        5,
+        170,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 3,
+      "used": true,
+      "bbox": [
+        20,
+        5,
+        171,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 4,
+      "used": true,
+      "bbox": [
+        8,
+        5,
+        184,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 5,
+      "used": true,
+      "bbox": [
+        18,
+        5,
+        174,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 6,
+      "used": true,
+      "bbox": [
+        13,
+        5,
+        179,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 0,
+      "column": 7,
+      "used": true,
+      "bbox": [
+        7,
+        5,
+        184,
+        203
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 0,
+      "used": true,
+      "bbox": [
+        5,
+        7,
+        187,
+        201
+      ],
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 1,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 2,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 3,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 4,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 5,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 6,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    },
+    {
+      "row": 1,
+      "column": 7,
+      "used": false,
+      "bbox": null,
+      "edge_pixels": 0,
+      "ok": true
+    }
+  ]
+}

@@ -11,7 +11,6 @@ from PIL import Image
 
 CELL_WIDTH = 192
 CELL_HEIGHT = 208
-COLUMNS = 6
 ROWS = 2
 
 
@@ -55,14 +54,21 @@ def main() -> None:
     args = parser.parse_args()
 
     running_root = Path(args.running_frames).expanduser().resolve()
-    running_paths = [running_root / f"{index:02d}.png" for index in range(COLUMNS)]
-    missing = [path for path in running_paths if not path.is_file()]
-    if missing:
-        raise SystemExit(f"missing running frames: {', '.join(str(path) for path in missing)}")
+    running_paths = sorted(running_root.glob("[0-9][0-9].png"))
+    if not running_paths:
+        raise SystemExit(f"no numbered running frames found in {running_root}")
+    expected_names = [f"{index:02d}.png" for index in range(len(running_paths))]
+    actual_names = [path.name for path in running_paths]
+    if actual_names != expected_names:
+        raise SystemExit(
+            "running frames must be consecutively numbered from 00.png; "
+            f"found {', '.join(actual_names)}"
+        )
+    columns = len(running_paths)
 
     atlas = Image.new(
         "RGBA",
-        (COLUMNS * CELL_WIDTH, ROWS * CELL_HEIGHT),
+        (columns * CELL_WIDTH, ROWS * CELL_HEIGHT),
         (0, 0, 0, 0),
     )
     for column, path in enumerate(running_paths):

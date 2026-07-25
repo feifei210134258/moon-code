@@ -10,15 +10,15 @@
     "height": 208
   },
   "atlas": {
-    "columns": 6,
+    "columns": 8,
     "rows": 2,
-    "width": 1152,
+    "width": 1536,
     "height": 416
   },
   "states": {
     "running": {
       "row": 0,
-      "frames": 6,
+      "frames": 8,
       "loop": true
     },
     "completed": {

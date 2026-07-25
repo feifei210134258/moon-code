@@ -17,7 +17,7 @@ export interface PetSpriteAnimation {
 }
 
 const TWO_STATE_ANIMATIONS = {
-  running: { row: 0, frames: 6, durations: [150, 140, 130, 130, 140, 150], loop: true },
+  running: { row: 0, frames: 8, durations: [145, 135, 135, 135, 145, 135, 135, 135], loop: true },
   completed: { row: 1, frames: 1, durations: [0], loop: false }
 } as const satisfies Record<'running' | 'completed', PetSpriteAnimation>
 
