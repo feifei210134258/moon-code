@@ -1,4 +1,5 @@
 import type {
+  KimiAttachmentPasteInput,
   KimiPromptControls,
   KimiPromptInput,
   KimiSideChatPromptInput,
@@ -9,6 +10,7 @@ const MAX_PROMPT_TEXT = 200_000
 const MAX_MODEL_ID = 512
 const MAX_THINKING_ID = 64
 const MAX_ATTACHMENTS = 32
+const MAX_PASTED_IMAGE_BYTES = 10 * 1024 * 1024
 
 export function validatePromptControls(value: unknown): KimiPromptControls {
   if (!isRecord(value)) throw new TypeError('Invalid Kimi prompt controls')
@@ -84,6 +86,18 @@ export function validateMediaType(value: unknown): string {
     throw new TypeError('Invalid Kimi attachment media type')
   }
   return mediaType
+}
+
+export function validatePastedAttachment(value: unknown): KimiAttachmentPasteInput {
+  if (!isRecord(value)) throw new TypeError('Invalid pasted Kimi attachment')
+  const mediaType = validateMediaType(value.mediaType)
+  if (!mediaType.startsWith('image/')) throw new TypeError('Only images can be pasted as Kimi attachments')
+  const name = shortString(value.name, 512, 'pasted attachment name')
+  const bytes = value.bytes
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_PASTED_IMAGE_BYTES) {
+    throw new TypeError('Invalid pasted attachment bytes')
+  }
+  return { name, mediaType, bytes }
 }
 
 function shortString(value: unknown, max: number, label: string): string {

@@ -59,4 +59,30 @@ describe('TopBar usage', () => {
     await wrapper.get('[aria-label="刷新用量"]').trigger('click')
     expect(wrapper.emitted('refreshUsage')).toHaveLength(1)
   })
+
+  it('keeps English reset hint on the pill but localizes the popover to Chinese', () => {
+    const englishUsage: KimiUsageState = {
+      ...usage,
+      summary: { key: 'summary:plan', label: 'Plan usage', used: 82, limit: 100, ratio: 0.82, resetHint: 'resets in 5d 20h 5m' },
+      limits: [{ key: 'limit:5h', label: '5h window', used: 41, limit: 100, ratio: 0.41, resetHint: 'resets in 1h 12m' }]
+    }
+    const wrapper = mount(TopBar, {
+      props: {
+        runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: englishUsage, sessionUsage,
+        contextOpen: false, usageOpen: true, extensionsOpen: true
+      }
+    })
+
+    /* 胶囊按钮保留服务端英文原文 */
+    const pill = wrapper.get('.usage-pill.plan-usage').text()
+    expect(pill).toContain('resets in 5d 20h 5m')
+    /* 弹窗内部一律中文 */
+    const popover = wrapper.get('.usage-popover').text()
+    expect(popover).toContain('套餐总量')
+    expect(popover).toContain('5 小时窗口')
+    expect(popover).toContain('5 天 20 小时 5 分钟后重置')
+    expect(popover).toContain('1 小时 12 分钟后重置')
+    expect(popover).not.toContain('resets in')
+  })
 })

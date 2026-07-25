@@ -187,7 +187,7 @@ export const useWorkbenchStore = defineStore('workbench', {
       this.transcriptPhase = state.phase
       this.transcriptError = state.error
       this.transcriptHasMore = state.hasMoreMessages
-      this.turns = state.messages.map(mapTranscriptMessage)
+      this.turns = groupTranscriptTurns(state.messages)
     },
     markTranscriptLoading(sessionId: string) {
       if (sessionId !== this.activeSessionId) return
@@ -197,6 +197,23 @@ export const useWorkbenchStore = defineStore('workbench', {
     }
   }
 })
+
+/* 同一轮里 Kimi CLI 会拆出多条 assistant 消息；展示层聚合成一个 Kimi 回合，
+ * 直到下一个用户消息（或 cron/compaction 来源标记）才开启新回合。 */
+function groupTranscriptTurns(messages: SessionTranscriptMessage[]): ChatTurn[] {
+  const turns: ChatTurn[] = []
+  for (const message of messages) {
+    const turn = mapTranscriptMessage(message)
+    const last = turns.at(-1)
+    if (turn.role === 'assistant' && last?.role === 'assistant' && message.originKind === undefined) {
+      last.blocks.push(...turn.blocks)
+      if (last.author !== 'Kimi' && turn.author === 'Kimi') last.author = 'Kimi'
+    } else {
+      turns.push(turn)
+    }
+  }
+  return turns
+}
 
 function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
   const blocks: ChatTurn['blocks'] = []

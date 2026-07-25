@@ -86,12 +86,25 @@ function updatedLabel(value: string | null): string {
 
 function usageWindowLabel(label: string): string {
   const normalized = label.trim().toLocaleLowerCase()
-  if (normalized === 'plan') return '套餐总量'
+  if (normalized === 'plan' || normalized === 'plan usage') return '套餐总量'
   const hourWindow = /^(\d+)\s*h(?:\s*window)?$/.exec(normalized)
   if (hourWindow !== null) return `${hourWindow[1]} 小时窗口`
   const dayWindow = /^(\d+)\s*d(?:\s*window)?$/.exec(normalized)
   if (dayWindow !== null) return `${dayWindow[1]} 天窗口`
+  if (/^daily/.test(normalized)) return '每日窗口'
+  if (/^weekly/.test(normalized)) return '每周窗口'
+  if (/^monthly/.test(normalized)) return '每月窗口'
   return label
+}
+
+/* 用量接口返回英文重置提示（如 "resets in 5d 20h 5m"），展示前转为中文。 */
+function resetHintLabel(hint: string): string {
+  const body = /^resets?\s+in\s+(.+)$/i.exec(hint.trim())?.[1]
+  if (body === undefined) return hint
+  const unitNames: Record<string, string> = { s: '秒', m: '分钟', h: '小时', d: '天', w: '周' }
+  const parts = [...body.matchAll(/(\d+)\s*([smhdw])\b/gi)]
+  if (parts.length === 0) return hint
+  return `${parts.map((part) => `${part[1] ?? ''} ${unitNames[(part[2] ?? '').toLowerCase()] ?? ''}`).join(' ')}后重置`
 }
 </script>
 
@@ -183,7 +196,7 @@ function usageWindowLabel(label: string): string {
             </div>
             <div class="usage-detail-value">
               <strong>{{ percent(window.ratio) }}</strong>
-              <span>{{ window.resetHint || '暂无重置时间' }}</span>
+              <span>{{ window.resetHint === null ? '暂无重置时间' : resetHintLabel(window.resetHint) }}</span>
             </div>
           </div>
         </div>

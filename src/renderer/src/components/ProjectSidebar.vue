@@ -48,7 +48,8 @@ const emit = defineEmits<{
 
 const searchQuery = ref('')
 const menuKey = ref<string | null>(null)
-const menuPosition = ref({ top: 0, left: 0 })
+/* Inline style needs explicit units — bare numbers are dropped as invalid CSS. */
+const menuPosition = ref({ top: '0px', left: '0px' })
 const editingKey = ref<string | null>(null)
 const editingValue = ref('')
 const editInput = ref<HTMLInputElement | null>(null)
@@ -97,11 +98,10 @@ function toggleMenu(key: string, event: MouseEvent): void {
   const trigger = event.currentTarget
   if (!(trigger instanceof HTMLElement)) return
   const rect = trigger.getBoundingClientRect()
-  const menuWidth = 156
-  menuPosition.value = {
-    top: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 224)),
-    left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
-  }
+  const menuWidth = 146
+  const top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 224))
+  const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
+  menuPosition.value = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
   menuKey.value = key
 }
 

@@ -11,8 +11,10 @@ import {
   PhFileJs,
   PhFileTs,
   PhFolderOpen,
+  PhMagnifyingGlass,
   PhSidebarSimple,
   PhSpinnerGap,
+  PhTextT,
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
@@ -354,11 +356,11 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       <div class="files-search-tools">
         <form @submit.prevent="submitFileSearch">
           <input v-model="fileSearchQuery" type="search" maxlength="512" placeholder="搜索文件名…" aria-label="搜索文件名" />
-          <button type="submit" :disabled="fileSearchPending">搜索</button>
+          <button type="submit" aria-label="提交文件名搜索" title="搜索文件名" :disabled="fileSearchPending"><PhMagnifyingGlass :size="15" /></button>
         </form>
         <form @submit.prevent="submitGrep">
           <input v-model="grepPattern" type="search" maxlength="512" placeholder="搜索文件内容…" aria-label="搜索文件内容" />
-          <button type="submit" :disabled="fileGrepPending">内容</button>
+          <button type="submit" aria-label="提交文件内容搜索" title="搜索文件内容" :disabled="fileGrepPending"><PhTextT :size="15" /></button>
         </form>
       </div>
       <section v-if="fileSearchPending || fileSearchError || fileSearch" class="file-search-results">

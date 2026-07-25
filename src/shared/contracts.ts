@@ -40,6 +40,7 @@ export const ipcChannels = {
   questionRespond: 'question:respond',
   questionDismiss: 'question:dismiss',
   attachmentsPick: 'attachments:pick',
+  attachmentsPaste: 'attachments:paste',
   attachmentRead: 'attachment:read',
   attachmentDiscard: 'attachment:discard',
   filesList: 'files:list',
@@ -449,6 +450,12 @@ export interface KimiUploadedFile {
 export interface KimiAttachmentPickResult {
   cancelled: boolean
   files: KimiUploadedFile[]
+}
+
+export interface KimiAttachmentPasteInput {
+  name: string
+  mediaType: string
+  bytes: Uint8Array
 }
 
 export interface KimiAttachmentBlob {
@@ -1041,6 +1048,7 @@ export interface KimiAgentDesktopApi {
   ): Promise<InteractionResolveResult>
   dismissQuestion(sessionId: string, questionId: string): Promise<QuestionDismissResult>
   pickAttachments(): Promise<KimiAttachmentPickResult>
+  pasteAttachment(input: KimiAttachmentPasteInput): Promise<KimiUploadedFile>
   readAttachment(fileId: string, mediaType: string): Promise<KimiAttachmentBlob>
   discardAttachment(fileId: string): Promise<void>
   listFiles(sessionId: string, path?: string): Promise<WorkspaceFileList>

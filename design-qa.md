@@ -157,3 +157,39 @@ final result: passed
 
 - `vue-tsc -p tsconfig.web.json` 通过（渲染层零 TS 错误）。
 - `pnpm test`：302 passed / 1 failed；唯一失败 `tests/runtime/externalRuntime.test.ts` 源自工作区并行改动的 `src/main/runtime/KimiRuntimeManager.ts`（`connectExternal` 引用未定义 `meta`），与本轮样式改动无关。
+
+---
+
+# UI Polish Fixes (fix/ui-polish-issues)
+
+- Base: `main` (`555762a`)；分支 `fix/ui-polish-issues`。
+- 验证环境：`http://127.0.0.1:5173/`（Vite 预览），viewport `1440 × 900`；脚本 `artifacts/design-qa/shots-fixes.mjs` 等。
+
+## 本轮修复
+
+1. **侧栏"三个点"菜单飞到角落**：`:style="menuPosition"` 绑定的是裸数字，Vue 不会自动补 `px`，CSSOM 视为非法值整体丢弃 → 菜单回退到样式表 `right:0/top:29px` 固定在窗口角落。修复为显式 `px` 字符串，并将 `menuWidth` 与 CSS 实际宽度（146px）对齐。验证：触发按钮 rect `(237,237.5)`，菜单现锚定 `(116,269)`（紧贴按钮下方）。截图 `fix1-menu-after.png`。
+2. **右栏不再默认展开 Diff**：移除 `useRuntimeBridge.refreshWorkspaceContext` 中"自动加载首个变更文件 Diff"的逻辑，Diff 面板只在用户点击 Changed Files 行时打开。
+3. **Composer 自适应高度 + 顶边拖拽**：新增 `resizeTextareaToContent()`（input/loadDraft/选择引用/窗口 resize 时触发），高度随内容增长，上限 `max(96px, 50vh)`；删除右下角拖大手柄（模板 + CSS + `.composer-actions` 的让位 padding），改为顶部边条 `.composer-top-resize`（hover 显示抓手，向上拖拉高，支持 ArrowUp/Down 键盘微调）。验证：16 行 → `327px`，80 行 → `450px`（恰为 50vh 封顶）。截图 `fix3-composer-*.png`。
+4. **套餐用量弹窗中文化**：新增 `resetHintLabel()` 将服务端英文提示（如 `resets in 5d 20h 5m`）转为 `5 天 20 小时 5 分钟后重置`（无法识别时原样透传，中文提示不受影响）；`usageWindowLabel()` 补 `Plan usage`→`套餐总量`、`daily/weekly/monthly`→`每日/每周/每月窗口`。新增测试锁定该行为（`topBarUsage.test.ts`）。截图 `fix4-usage-popover.png`。
+5. **项目文件搜索框样式**：输入框与按钮改为统一外壳（form 持边框与 `:focus-within` 聚焦环，内部 input 无边框、禁用原生 search 取消按钮与重复 ring），提交按钮由文字改为内嵌图标（`PhMagnifyingGlass` / `PhTextT`，含 aria-label）。修复此前聚焦环被 `border-right:0` 截断、图标按钮外凸为独立方盒的问题。截图 `fix5-search-focus.png`。
+
+## 验证
+
+- `pnpm typecheck` 通过。
+- `pnpm test`：304 passed / 2 skipped / 0 failed。
+- 备注：fixture 状态下 Composer 为禁用态，自适应验证通过真实 `input` 事件驱动（与真实键入同路径）；`fill()` 在该状态下不会触发 Vue 重渲染，属测试环境差异。
+
+---
+
+# Follow-up: Usage Pill / Image Paste / Turn Aggregation (fix/ui-polish-issues)
+
+## 本轮改动
+
+1. **套餐用量展示策略调整**：顶栏胶囊按钮恢复显示服务端英文原文（如 `resets in 5d 20h 5m`）；弹窗内部保持全中文（`resetHintLabel` 翻译 + 窗口标签中文化）。测试 `topBarUsage.test.ts` 锁定"胶囊英文 / 弹窗中文"两种形态。
+2. **会话框支持粘贴图片**：textarea 新增 `@paste` 处理——剪贴板含 `image/*` 项时优先作为附件上传（阻止文本粘贴回退），经新 IPC `attachments:paste` → 主进程 `validatePastedAttachment`（仅 image、≤10MB、字节校验）→ `KimiRestClient.uploadFile` 上传 Kimi。粘贴的图片显示在输入框**上方的附件 chips 行**（与文件选择器附件同一位置，图片附件用 PhImage 图标区分），命名 `粘贴截图-YYYYMMDD-HHmmss.png`，可单独移除、随消息一起发送。纯文本粘贴行为不变。测试 `composerPaste.test.ts`。
+3. **同一轮 Kimi 多段输出聚合**：CLI 在一轮回答里会拆出多条 assistant 消息（Thinking/工具卡分散在多个 "Kimi" 气泡）。`workbench.hydrateTranscript` 改用 `groupTranscriptTurns`：连续的 assistant 消息聚合为一个 Kimi 回合（保留首条消息的 id/时间；遇用户消息或 cron/compaction 来源标记另起回合；首条为 Tool 角色时合并后作者纠正为 Kimi）。纯展示层聚合，不动上游 projector。测试 `workbench.test.ts` 更新 + 新增聚合用例。
+
+## 验证
+
+- `pnpm typecheck` 通过。
+- `pnpm test`：307 passed / 2 skipped / 0 failed（新增 3 用例：图片粘贴 ×2、回合聚合 ×1；更新 2 用例：trailing thinking、usage pill）。

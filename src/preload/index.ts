@@ -57,6 +57,7 @@ const api: KimiAgentDesktopApi = {
   dismissQuestion: (sessionId, questionId) =>
     ipcRenderer.invoke(ipcChannels.questionDismiss, sessionId, questionId),
   pickAttachments: () => ipcRenderer.invoke(ipcChannels.attachmentsPick),
+  pasteAttachment: (input) => ipcRenderer.invoke(ipcChannels.attachmentsPaste, input),
   readAttachment: (fileId, mediaType) => ipcRenderer.invoke(ipcChannels.attachmentRead, fileId, mediaType),
   discardAttachment: (fileId) => ipcRenderer.invoke(ipcChannels.attachmentDiscard, fileId),
   listFiles: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesList, sessionId, path),

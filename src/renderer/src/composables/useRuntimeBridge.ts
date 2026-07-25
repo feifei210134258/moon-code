@@ -966,11 +966,8 @@ export function useRuntimeBridge() {
       .finally(() => {
         if (generation === workspaceGeneration) gitStatusPending.value = false
       })
+    /* Diff 面板只在用户主动点击变更文件时打开，不再默认展开首个文件。 */
     await Promise.all([directoryPromise, gitPromise])
-    const firstChangedPath = gitStatus.value === null
-      ? undefined
-      : Object.keys(gitStatus.value.entries).find((path) => gitStatus.value?.entries[path] !== 'clean')
-    if (firstChangedPath !== undefined && generation === workspaceGeneration) void loadFileDiff(firstChangedPath)
   }
 
   const loadDirectoryForSession = async (

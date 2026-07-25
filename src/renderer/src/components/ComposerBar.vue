@@ -4,6 +4,7 @@ import {
   PhCaretDown,
   PhFile,
   PhFolderOpen,
+  PhImage,
   PhPaperclip,
   PhPaperPlaneTilt,
   PhSlidersHorizontal,
@@ -12,7 +13,7 @@ import {
   PhSpinnerGap,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {
   KimiModelCatalogItem,
   KimiPromptControls,
@@ -142,6 +143,19 @@ function toggleCommands(): void {
   }
 }
 
+function maxComposerHeight(): number {
+  return Math.max(96, Math.floor(window.innerHeight * 0.5))
+}
+
+function resizeTextareaToContent(): void {
+  void nextTick(() => {
+    const textarea = input.value
+    if (textarea === null) return
+    textarea.style.height = '0px'
+    composerHeight.value = Math.min(maxComposerHeight(), Math.max(96, textarea.scrollHeight))
+  })
+}
+
 function startInputResize(event: PointerEvent): void {
   if (event.button !== 0) return
   const textarea = input.value
@@ -150,7 +164,7 @@ function startInputResize(event: PointerEvent): void {
   const startY = event.clientY
   const startHeight = textarea.getBoundingClientRect().height
   const onMove = (moveEvent: PointerEvent): void => {
-    composerHeight.value = Math.round(Math.min(360, Math.max(96, startHeight + moveEvent.clientY - startY)))
+    composerHeight.value = Math.round(Math.min(maxComposerHeight(), Math.max(96, startHeight + startY - moveEvent.clientY)))
   }
   const onUp = (): void => {
     window.removeEventListener('pointermove', onMove)
@@ -163,7 +177,15 @@ function startInputResize(event: PointerEvent): void {
   window.addEventListener('pointerup', onUp)
 }
 
+function onResizeKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+  event.preventDefault()
+  const delta = event.key === 'ArrowUp' ? 24 : -24
+  composerHeight.value = Math.round(Math.min(maxComposerHeight(), Math.max(96, composerHeight.value + delta)))
+}
+
 function onComposerInput(): void {
+  resizeTextareaToContent()
   if (slashQuery.value !== null && props.disabled !== true) {
     commandOpen.value = true
     optionsOpen.value = false
@@ -188,6 +210,7 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   optionsOpen.value = false
   closeMention()
   await nextTick()
+  resizeTextareaToContent()
   input.value?.focus()
 }
 
@@ -201,6 +224,41 @@ async function pickAttachments(): Promise<void> {
     if (!result.cancelled) {
       const existing = new Set(attachments.value.map((file) => file.fileId))
       attachments.value = [...attachments.value, ...result.files.filter((file) => !existing.has(file.fileId))]
+    }
+  } catch (reason) {
+    attachmentError.value = reason instanceof Error ? reason.message : String(reason)
+  } finally {
+    attachmentPending.value = false
+  }
+}
+
+function pastedImageName(mediaType: string): string {
+  const subtype = mediaType.split('/')[1]?.split('+')[0] ?? 'png'
+  const ext = subtype === 'jpeg' ? 'jpg' : subtype
+  const stamp = new Date().toLocaleString('sv-SE').replace(/[-:]/g, '').replace(' ', '-')
+  return `粘贴截图-${stamp}.${ext}`
+}
+
+async function onPaste(event: ClipboardEvent): Promise<void> {
+  if (props.disabled === true) return
+  const images = [...(event.clipboardData?.items ?? [])]
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+  const api = window.kimiAgent
+  if (images.length === 0 || api === undefined) return
+  /* 剪贴板里有图片时优先作为附件上传，不再按文本粘贴 */
+  event.preventDefault()
+  attachmentPending.value = true
+  attachmentError.value = null
+  try {
+    for (const item of images) {
+      const file = item.getAsFile()
+      if (file === null) continue
+      const mediaType = file.type || 'image/png'
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const uploaded = await api.pasteAttachment({ bytes, name: pastedImageName(mediaType), mediaType })
+      if (!attachments.value.some((existing) => existing.fileId === uploaded.fileId)) {
+        attachments.value = [...attachments.value, uploaded]
+      }
     }
   } catch (reason) {
     attachmentError.value = reason instanceof Error ? reason.message : String(reason)
@@ -294,6 +352,7 @@ function selectMention(item: WorkspaceFileSearchItem): void {
     const caret = token.start + item.path.length
     input.value?.setSelectionRange(caret, caret)
     input.value?.focus()
+    resizeTextareaToContent()
   })
 }
 
@@ -353,17 +412,33 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+onMounted(() => {
+  window.addEventListener('resize', resizeTextareaToContent)
+  resizeTextareaToContent()
+})
+
 onBeforeUnmount(() => {
   closeMention()
   stopInputResize?.()
+  window.removeEventListener('resize', resizeTextareaToContent)
 })
 </script>
 
 <template>
   <div class="composer-wrap">
+    <div
+      class="composer-top-resize"
+      role="separator"
+      aria-label="拖动调整输入框高度"
+      aria-orientation="horizontal"
+      tabindex="0"
+      @pointerdown="startInputResize"
+      @keydown="onResizeKeydown"
+    />
     <div v-if="attachments.length > 0 || attachmentPending" class="composer-attachments" aria-label="待发送附件">
       <div v-for="file in attachments" :key="file.fileId" class="composer-attachment-chip">
-        <PhFile :size="15" />
+        <PhImage v-if="file.mediaType.startsWith('image/')" :size="15" />
+        <PhFile v-else :size="15" />
         <span><strong>{{ file.name }}</strong><small>{{ formattedSize(file.size) }}</small></span>
         <button type="button" :aria-label="`移除附件 ${file.name}`" @click="removeAttachment(file)"><PhX :size="13" /></button>
       </div>
@@ -383,6 +458,7 @@ onBeforeUnmount(() => {
         :style="{ height: `${composerHeight}px` }"
         @keydown="onKeydown"
         @input="onComposerInput"
+        @paste="onPaste"
       />
     </div>
     <div v-if="goalMode" class="goal-mode-banner"><strong>目标</strong><span>下一条消息会创建持续目标并立即开始执行</span></div>
@@ -445,14 +521,6 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
-    <div
-      class="composer-resize-handle"
-      role="separator"
-      aria-label="调整输入框高度"
-      aria-orientation="horizontal"
-      tabindex="0"
-      @pointerdown="startInputResize"
-    />
 
     <div v-if="optionsOpen" class="composer-popover" aria-label="Kimi 会话控制">
       <label>

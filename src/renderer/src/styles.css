@@ -2623,8 +2623,7 @@ select:focus-visible {
   display: block;
   width: 100%;
   min-height: 96px;
-  height: 96px;
-  max-height: 360px;
+  max-height: 50vh;
   padding: 4px 168px 1px 4px;
   resize: none;
   border: 0;
@@ -2676,38 +2675,41 @@ select:focus-visible {
   justify-content: space-between;
   align-items: center;
   margin-top: 3px;
-  padding-right: 20px;
 }
 
-.composer-resize-handle {
+.composer-top-resize {
   position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 17px;
-  height: 17px;
-  border-radius: 5px;
+  top: -5px;
+  right: 18px;
+  left: 18px;
+  z-index: 4;
+  height: 10px;
+  border-radius: 6px;
   cursor: ns-resize;
   touch-action: none;
 }
 
-.composer-resize-handle::before {
+.composer-top-resize::before {
   position: absolute;
-  right: 2px;
-  bottom: 2px;
-  width: 9px;
-  height: 9px;
+  top: 3px;
+  left: 50%;
+  width: 46px;
+  height: 4px;
+  border-radius: 2px;
   content: '';
-  background: repeating-linear-gradient(
-    135deg,
-    transparent 0 2px,
-    rgba(92, 108, 128, 0.68) 2px 3px,
-    transparent 3px 5px
-  );
+  background: rgba(15, 23, 42, 0.16);
+  opacity: 0;
+  transform: translateX(-50%);
+  transition: opacity 120ms ease;
 }
 
-.composer-resize-handle:hover,
-.composer-resize-handle:focus-visible {
-  background: rgba(37, 99, 235, 0.09);
+.composer-top-resize:hover::before,
+.composer-top-resize:focus-visible::before,
+.composer-top-resize:active::before {
+  opacity: 1;
+}
+
+.composer-top-resize:focus-visible {
   outline: none;
 }
 
@@ -3620,32 +3622,70 @@ select:focus-visible {
   padding: 7px 8px 5px;
 }
 
-.files-search-tools form { display: flex; min-width: 0; }
+.files-search-tools form {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #ffffff;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+/* The form shell owns the focus ring; never draw a second one on the bare input. */
+.files-search-tools form:focus-within {
+  border-color: var(--input-focus-border);
+  box-shadow: var(--focus-ring);
+}
+
 .files-search-tools input {
   min-width: 0;
   width: 100%;
-  height: 29px;
-  padding: 0 7px;
-  border: 1px solid var(--border);
-  border-right: 0;
-  border-radius: 7px 0 0 7px;
+  height: 27px;
+  padding: 0 4px 0 7px;
+  border: 0;
   outline: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
   color: var(--text);
-  background: #ffffff;
+  background: transparent;
   font: inherit;
   font-size: 10px;
 }
-.files-search-tools input:focus { border-color: var(--input-focus-border); }
-.files-search-tools button {
-  height: 29px;
-  padding: 0 7px;
-  border: 1px solid var(--border);
-  border-radius: 0 7px 7px 0;
-  color: #526276;
-  background: #ffffff;
-  cursor: pointer;
-  font-size: 9px;
+
+.files-search-tools input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
+
+.files-search-tools input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.files-search-tools button {
+  display: grid;
+  flex: none;
+  width: 26px;
+  height: 25px;
+  margin-right: 1px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #526276;
+  background: transparent;
+  cursor: pointer;
+}
+
+.files-search-tools button:hover {
+  color: var(--ink);
+  background: rgba(15, 23, 42, 0.05);
+}
+
 .files-search-tools button:disabled { opacity: 0.48; cursor: default; }
 
 .file-search-results {

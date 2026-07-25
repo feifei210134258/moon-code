@@ -16,6 +16,7 @@ import {
   type KimiMcpServer,
   type KimiAttachmentBlob,
   type KimiAttachmentPickResult,
+  type KimiUploadedFile,
   type KimiGlobalStateEvent,
   type KimiSessionRuntimeStatus,
   type KimiSideChatView,
@@ -99,6 +100,7 @@ import {
 } from './security/fileSearchInputs.js'
 import {
   validateMediaType,
+  validatePastedAttachment,
   validatePromptControls,
   validatePromptInput,
   validateSideChatPromptInput
@@ -487,6 +489,17 @@ export function registerIpc(
       })
     }
     return { cancelled: false, files }
+  })
+  ipcMain.handle(ipcChannels.attachmentsPaste, async (event, input?: unknown): Promise<KimiUploadedFile> => {
+    assertTrustedSender(event)
+    const safe = validatePastedAttachment(input)
+    const uploaded = await runtime.createRestClient().uploadFile(safe)
+    return {
+      fileId: uploaded.id,
+      name: uploaded.name,
+      mediaType: uploaded.media_type,
+      size: uploaded.size
+    }
   })
   ipcMain.handle(
     ipcChannels.attachmentRead,

@@ -139,10 +139,39 @@ describe('workbench transcript hydration', () => {
     ]
     store.hydrateTranscript(state)
 
-    const firstThinking = store.turns[0]?.blocks[0]
-    const trailingThinking = store.turns[1]?.blocks[0]
+    /* 同一轮的连续 assistant 消息聚合为一个 Kimi 回合 */
+    expect(store.turns).toHaveLength(1)
+    const blocks = store.turns[0]?.blocks ?? []
+    const firstThinking = blocks[0]
+    const trailingThinking = blocks[2]
     expect(firstThinking?.type === 'activity' ? firstThinking.activity.status : null).toBe('done')
     expect(trailingThinking?.type === 'activity' ? trailingThinking.activity.status : null).toBe('running')
+  })
+
+  it('aggregates consecutive assistant messages of one round into a single Kimi turn', () => {
+    const store = useWorkbenchStore()
+    store.activeSessionId = 'session-1'
+    const state = sessionState()
+    const base = state.messages[0]!
+    state.messages = [
+      { ...base, id: 'assistant-1', content: [{ type: 'tool', toolCallId: 'tool-1', toolName: 'Bash', state: 'done' }] },
+      { ...base, id: 'assistant-2', content: [{ type: 'thinking', text: 'Reviewing output' }, { type: 'tool', toolCallId: 'tool-2', toolName: 'Read', state: 'done' }] },
+      {
+        id: 'user-2', sessionId: 'session-1', role: 'user',
+        content: [{ type: 'text', text: '继续' }],
+        createdAt: '2026-07-23T01:05:00.000Z', promptId: 'prompt-2', status: 'completed'
+      },
+      { ...base, id: 'assistant-3', content: [{ type: 'text', text: '已完成。' }] }
+    ]
+    store.hydrateTranscript(state)
+
+    expect(store.turns.map((turn) => `${turn.role}:${turn.blocks.length}`)).toEqual([
+      'assistant:3',
+      'user:1',
+      'assistant:1'
+    ])
+    /* 聚合回合保留首条消息的时间与 id */
+    expect(store.turns[0]?.id).toBe('assistant-1')
   })
 
   it('keeps a workspace selected even when it has no sessions', () => {
