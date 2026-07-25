@@ -106,6 +106,11 @@ const composerEnabled = computed(() => showOperationalFixture || (
   transcriptPhase.value === 'ready' &&
   !runtimeBridge.promptPending.value
 ))
+const terminalEnabled = computed(() => (
+  runtimeBridge.runtime.value.status === 'running' &&
+  activeSessionId.value.length > 0 &&
+  transcriptPhase.value === 'ready'
+))
 const activeWorkspaceName = computed(() => projects.value.find((project) =>
   project.id === activeWorkspaceId.value
 )?.name ?? '项目文件')
@@ -205,6 +210,11 @@ function toggleUsage(): void {
 
 function toggleExtensions(): void {
   store.rightPanelOpen = !store.rightPanelOpen
+}
+
+function toggleTerminal(): void {
+  if (!terminalEnabled.value) return
+  store.toggleTerminal()
 }
 
 function toggleRuntime(): void {
@@ -362,8 +372,10 @@ function onWindowKeydown(event: KeyboardEvent): void {
     return
   }
   if (event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-    event.preventDefault()
-    store.toggleTerminal()
+    if (terminalEnabled.value) {
+      event.preventDefault()
+      toggleTerminal()
+    }
     return
   }
   if (event.metaKey && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'b') {
@@ -578,7 +590,7 @@ onBeforeUnmount(() => {
         :prompt-error="runtimeBridge.promptError.value"
         :prompt-running="activeSessionView?.mainTurnActive === true"
         :session-id="activeSessionId"
-        :terminal-enabled="activeSessionView !== null && transcriptPhase === 'ready'"
+        :terminal-enabled="terminalEnabled"
         :terminal-open="terminalOpen"
         :pending-approvals="visibleApprovals"
         :pending-questions="visibleQuestions"
@@ -620,7 +632,7 @@ onBeforeUnmount(() => {
         @dismiss-question="dismissQuestion"
         @open-file="openWorkspaceFile"
         @close-terminal="store.toggleTerminal(false)"
-        @toggle-terminal="store.toggleTerminal()"
+        @toggle-terminal="toggleTerminal"
         @activate-skill="activateSkill"
         @update-prompt-controls="runtimeBridge.setPromptControls"
         @control-goal="controlGoal"

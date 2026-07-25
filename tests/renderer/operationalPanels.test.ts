@@ -25,7 +25,7 @@ describe('operational panels', () => {
     expect(wrapper.emitted('control')).toEqual([['pause']])
   })
 
-  it('shows active and queued Prompts with steer and abort actions', async () => {
+  it('shows only queued Prompts with steer and abort actions', async () => {
     const wrapper = mount(PromptQueueDock, {
       props: {
         pendingKey: null,
@@ -37,10 +37,25 @@ describe('operational panels', () => {
       }
     })
     expect(wrapper.text()).toContain('1 waiting')
+    expect(wrapper.text()).not.toContain('当前任务')
     await wrapper.get('[aria-label="将 Prompt 插入当前任务"]').trigger('click')
     expect(wrapper.emitted('steer')).toEqual([['p2']])
     await wrapper.get('[aria-label="移出 Prompt 队列"]').trigger('click')
     expect(wrapper.emitted('abort')).toContainEqual(['p2'])
+  })
+
+  it('does not render a card for the currently running Prompt alone', () => {
+    const wrapper = mount(PromptQueueDock, {
+      props: {
+        pendingKey: null,
+        localQueue: [],
+        queue: {
+          active: { promptId: 'p1', userMessageId: 'm1', status: 'running', textPreview: '当前任务', createdAt: null },
+          queued: []
+        }
+      }
+    })
+    expect(wrapper.find('.prompt-queue-dock').exists()).toBe(false)
   })
 
   it('keeps official-style local drafts editable and reorderable before Kimi submission', async () => {

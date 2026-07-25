@@ -25,6 +25,7 @@ import type {
 const props = defineProps<{
   disabled?: boolean
   disabledReason?: string
+  terminalEnabled?: boolean
   pending?: boolean
   running?: boolean
   skills: KimiSkill[]
@@ -428,7 +429,7 @@ onBeforeUnmount(() => {
           :disabled="disabled"
           @click="toggleCommands"
         >/</button>
-        <button type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="disabled" @click="emit('toggleTerminal')">
+        <button type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="terminalEnabled !== true" @click="emit('toggleTerminal')">
           <PhTerminalWindow :size="19" />
         </button>
       </div>

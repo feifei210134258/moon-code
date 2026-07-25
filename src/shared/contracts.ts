@@ -330,6 +330,7 @@ export interface KimiUsagePreferences {
   turnNotifications?: boolean
   notificationSound?: boolean
   locale?: 'zh-CN' | 'en-US'
+  petEnabled?: boolean
 }
 
 export interface KimiUsageState {

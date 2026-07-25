@@ -46,6 +46,7 @@ export async function runPackagedPetSmoke(timeoutMs = 15_000): Promise<void> {
   })
   try {
     manager.start()
+    manager.setEnabled(true)
     const petWindow = await waitForWindow(before, timeoutMs)
     await waitFor(() => !petWindow.webContents.isLoading(), timeoutMs)
     const diagnostics = await petWindow.webContents.executeJavaScript(`({
@@ -67,6 +68,10 @@ export async function runPackagedPetSmoke(timeoutMs = 15_000): Promise<void> {
     }
     if (!petWindow.isAlwaysOnTop() || petWindow.isResizable()) {
       throw new Error('Pet BrowserWindow lost its always-on-top or fixed-size contract')
+    }
+    const bounds = petWindow.getBounds()
+    if (bounds.width !== 88 || bounds.height !== 110) {
+      throw new Error(`Pet BrowserWindow size did not shrink as expected: ${JSON.stringify(bounds)}`)
     }
 
     await petWindow.webContents.executeJavaScript('window.kimiPet.openSession()')

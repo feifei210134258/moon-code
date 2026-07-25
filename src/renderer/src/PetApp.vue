@@ -139,7 +139,6 @@ onBeforeUnmount(() => {
       <div v-if="state?.pendingInteraction !== 'none'" class="pet-attention">!</div>
       <div v-if="(state?.overflowCount ?? 0) > 0" class="pet-overflow">+{{ state?.overflowCount }}</div>
     </div>
-    <div class="pet-status-label">{{ statusLabel }}</div>
   </main>
 </template>
 
@@ -161,7 +160,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding: 8px 8px 10px;
+  padding: 5px 5px 7px;
   cursor: grab;
   touch-action: none;
 }
@@ -176,16 +175,16 @@ onBeforeUnmount(() => {
 
 .pet-tooltip {
   position: absolute;
-  top: 3px;
-  left: 4px;
-  right: 4px;
+  top: 2px;
+  left: 3px;
+  right: 3px;
   z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 7px 9px;
+  padding: 5px 6px;
   border: 1px solid rgba(255, 255, 255, 0.86);
-  border-radius: 11px;
+  border-radius: 8px;
   background: rgba(250, 253, 255, 0.82);
   box-shadow: 0 9px 24px rgba(55, 72, 90, 0.14);
   backdrop-filter: blur(16px) saturate(1.08);
@@ -204,11 +203,10 @@ onBeforeUnmount(() => {
 
 .pet-character {
   position: relative;
-  width: 96px;
-  height: 104px;
+  width: 64px;
+  height: 70px;
 }
-.pet-status-dot { position: absolute; right: 2px; bottom: 4px; width: 13px; height: 13px; border: 3px solid rgba(247,250,252,0.95); border-radius: 50%; background: var(--pet-accent); }
-.pet-attention { position: absolute; top: 2px; right: -2px; display: grid; width: 20px; height: 20px; place-items: center; border: 2px solid rgba(255,255,255,0.9); border-radius: 50%; color: white; background: var(--pet-accent); font-size: 12px; font-weight: 800; }
-.pet-overflow { position: absolute; left: -2px; bottom: 2px; display: grid; min-width: 25px; height: 20px; padding: 0 5px; place-items: center; border: 2px solid rgba(255,255,255,0.92); border-radius: 999px; color: #536273; background: rgba(247,250,252,0.96); font-size: 9px; font-weight: 760; }
-.pet-status-label { margin-top: 5px; padding: 3px 8px; border: 1px solid rgba(255,255,255,0.76); border-radius: 999px; color: var(--pet-accent); background: rgba(250,253,255,0.78); box-shadow: 0 4px 12px rgba(55,72,90,0.08); backdrop-filter: blur(10px); font-size: 9px; font-weight: 680; }
+.pet-status-dot { position: absolute; right: 1px; bottom: 3px; width: 9px; height: 9px; border: 2px solid rgba(247,250,252,0.95); border-radius: 50%; background: var(--pet-accent); }
+.pet-attention { position: absolute; top: 1px; right: -1px; display: grid; width: 14px; height: 14px; place-items: center; border: 1px solid rgba(255,255,255,0.9); border-radius: 50%; color: white; background: var(--pet-accent); font-size: 9px; font-weight: 800; }
+.pet-overflow { position: absolute; left: -1px; bottom: 1px; display: grid; min-width: 17px; height: 14px; padding: 0 3px; place-items: center; border: 1px solid rgba(255,255,255,0.92); border-radius: 999px; color: #536273; background: rgba(247,250,252,0.96); font-size: 7px; font-weight: 760; }
 </style>

@@ -16,7 +16,7 @@ import { isTrustedRendererUrl, rendererEntryUrl } from './security/trustedRender
 import { PACKAGED_PTY_SMOKE_MARKER, runPackagedPtySmoke } from './packagedPtySmoke.js'
 import { PACKAGED_BROWSER_SMOKE_MARKER, runPackagedBrowserSmoke } from './packagedBrowserSmoke.js'
 import { PACKAGED_PET_SMOKE_MARKER, runPackagedPetSmoke } from './packagedPetSmoke.js'
-import { ipcChannels, type PetOpenSessionIntent } from '../shared/contracts.js'
+import { ipcChannels, type KimiUsageState, type PetOpenSessionIntent } from '../shared/contracts.js'
 
 let mainWindow: BrowserWindow | null = null
 const runtime = new KimiRuntimeManager()
@@ -44,6 +44,9 @@ const usage = new KimiUsageService(runtime, {
 })
 let quitting = false
 let petWindows: KimiPetWindowManager | null = null
+const syncPetWindowPreference = (state: KimiUsageState): void => {
+  petWindows?.setEnabled(state.preferences.petEnabled === true)
+}
 
 function getTrustedRendererUrl(): string {
   return process.env.ELECTRON_RENDERER_URL ?? rendererEntryUrl(join(__dirname, '../renderer/index.html'))
@@ -153,6 +156,7 @@ if (process.argv.includes('--smoke-node-pty')) {
     })
 } else {
   app.whenReady().then(() => {
+    usage.on('state-changed', syncPetWindowPreference)
     usage.start()
     pets.start()
     const trustedRendererUrl = getTrustedRendererUrl()
@@ -163,6 +167,7 @@ if (process.argv.includes('--smoke-node-pty')) {
       onOpenSession: openMainWindowForPet
     })
     petWindows.start()
+    petWindows.setEnabled(usage.state.preferences.petEnabled === true)
     mainWindow = createMainWindow()
     // Moon Code uses the Kimi Code CLI installed by the user. Start it as
     // soon as the application opens so the renderer can use its sessions
@@ -189,6 +194,7 @@ app.on('before-quit', (event) => {
     browser.close().catch(() => undefined)
   ])
     .then(async () => {
+      usage.off('state-changed', syncPetWindowPreference)
       usage.close()
       petWindows?.close()
       pets.close()

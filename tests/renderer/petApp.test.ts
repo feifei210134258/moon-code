@@ -44,6 +44,7 @@ describe('PetApp', () => {
     const wrapper = mount(PetApp)
     await vi.waitFor(() => expect(wrapper.text()).toContain('实现桌面宠物'))
     expect(wrapper.text()).toContain('等待授权')
+    expect(wrapper.find('.pet-status-label').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('批准')
     expect(wrapper.get('.mimo-sprite').attributes('data-row')).toBe('6')
 

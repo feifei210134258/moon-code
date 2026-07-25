@@ -6,7 +6,7 @@ import {
   PhGitBranch,
   PhSidebarSimple,
   PhArrowClockwise,
-  PhArrowsIn,
+  PhArrowsInLineVertical,
   PhSpinnerGap
 } from '@phosphor-icons/vue'
 import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary } from '@shared/contracts'
@@ -162,7 +162,7 @@ function resetHintLabel(hint: string): string {
           @click="emit('compact')"
         >
           <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="14" />
-          <PhArrowsIn v-else :size="15" />
+          <PhArrowsInLineVertical v-else :size="15" />
         </button>
       </div>
       <button class="usage-pill plan-usage" :class="usageTone(tightestWindow?.ratio ?? null)" type="button" aria-label="查看 Kimi 套餐用量" aria-controls="usage-popover" :aria-expanded="usageOpen" @click="$emit('toggleUsage')">

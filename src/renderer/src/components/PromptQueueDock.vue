@@ -29,22 +29,11 @@ const waitingCount = computed(() => (props.queue?.queued.length ?? 0) + props.lo
 </script>
 
 <template>
-  <section v-if="queue?.active != null || waitingCount > 0" class="prompt-queue-dock" aria-label="Kimi Prompt 队列">
+  <section v-if="waitingCount > 0" class="prompt-queue-dock" aria-label="Kimi Prompt 队列">
     <header>
       <strong>Prompt Queue</strong>
       <span>{{ waitingCount }} waiting</span>
     </header>
-    <div v-if="queue?.active" class="prompt-queue-row is-active">
-      <span class="prompt-state-dot" />
-      <p>{{ queue.active.textPreview || '当前 Prompt' }}</p>
-      <em>Running</em>
-      <button
-        type="button"
-        aria-label="停止当前 Prompt"
-        :disabled="pendingKey !== null"
-        @click="emit('abort', queue.active.promptId)"
-      ><PhStopCircle :size="15" /></button>
-    </div>
     <div v-for="(draft, index) in localQueue" :key="draft.id" class="prompt-queue-row is-local">
       <span class="queue-index">{{ index + 1 }}</span>
       <p>{{ draft.input.text || draft.input.attachments?.map((file) => file.name).join('、') || '附件 Prompt' }}</p>

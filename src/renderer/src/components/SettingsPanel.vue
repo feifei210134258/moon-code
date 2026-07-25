@@ -229,7 +229,9 @@ async function updateUsagePreference(patch: Partial<KimiUsagePreferences>): Prom
   notice.value = null
   try {
     await api.updateKimiUsagePreferences({ ...props.usage.preferences, ...patch })
-    notice.value = '用量阈值已保存在本机；不会修改 Kimi 套餐数据。'
+    notice.value = 'petEnabled' in patch
+      ? '宠物设置已保存在本机。'
+      : '用量阈值已保存在本机；不会修改 Kimi 套餐数据。'
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -606,6 +608,9 @@ function errorMessage(reason: unknown): string {
 
               <section v-else class="settings-section">
                 <div class="settings-title"><div><h2>通用</h2><p>Kimi 配置和仅本机的产品偏好会明确分开保存。</p></div></div>
+                <label class="preference-row"><span><strong>桌面宠物</strong><small>在桌面显示当前会话状态；默认关闭</small></span>
+                  <input type="checkbox" :checked="usage.preferences.petEnabled === true" :disabled="actionPending !== null" @change="updateUsagePreference({ petEnabled: ($event.target as HTMLInputElement).checked })" />
+                </label>
                 <label class="preference-row"><span><strong>界面语言</strong><small>影响系统通知、日期/数字格式与界面语言标记</small></span>
                   <select :value="usage.preferences.locale ?? 'zh-CN'" :disabled="actionPending !== null" @change="updateUsagePreference({ locale: ($event.target as HTMLSelectElement).value as 'zh-CN' | 'en-US' })">
                     <option value="zh-CN">简体中文</option><option value="en-US">English</option>

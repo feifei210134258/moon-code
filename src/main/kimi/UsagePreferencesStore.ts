@@ -9,7 +9,8 @@ export const DEFAULT_USAGE_PREFERENCES: KimiUsagePreferences = {
   systemNotifications: true,
   turnNotifications: true,
   notificationSound: true,
-  locale: 'zh-CN'
+  locale: 'zh-CN',
+  petEnabled: false
 }
 
 export class UsagePreferencesStore {
@@ -55,7 +56,12 @@ export function validateUsagePreferences(value: unknown): KimiUsagePreferences {
     ? DEFAULT_USAGE_PREFERENCES.notificationSound!
     : record.notificationSound
   const locale = record.locale === undefined ? DEFAULT_USAGE_PREFERENCES.locale! : record.locale
-  if (typeof turnNotifications !== 'boolean' || typeof notificationSound !== 'boolean') {
+  const petEnabled = record.petEnabled === undefined ? DEFAULT_USAGE_PREFERENCES.petEnabled! : record.petEnabled
+  if (
+    typeof turnNotifications !== 'boolean' ||
+    typeof notificationSound !== 'boolean' ||
+    typeof petEnabled !== 'boolean'
+  ) {
     throw new TypeError('Invalid Kimi turn notification preference')
   }
   if (locale !== 'zh-CN' && locale !== 'en-US') throw new TypeError('Invalid Kimi locale preference')
@@ -66,7 +72,8 @@ export function validateUsagePreferences(value: unknown): KimiUsagePreferences {
     systemNotifications: record.systemNotifications,
     turnNotifications,
     notificationSound,
-    locale
+    locale,
+    petEnabled
   }
 }
 

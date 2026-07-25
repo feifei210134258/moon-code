@@ -96,6 +96,16 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.emitted('abort')).toEqual([[]])
   })
 
+  it('keeps the Terminal entry usable independently from Prompt controls', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: { skills: [], models, controls: null, disabled: true, terminalEnabled: true }
+    })
+    const terminalButton = wrapper.get('[aria-label="打开终端"]')
+    expect(terminalButton.attributes('disabled')).toBeUndefined()
+    await terminalButton.trigger('click')
+    expect(wrapper.emitted('toggleTerminal')).toEqual([[]])
+  })
+
   it('uses the real model catalog and exposes independent Plan and Swarm controls', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('.model-summary').trigger('click')

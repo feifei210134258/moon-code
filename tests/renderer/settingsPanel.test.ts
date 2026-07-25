@@ -268,6 +268,29 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
+  it('keeps the desktop pet disabled by default and toggles it from General settings', async () => {
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      updateKimiUsagePreferences: vi.fn(async (preferences) => ({ ...usage, preferences }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    const petToggle = wrapper.find('.settings-section input[type="checkbox"]')
+    expect((petToggle.element as HTMLInputElement).checked).toBe(false)
+    await petToggle.setValue(true)
+    await flushPromises()
+
+    expect(api.updateKimiUsagePreferences).toHaveBeenCalledWith(expect.objectContaining({ petEnabled: true }))
+    expect(wrapper.text()).toContain('宠物设置已保存在本机')
+    wrapper.unmount()
+  })
+
   it('lists and restores Kimi archived sessions', async () => {
     const api = {
       getKimiSettings: vi.fn(async () => snapshot),

@@ -23,8 +23,9 @@ describe('UsagePreferencesStore', () => {
       locale: 'en-US' as const
     }
     await store.save(preferences)
-    await expect(store.load()).resolves.toEqual(preferences)
-    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(preferences)
+    const migrated = { ...preferences, petEnabled: false }
+    await expect(store.load()).resolves.toEqual(migrated)
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(migrated)
   })
 
   it('rejects unordered/out-of-range thresholds and safely falls back on invalid disk data', async () => {
@@ -41,5 +42,16 @@ describe('UsagePreferencesStore', () => {
     expect(validateUsagePreferences({
       infoThreshold: 0.5, warningThreshold: 0.8, criticalThreshold: 0.95, systemNotifications: true
     })).toEqual(DEFAULT_USAGE_PREFERENCES)
+  })
+
+  it('validates the local desktop pet preference', () => {
+    expect(validateUsagePreferences({
+      ...DEFAULT_USAGE_PREFERENCES,
+      petEnabled: true
+    }).petEnabled).toBe(true)
+    expect(() => validateUsagePreferences({
+      ...DEFAULT_USAGE_PREFERENCES,
+      petEnabled: 'yes'
+    })).toThrow('Invalid Kimi turn notification preference')
   })
 })

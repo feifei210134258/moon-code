@@ -183,7 +183,8 @@ const activeTocId = computed(() => {
 function measureTocRail(): void {
   const element = transcriptScroll.value
   if (element === null) return
-  const railHeight = element.clientHeight
+  const railStart = Math.round(element.clientHeight / 3)
+  const railHeight = Math.max(0, element.clientHeight - railStart)
   const scrollHeight = element.scrollHeight
   const containerTop = element.getBoundingClientRect().top
   const ticks = tocItems.value.flatMap((item) => {
@@ -199,7 +200,7 @@ function measureTocRail(): void {
       turnHeight: rect.height
     }]
   })
-  tocMeasure.value = { railTop: element.offsetTop, railHeight, scrollHeight, ticks }
+  tocMeasure.value = { railTop: element.offsetTop + railStart, railHeight, scrollHeight, ticks }
 }
 
 function onTranscriptScroll(): void {
@@ -442,7 +443,7 @@ watch(
 
     <div class="composer-stack">
       <PromptQueueDock
-        v-if="promptQueue !== null || localPromptQueue.length > 0"
+        v-if="(promptQueue?.queued.length ?? 0) > 0 || localPromptQueue.length > 0"
         :queue="promptQueue"
         :local-queue="localPromptQueue"
         :pending-key="operationalActionPending"
@@ -485,6 +486,7 @@ watch(
       <ComposerBar
         ref="composer"
         :disabled="!composerEnabled || promptControls === null"
+        :terminal-enabled="terminalEnabled"
         :pending="promptPending"
         :running="promptRunning"
         :skills="skills"

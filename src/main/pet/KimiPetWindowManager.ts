@@ -37,7 +37,7 @@ export interface KimiPetWindowManagerOptions {
   windowSize?: { width: number; height: number }
 }
 
-const DEFAULT_SIZE = { width: 132, height: 164 }
+const DEFAULT_SIZE = { width: 88, height: 110 }
 const EDGE_MARGIN = 8
 
 export class KimiPetWindowManager {
@@ -50,6 +50,7 @@ export class KimiPetWindowManager {
   readonly #windows = new Map<string, PetWindowRecord>()
   readonly #creating = new Set<string>()
   #started = false
+  #enabled = false
   #latestRoster: PetRosterState | null = null
 
   readonly #onRosterChanged = (roster: PetRosterState): void => {
@@ -126,6 +127,18 @@ export class KimiPetWindowManager {
     void this.#reconcile(this.#latestRoster)
   }
 
+  setEnabled(enabled: boolean): void {
+    if (this.#enabled === enabled) return
+    this.#enabled = enabled
+    if (!this.#started) return
+    if (enabled) {
+      if (this.#latestRoster !== null) void this.#reconcile(this.#latestRoster)
+      return
+    }
+    for (const record of this.#windows.values()) record.window.destroy()
+    this.#windows.clear()
+  }
+
   close(): void {
     if (!this.#started) return
     this.#started = false
@@ -141,7 +154,7 @@ export class KimiPetWindowManager {
   }
 
   async #reconcile(roster: PetRosterState): Promise<void> {
-    if (!this.#started) return
+    if (!this.#started || !this.#enabled) return
     const desired = new Map(roster.items.map((state) => [state.sessionId, state]))
     for (const [sessionId, record] of this.#windows) {
       const state = desired.get(sessionId)
@@ -166,10 +179,10 @@ export class KimiPetWindowManager {
   }
 
   async #createWindow(state: PetSessionState, index: number): Promise<void> {
-    if (!this.#started || this.#windows.has(state.sessionId)) return
+    if (!this.#started || !this.#enabled || this.#windows.has(state.sessionId)) return
     const bounds = await this.#initialBounds(state.sessionId, index)
     const currentState = this.#latestRoster?.items.find((item) => item.sessionId === state.sessionId)
-    if (!this.#started || currentState === undefined) return
+    if (!this.#started || !this.#enabled || currentState === undefined) return
     state = currentState
     const window = new BrowserWindow({
       ...bounds,

@@ -114,7 +114,8 @@ describe('Conversation controls', () => {
     await nextTick()
 
     const rail = wrapper.get('.toc-rail')
-    expect(rail.attributes('style')).toContain('height: 500px')
+    expect(rail.attributes('style')).toContain('top: 167px')
+    expect(rail.attributes('style')).toContain('height: 333px')
     const ticks = wrapper.findAll('.toc-tick')
     expect(ticks).toHaveLength(2)
     expect(ticks[0]!.attributes('aria-label')).toBe('跳转到：实现 Compact、Undo 和会话目录')
