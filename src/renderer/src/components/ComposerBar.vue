@@ -431,7 +431,6 @@ onBeforeUnmount(() => {
         <button type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="disabled" @click="emit('toggleTerminal')">
           <PhTerminalWindow :size="19" />
         </button>
-        <slot name="session-actions" />
       </div>
       <div class="composer-settings">
         <button class="model-summary" type="button" :disabled="disabled" @click="optionsOpen = !optionsOpen; commandOpen = false; closeMention()">

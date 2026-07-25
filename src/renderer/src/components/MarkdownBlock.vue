@@ -137,7 +137,15 @@ function renderRichContent(): void {
 
 function onClick(event: MouseEvent): void {
   const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a')
-  if (anchor === null) return
+  if (anchor === null) {
+    const code = (event.target as HTMLElement).closest<HTMLElement>('code.markdown-file-inline')
+    const codePath = code?.dataset.workspacePath
+    if (codePath !== undefined) {
+      event.preventDefault()
+      emit('openFile', codePath)
+    }
+    return
+  }
   const path = anchor.dataset.workspacePath
   if (path !== undefined) {
     event.preventDefault()
@@ -197,8 +205,14 @@ function installFilePathLinks(markdownRenderer: MarkdownIt): void {
       let linkDepth = 0
       for (const token of block.children) {
         if (token.type === 'link_open') linkDepth += 1
-        if (token.type === 'code_inline' && inlineFilePattern.test(token.content)) {
-          token.attrJoin('class', 'markdown-file-inline')
+        if (token.type === 'code_inline') {
+          const codeMatch = inlineFilePattern.exec(token.content)
+          if (codeMatch !== null) {
+            token.attrJoin('class', 'markdown-file-inline')
+            /* 行内代码里的文件路径（Kimi 回复常见写法）也可点击打开 */
+            token.attrSet('data-workspace-path', codeMatch[0].trim())
+            token.attrSet('title', '点击打开文件')
+          }
         }
         if (token.type !== 'text' || linkDepth > 0) {
           next.push(token)

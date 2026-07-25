@@ -42,9 +42,22 @@ describe('MarkdownBlock', () => {
     expect(wrapper.find('.katex').exists()).toBe(true)
     const fileLink = wrapper.get('.markdown-file-link')
     expect(fileLink.attributes('data-workspace-path')).toBe('src/app/index.html')
-    expect(wrapper.get('code.markdown-file-inline').text()).toBe('src/components/Card.tsx:8')
+    const inlineFile = wrapper.get('code.markdown-file-inline')
+    expect(inlineFile.text()).toBe('src/components/Card.tsx:8')
+    expect(inlineFile.attributes('data-workspace-path')).toBe('src/components/Card.tsx:8')
     await fileLink.trigger('click')
     expect(wrapper.emitted('openFile')).toEqual([['src/app/index.html']])
+  })
+
+  it('opens inline-code file paths from assistant replies (Kimi HTML files)', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: { text: '落地页已写好，直接打开 `app/index.html` 预览。' }
+    })
+
+    const inlineFile = wrapper.get('code.markdown-file-inline')
+    expect(inlineFile.attributes('data-workspace-path')).toBe('app/index.html')
+    await inlineFile.trigger('click')
+    expect(wrapper.emitted('openFile')).toEqual([['app/index.html']])
   })
 
   it('does not execute raw HTML from model output', () => {

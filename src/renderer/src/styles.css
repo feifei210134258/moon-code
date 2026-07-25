@@ -377,6 +377,60 @@ select:focus-visible {
   margin-left: auto;
 }
 
+/* 上下文卡内的会话操作（压缩/撤销） */
+.context-session-actions {
+  gap: 9px;
+}
+
+.context-compact-field {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.context-compact-field input {
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  color: var(--text);
+  background: #ffffff;
+  font: inherit;
+  font-size: 11px;
+}
+
+.context-compact-field input:focus {
+  border-color: var(--input-focus-border);
+  box-shadow: var(--focus-ring);
+}
+
+.context-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.context-action-row > button {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  color: #40566f;
+  background: rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.context-action-row > button:hover { background: rgba(15, 23, 42, 0.08); }
+.context-action-row > button:disabled { opacity: 0.42; cursor: default; }
+
 .usage-popover-footer {
   align-items: flex-start;
   padding: 10px 1px 1px;
@@ -890,122 +944,36 @@ select:focus-visible {
   min-width: 0;
 }
 
-.composer-session-actions {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  margin-left: 2px;
-  padding-left: 7px;
-  border-left: 1px solid var(--border);
-}
-
-.conversation-tool-button {
-  min-height: 27px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 7px;
-  color: #667487;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 10px;
-  list-style: none;
-  white-space: nowrap;
-}
-.conversation-tool-button::-webkit-details-marker { display: none; }
-.conversation-tool-button:hover,
-.conversation-action-menu[open] > .conversation-tool-button { color: #40566f; background: rgba(15, 23, 42, 0.05); }
-.conversation-tool-button:disabled { opacity: 0.38; cursor: default; }
-.conversation-action-menu { position: relative; }
-.conversation-action-popover,
-.conversation-toc {
+/* Codex 式会话目录刻度轨：悬浮在会话区左缘，不占用布局宽度 */
+.toc-rail {
   position: absolute;
-  z-index: 20;
-  border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  background: #ffffff;
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(22px);
+  left: 0;
+  z-index: 5;
+  width: 20px;
+  pointer-events: none;
 }
-.conversation-action-popover {
-  bottom: calc(100% + 6px);
-  right: 0;
-  width: 250px;
-  display: grid;
-  gap: 6px;
-  padding: 9px;
-}
-.conversation-action-popover label { display: grid; gap: 5px; color: var(--muted); font-size: 9.5px; }
-.conversation-action-popover input {
-  min-width: 0;
-  height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  outline: none;
-  color: var(--text);
-  background: #ffffff;
-  font: inherit;
-  font-size: 10.5px;
-}
-.conversation-action-popover input:focus { border-color: var(--input-focus-border); box-shadow: var(--focus-ring); }
-.conversation-action-popover > button {
-  min-height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 8px;
-  color: #40566f;
-  background: rgba(15, 23, 42, 0.05);
-  cursor: pointer;
-  font-size: 10.5px;
-}
-.conversation-action-popover > button:hover { background: rgba(15, 23, 42, 0.08); }
-.conversation-action-popover > button:disabled { opacity: 0.42; cursor: default; }
-.conversation-toc {
-  right: 0;
-  bottom: calc(100% + 6px);
-  width: min(340px, calc(100vw - 60px));
-  max-height: min(420px, 60vh);
-  display: grid;
-  gap: 2px;
-  overflow: auto;
-  padding: 8px;
-}
-.conversation-toc > strong { padding: 5px 7px 7px; color: var(--muted); font-size: 10px; }
-.conversation-toc > button {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 9px;
-  align-items: center;
-  padding: 7px 8px;
-  border: 0;
-  border-radius: 8px;
-  color: #3f4d60;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font-size: 10.5px;
-}
-.conversation-toc > button:hover { background: rgba(15, 23, 42, 0.05); }
-.conversation-toc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conversation-toc small { color: var(--faint); font-size: 9px; }
 
-@media (max-width: 640px) {
-  .composer-session-actions { gap: 1px; padding-left: 4px; }
-  .composer-session-actions .conversation-tool-button {
-    width: 27px;
-    justify-content: center;
-    padding: 0;
-  }
-  .composer-session-actions .conversation-tool-button > span { display: none; }
+.toc-tick {
+  position: absolute;
+  left: 3px;
+  box-sizing: content-box;
+  height: 2px;
+  padding: 0;
+  border: 4px solid transparent;
+  border-radius: 999px;
+  background: rgba(96, 116, 138, 0.32) padding-box;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: width 0.15s ease, background-color 0.15s ease;
+}
+
+.toc-tick:hover {
+  background: rgba(64, 86, 111, 0.62) padding-box;
+}
+
+.toc-tick.is-active {
+  width: 17px !important;
+  background: var(--blue) padding-box;
 }
 
 .conversation-action-error {
@@ -1984,6 +1952,14 @@ select:focus-visible {
 .attachment-block strong {
   color: var(--blue);
   font-weight: 600;
+}
+
+.markdown-block code.markdown-file-inline {
+  cursor: pointer;
+}
+
+.markdown-block code.markdown-file-inline:hover {
+  text-decoration: underline;
 }
 
 .linked-file:hover {

@@ -214,3 +214,19 @@ final result: passed
 - `pnpm typecheck` 通过；`pnpm test`：320 passed / 2 skipped / 0 failed（更新 `composerSkills.test.ts` 高度断言为"无内联高度+无拖拽手柄"）。
 - 截图：`r5-composer.png`（按钮已在底行）、`r5-project-row.png`（新建任务外置）、`r5-usage-popover.png`（绿/琥珀进度条）、`r5-plan-card.png`（新样式）。fixture 无套餐/todo 数据，两者用静态 DOM 注入验证 CSS；组件 wiring 由单测覆盖。
 - 备注：fixture 下 composer 禁用且 controls 为 null，思维强度 chip 与真实键入拉高需在真实会话复核；浏览器 overlay 的遮挡解除效果涉及原生视图，dev 环境无法截图验证，依赖代码路径与单测。
+
+---
+
+# Round 6: TOC Rail / Composer Cleanup / Context-card Actions / Clickable Inline Paths (feat/convo-toc-rail)
+
+## 本轮改动
+
+1. **会话目录改为左侧 Codex 式刻度轨**（`ConversationPane.vue` + `.toc-rail/.toc-tick` CSS）：每个 user 回合一枚刻度，悬浮于会话区左缘（不占布局宽度）；刻度纵坐标 ∝ 回合在全文的位置（`contentTop/scrollHeight × railHeight`），长度 ∝ 回合高度（clamp 6–15px）；当前视口回合的刻度加长高亮（`is-active`，蓝）；点击平滑滚动到对应回合，title 显示回合摘要。测量由 ResizeObserver + window resize + 内容流式 watcher 驱动。注意点：tick 用透明 border 扩大点击区，必须 `box-sizing: content-box`（全局 border-box 会把 2px 背景区压没，第一版截图实测不可见后修复）。原"目录"弹层按钮删除。
+2. **会话框不再携带"目录 / BTW / 会话操作"**：ComposerBar 移除 `session-actions` slot，ConversationPane 移除整块工具组及相关脚本（tocOpen/compactInstruction/conversationActionMenu/requestCompact/Esc 处理与 compact/undo/startSideChat emits）；CSS 清理 `.composer-session-actions`、`.conversation-tool-button`、`.conversation-action-menu/popover`、`.conversation-toc` 及 640px 媒体查询。
+3. **压缩上下文 / 撤销上一轮移入顶部上下文卡**（TopBar `context-popover` 新增"会话操作"区：压缩说明输入 + 两按钮；新 props `sessionReady/promptRunning/hasTurns/conversationActionPending`，新 emits `compact/undo`，App 接线同一组 handler）。**BTW 侧边会话移到左侧任务树"三个点"菜单**（仅当前活动会话可见，bridge 侧对重复开启本就幂等）；SideChatPanel 本体不变。
+4. **Kimi 回复里的文件路径可打开**：根因是 CLI 回复习惯用行内代码写路径（如 `` `app/index.html` ``），此前 `code_inline` 只加样式不生成链接，点击无响应。现在 `installFilePathLinks` 给匹配的行内 code 写入 `data-workspace-path`，`onClick` 处理 `code.markdown-file-inline` 点击（HTML 仍由 `workspaceFileDestination` 路由到浏览器预览）；加指针/下划线 hover 样式与"点击打开文件"title。
+
+## 验证
+
+- `pnpm typecheck` 通过；`pnpm test`：324 passed / 2 skipped / 0 failed（重写 `conversationControls.test.ts`：删会话操作用例、加刻度轨布局/跳转用例（attachTo + 模拟布局指标）；新增 TopBar 压缩/撤销、侧栏 BTW 菜单、行内代码路径点击用例）。
+- 截图：`r6-toc-rail.png`（左缘蓝色刻度）、`r6-context-popover.png`（会话操作区，fixture 下按钮禁用为正确态）、`r6-session-menu.png`（BTW 菜单项）。fixture 只有 1 个 user 回合，多刻度分布与行内代码点击由单测覆盖。
