@@ -490,12 +490,27 @@ select:focus-visible {
 
 .session-search input {
   min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
   border: 0;
   outline: 0;
+  box-shadow: none;
   background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 12px;
+}
+
+/* The search shell owns the focus indicator; never draw a second focused field inside it. */
+.session-search input:focus-visible,
+.browser-address input:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+.session-search input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .session-search button,
@@ -3984,8 +3999,11 @@ select:focus-visible {
 .browser-address input {
   min-width: 0;
   width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
   border: 0;
   outline: 0;
+  box-shadow: none;
   color: var(--text);
   background: transparent;
   font: 9.5px/1.2 "SFMono-Regular", Consolas, monospace;
