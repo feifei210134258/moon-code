@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
+import { defineComponent, reactive } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useBrowserBridge } from '../../src/renderer/src/composables/useBrowserBridge.js'
-import type { BrowserViewState, KimiAgentDesktopApi, KimiPromptControls } from '../../src/shared/contracts.js'
+import type {
+  BrowserAnnotationSubmitInput,
+  BrowserViewState,
+  KimiAgentDesktopApi,
+  KimiPromptControls
+} from '../../src/shared/contracts.js'
 
 const controls: KimiPromptControls = {
   model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
@@ -42,9 +47,14 @@ describe('useBrowserBridge', () => {
         },
         screenshot: { dataUrl: 'data:image/png;base64,AA==', width: 96, height: 56, fullPage: false }
       })),
-      submitBrowserAnnotation: vi.fn(async () => ({
-        promptId: 'prompt-1', userMessageId: 'message-1', status: 'running' as const
-      })),
+      submitBrowserAnnotation: vi.fn(async (
+        _sessionId: string,
+        input: BrowserAnnotationSubmitInput,
+        promptControls: KimiPromptControls
+      ) => {
+        structuredClone({ input, promptControls })
+        return { promptId: 'prompt-1', userMessageId: 'message-1', status: 'running' as const }
+      }),
       deleteBrowserAnnotation: vi.fn(async () => undefined),
       onBrowserStateChanged: vi.fn((next: (state: BrowserViewState) => void) => {
         listener = next
@@ -76,10 +86,10 @@ describe('useBrowserBridge', () => {
     await bridge.pickAnnotation('region')
     expect(api.pickBrowserAnnotation).toHaveBeenCalledWith('region')
     expect(bridge.annotationDrafts.value).toHaveLength(1)
-    await bridge.submitAnnotation('session-1', {
+    await bridge.submitAnnotation('session-1', reactive({
       draftId: 'draft-1', comment: '调整这个区域', pageUrl: state.url,
       includeSelector: false, includeText: false, includeScreenshot: true
-    }, controls)
+    }), reactive(controls))
     expect(api.submitBrowserAnnotation).toHaveBeenCalledWith('session-1', expect.objectContaining({
       draftId: 'draft-1', comment: '调整这个区域'
     }), controls)

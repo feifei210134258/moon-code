@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 
 import { flushPromises, mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
+import { defineComponent, reactive } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useRuntimeBridge } from '../../src/renderer/src/composables/useRuntimeBridge'
 import type {
   KimiAgentDesktopApi,
+  KimiPromptInput,
   SessionViewState
 } from '../../src/shared/contracts.js'
 
@@ -165,7 +166,10 @@ describe('useRuntimeBridge session races', () => {
       getGitStatus: vi.fn(async () => ({
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
-      submitPrompt: vi.fn(async () => ({ promptId: 'p-next', userMessageId: 'm-next', status: 'running' as const }))
+      submitPrompt: vi.fn(async (_sessionId: string, input: KimiPromptInput) => {
+        structuredClone(input)
+        return { promptId: 'p-next', userMessageId: 'm-next', status: 'running' as const }
+      })
     } as unknown as KimiAgentDesktopApi
     window.kimiAgent = api
     let bridge!: ReturnType<typeof useRuntimeBridge>
@@ -178,12 +182,12 @@ describe('useRuntimeBridge session races', () => {
     await flushPromises()
     await bridge.openSession('session-queue')
 
-    const controls = {
+    const controls = reactive({
       model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
       planMode: false, swarmMode: false
-    }
-    await bridge.submitPrompt('session-queue', { text: '先执行 A', controls })
-    await bridge.submitPrompt('session-queue', { text: '再执行 B', controls })
+    })
+    await bridge.submitPrompt('session-queue', reactive({ text: '先执行 A', controls }))
+    await bridge.submitPrompt('session-queue', reactive({ text: '再执行 B', controls }))
     expect(api.submitPrompt).not.toHaveBeenCalled()
     expect(bridge.localPromptQueue.value.map((draft) => draft.input.text)).toEqual(['先执行 A', '再执行 B'])
 

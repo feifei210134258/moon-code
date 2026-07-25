@@ -1,4 +1,9 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import {
+  ipcErrorMessage,
+  toCloneableBrowserAnnotationInput,
+  toCloneablePromptControls
+} from '../utils/ipcPayloads'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -199,10 +204,14 @@ export function useBrowserBridge() {
     annotationSubmitting.value = true
     annotationError.value = null
     try {
-      await window.kimiAgent.submitBrowserAnnotation(sessionId, input, controls)
+      await window.kimiAgent.submitBrowserAnnotation(
+        sessionId,
+        toCloneableBrowserAnnotationInput(input),
+        toCloneablePromptControls(controls)
+      )
       annotationDrafts.value = annotationDrafts.value.filter((draft) => draft.id !== input.draftId)
     } catch (reason) {
-      annotationError.value = errorMessage(reason)
+      annotationError.value = ipcErrorMessage(reason)
     } finally {
       annotationSubmitting.value = false
     }

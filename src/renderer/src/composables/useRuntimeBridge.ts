@@ -6,6 +6,13 @@ import {
   removeLocalPromptDraft,
   type LocalPromptDraft
 } from '../utils/localPromptQueue'
+import {
+  ipcErrorMessage,
+  toCloneableApprovalResponse,
+  toCloneablePromptInput,
+  toCloneableQuestionAnswers,
+  toCloneableSideChatPromptInput
+} from '../utils/ipcPayloads'
 import type {
   KimiModelCatalogItem,
   KimiAgentTranscript,
@@ -465,12 +472,13 @@ export function useRuntimeBridge() {
 
   const submitPrompt = async (sessionId: string, input: KimiPromptInput): Promise<void> => {
     if (window.kimiAgent === undefined) return
+    const cloneableInput = toCloneablePromptInput(input)
     if (shouldQueueLocally(sessionId)) {
-      enqueueLocalPrompt(sessionId, input)
+      enqueueLocalPrompt(sessionId, cloneableInput)
       if (!isSessionExecuting(sessionId)) void flushLocalPromptQueue(sessionId)
       return
     }
-    await sendPromptNow(sessionId, input)
+    await sendPromptNow(sessionId, cloneableInput)
   }
 
   const compactSession = async (sessionId: string, instruction?: string): Promise<boolean> => {
@@ -533,9 +541,13 @@ export function useRuntimeBridge() {
     sideChatPending.value = true
     sideChatError.value = null
     try {
-      await window.kimiAgent.submitSideChatPrompt(sessionId, agentId, input)
+      await window.kimiAgent.submitSideChatPrompt(
+        sessionId,
+        agentId,
+        toCloneableSideChatPromptInput(input)
+      )
     } catch (error) {
-      if (requestedSessionId === sessionId) sideChatError.value = errorMessage(error)
+      if (requestedSessionId === sessionId) sideChatError.value = ipcErrorMessage(error)
     } finally {
       sideChatPending.value = false
     }
@@ -584,14 +596,16 @@ export function useRuntimeBridge() {
     promptPending.value = true
     promptError.value = null
     try {
-      const result = await window.kimiAgent.submitPrompt(sessionId, input)
+      // Vue deep refs wrap queued drafts again, so normalize at the IPC boundary as well.
+      const cloneableInput = toCloneablePromptInput(input)
+      const result = await window.kimiAgent.submitPrompt(sessionId, cloneableInput)
       if (result.status === 'running' || result.status === 'queued') {
         awaitingPromptCycleAt.set(sessionId, Date.now())
       }
-      if (input.goalObjective !== undefined) goalMode.value = false
+      if (cloneableInput.goalObjective !== undefined) goalMode.value = false
       return true
     } catch (error) {
-      promptError.value = error instanceof Error ? error.message : String(error)
+      promptError.value = ipcErrorMessage(error)
       return false
     } finally {
       promptPending.value = false
@@ -609,7 +623,7 @@ export function useRuntimeBridge() {
       [sessionId]: appendLocalPromptDraft(queue, {
         id,
         sessionId,
-        input,
+        input: toCloneablePromptInput(input),
         createdAt: new Date().toISOString()
       })
     }
@@ -754,10 +768,14 @@ export function useRuntimeBridge() {
     interactionPendingKey.value = `approval:${approvalId}`
     interactionError.value = null
     try {
-      await window.kimiAgent.respondApproval(sessionId, approvalId, response)
+      await window.kimiAgent.respondApproval(
+        sessionId,
+        approvalId,
+        toCloneableApprovalResponse(response)
+      )
     } catch (error) {
       if (generation === interactionGeneration) {
-        interactionError.value = error instanceof Error ? error.message : String(error)
+        interactionError.value = ipcErrorMessage(error)
       }
     } finally {
       if (generation === interactionGeneration) interactionPendingKey.value = null
@@ -774,10 +792,14 @@ export function useRuntimeBridge() {
     interactionPendingKey.value = `question:${questionId}:answer`
     interactionError.value = null
     try {
-      await window.kimiAgent.respondQuestion(sessionId, questionId, answers)
+      await window.kimiAgent.respondQuestion(
+        sessionId,
+        questionId,
+        toCloneableQuestionAnswers(answers)
+      )
     } catch (error) {
       if (generation === interactionGeneration) {
-        interactionError.value = error instanceof Error ? error.message : String(error)
+        interactionError.value = ipcErrorMessage(error)
       }
     } finally {
       if (generation === interactionGeneration) interactionPendingKey.value = null
