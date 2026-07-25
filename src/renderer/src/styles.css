@@ -627,7 +627,7 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   margin: 0 8px 9px;
-  color: #98a1ae;
+  color: #767e8c;
   font-size: 11px;
   font-weight: 590;
   letter-spacing: 0.08em;
@@ -2230,10 +2230,8 @@ select:focus-visible {
   margin: 0 auto 14px;
   padding: 13px 14px 10px;
   border: 1px solid var(--border-strong);
-  border-radius: 15px;
+  border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(24px) saturate(1.04);
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease;
@@ -2241,9 +2239,7 @@ select:focus-visible {
 
 .composer-wrap:focus-within {
   border-color: var(--input-focus-border);
-  box-shadow:
-    0 0 0 3px rgba(48, 133, 250, 0.13),
-    0 10px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 0 0 3px rgba(48, 133, 250, 0.13);
 }
 
 .composer-attachments {
@@ -2279,8 +2275,8 @@ select:focus-visible {
   white-space: nowrap;
 }
 
-.composer-attachment-chip strong { font-size: 10.5px; }
-.composer-attachment-chip small { color: var(--faint); font-size: 9px; }
+.composer-attachment-chip strong { font-size: 11px; }
+.composer-attachment-chip small { color: var(--faint); font-size: 10.5px; }
 .composer-attachment-chip > button {
   display: grid;
   width: 22px;
@@ -3344,7 +3340,6 @@ select:focus-visible {
 .extension-tabs button.is-active {
   color: var(--text);
   background: #ffffff;
-  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.08);
 }
 
 .extension-content {
@@ -3355,16 +3350,23 @@ select:focus-visible {
   scrollbar-color: rgba(96, 116, 138, 0.2) transparent;
 }
 
+/* 右栏：标题外置 + 容器由内容挣得。
+   标题在面板底色上建立节奏；空态只留标题和一行灰字，不画框；
+   框只给需要边界的滚动内容（长文件列表），线性阅读列表（计划/任务）不加框。 */
 .changes-view {
   display: grid;
-  grid-template-rows: auto minmax(260px, 1fr) auto;
-  gap: 10px;
+  align-content: start;
+  gap: 18px;
 }
 
-.changed-files-panel,
-.diff-panel,
-.todo-panel,
-.plan-panel {
+.changes-view .extension-state {
+  min-height: 0;
+  padding: 4px 2px;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.diff-panel {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 11px;
@@ -3372,15 +3374,17 @@ select:focus-visible {
 }
 
 .changed-files-panel {
-  max-height: min(34vh, 300px);
   display: flex;
   flex-direction: column;
 }
 
 .changed-files-list {
   min-height: 0;
+  max-height: min(30vh, 260px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  border-radius: 11px;
   scrollbar-width: thin;
   scrollbar-color: rgba(96, 116, 138, 0.24) transparent;
 }
@@ -3389,8 +3393,10 @@ select:focus-visible {
 .todo-panel h2,
 .plan-panel h2 {
   margin: 0;
-  font-size: 12px;
-  font-weight: 620;
+  color: #767e8c;
+  font-size: 11px;
+  font-weight: 590;
+  letter-spacing: 0.08em;
 }
 
 .changed-files-panel h2 {
@@ -3398,14 +3404,17 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 11px 8px;
+  min-height: 22px;
+  margin-bottom: 7px;
+  padding: 0 2px;
 }
 
 .git-summary {
   overflow: hidden;
   color: var(--muted);
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 500;
+  letter-spacing: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3421,7 +3430,11 @@ select:focus-visible {
   border: 0;
   background: transparent;
   text-align: left;
-  font-size: 10.5px;
+  font-size: 11px;
+}
+
+.changed-file-row + .changed-file-row {
+  border-top: 1px solid rgba(15, 23, 42, 0.05);
 }
 
 .file-row.is-active {
@@ -3527,20 +3540,17 @@ select:focus-visible {
   font-size: 10px;
 }
 
-.todo-panel,
-.plan-panel {
-  padding: 8px 10px 10px;
-}
-
 .todo-panel header,
 .plan-panel header {
-  min-height: 30px;
+  min-height: 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 2px;
 }
 
-.todo-panel header > span {
+.todo-panel header > span,
+.plan-panel header > span {
   padding: 1px 8px;
   border-radius: 999px;
   color: var(--muted);
@@ -3553,7 +3563,7 @@ select:focus-visible {
 .plan-panel ol {
   display: grid;
   gap: 7px;
-  padding: 4px 0 0;
+  padding: 6px 2px 0;
   margin: 0;
   list-style: none;
 }
@@ -3589,7 +3599,7 @@ select:focus-visible {
   border-radius: 999px;
   color: var(--muted);
   background: rgba(15, 23, 42, 0.045);
-  font-size: 9px;
+  font-size: 10px;
   font-style: normal;
   white-space: nowrap;
 }
@@ -3620,7 +3630,7 @@ select:focus-visible {
 .plan-empty {
   margin: 2px 0 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.55;
 }
 
@@ -3629,8 +3639,13 @@ select:focus-visible {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px;
-  padding: 8px 0;
+  padding: 8px 2px;
   border-top: 1px solid var(--border);
+}
+
+.background-task-row:first-of-type {
+  border-top: 0;
+  padding-top: 6px;
 }
 
 .background-task-row .task-status-dot { margin-top: 5px; }
@@ -3646,7 +3661,7 @@ select:focus-visible {
 
 .background-task-row strong {
   overflow: hidden;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 580;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3655,7 +3670,7 @@ select:focus-visible {
 .background-task-row em {
   flex: none;
   color: var(--muted);
-  font-size: 8.5px;
+  font-size: 10px;
   font-style: normal;
   text-transform: capitalize;
 }
@@ -3666,7 +3681,7 @@ select:focus-visible {
   margin: 4px 0 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3821,21 +3836,22 @@ select:focus-visible {
   gap: 2px;
   margin: 2px 8px 6px;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(15, 23, 42, 0.07);
   border-radius: 9px;
-  background: #ffffff;
+  background: transparent;
 }
 .file-search-results > header {
-  min-height: 29px;
+  min-height: 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 9.5px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+  color: #767e8c;
+  font-size: 10px;
+  letter-spacing: 0.06em;
 }
-.file-search-results > header strong { color: #4c5a6c; font-size: 10px; }
+.file-search-results > header strong { font-size: 11px; font-weight: 590; }
 .file-search-results > button,
 .grep-match-list > button {
   min-width: 0;
@@ -3844,23 +3860,24 @@ select:focus-visible {
   align-items: center;
   gap: 5px;
   min-height: 27px;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 0;
+  border-radius: 6px;
   color: #445267;
   background: transparent;
   cursor: pointer;
   text-align: left;
-  font-size: 10px;
+  font-size: 11px;
 }
 .file-search-results > button:hover,
 .grep-match-list > button:hover { background: rgba(15, 23, 42, 0.05); }
 .file-search-results > button span,
 .grep-match-list > button span,
 .grep-match-list code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-search-results > button small { color: var(--faint); font-size: 8.5px; }
+.file-search-results > button small { color: var(--faint); font-size: 10px; }
 .grep-match-list { display: grid; padding: 0 0 3px 18px; }
-.grep-match-list > button { grid-template-columns: minmax(72px, auto) minmax(0, 1fr); min-height: 24px; color: var(--muted); font-size: 9px; }
-.grep-match-list code { color: #68778a; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 8.5px; }
+.grep-match-list > button { grid-template-columns: minmax(72px, auto) minmax(0, 1fr); min-height: 24px; color: var(--muted); font-size: 10px; }
+.grep-match-list code { color: #68778a; font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 10px; }
 
 .file-row {
   min-height: 34px;
@@ -3913,7 +3930,7 @@ select:focus-visible {
   margin-top: 10px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 11px;
+  border-radius: 10px;
   background: #ffffff;
 }
 
