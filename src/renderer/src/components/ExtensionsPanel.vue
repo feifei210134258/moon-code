@@ -3,7 +3,6 @@ import {
   PhArrowClockwise,
   PhArrowUp,
   PhCaretRight,
-  PhCopy,
   PhDownloadSimple,
   PhFile,
   PhFileCss,
@@ -29,7 +28,6 @@ import type {
   BrowserViewport,
   KimiBackgroundTask,
   KimiTodoList,
-  WorkspaceFileDiff,
   WorkspaceFileEntry,
   WorkspaceFileList,
   WorkspaceFilePreview,
@@ -53,9 +51,6 @@ const props = withDefaults(defineProps<{
   gitStatus: WorkspaceGitStatus | null
   gitStatusPending: boolean
   gitStatusError: string | null
-  fileDiff: WorkspaceFileDiff | null
-  fileDiffPending: boolean
-  fileDiffError: string | null
   fileSearch?: WorkspaceFileSearchResult | null
   fileSearchPending?: boolean
   fileSearchError?: string | null
@@ -69,6 +64,7 @@ const props = withDefaults(defineProps<{
   browserPending: boolean
   browserError: string | null
   browserCapture: BrowserCaptureResult | null
+  browserAnnotationBackdrop?: BrowserCaptureResult | null
   browserAnnotationDrafts?: BrowserAnnotationDraft[]
   browserAnnotationPicking?: boolean
   browserAnnotationSubmitting?: boolean
@@ -80,6 +76,7 @@ const props = withDefaults(defineProps<{
   operationalActionPending?: string | null
 }>(), {
   browserAnnotationDrafts: () => [],
+  browserAnnotationBackdrop: null,
   browserAnnotationPicking: false,
   browserAnnotationSubmitting: false,
   browserAnnotationError: null,
@@ -111,7 +108,6 @@ const emit = defineEmits<{
   openExternalFile: [path: string]
   openFileIn: [appId: 'cursor' | 'vscode', path: string]
   revealFile: [path: string]
-  selectDiff: [path: string]
   refresh: []
   browserBounds: [bounds: BrowserBounds]
   browserViewport: [viewport: BrowserViewport]
@@ -135,8 +131,6 @@ const parentPath = computed(() => {
 })
 const previewLines = computed(() => (props.filePreview?.content ?? '').split('\n').slice(0, 400))
 const previewClipped = computed(() => (props.filePreview?.lineCount ?? previewLines.value.length) > previewLines.value.length)
-const diffLines = computed(() => parseDiff(props.fileDiff?.diff ?? '').slice(0, 600))
-const diffClipped = computed(() => (props.fileDiff?.diff.split('\n').length ?? 0) > diffLines.value.length)
 const activeTodo = computed(() => props.todos.at(-1) ?? null)
 const todoItems = computed(() => activeTodo.value?.items ?? [])
 const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
@@ -193,48 +187,6 @@ function statusLabel(status: string): string {
   } as Record<string, string>)[status] ?? ''
 }
 
-async function copyDiff(): Promise<void> {
-  if (props.fileDiff === null || navigator.clipboard === undefined) return
-  await navigator.clipboard.writeText(props.fileDiff.diff)
-}
-
-interface RenderedDiffLine {
-  key: string
-  text: string
-  kind: 'context' | 'added' | 'removed' | 'meta'
-  oldLine: number | null
-  newLine: number | null
-}
-
-function parseDiff(diff: string): RenderedDiffLine[] {
-  let oldLine = 0
-  let newLine = 0
-  return diff.split('\n').map((text, index) => {
-    const hunk = text.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
-    if (hunk !== null) {
-      oldLine = Number(hunk[1])
-      newLine = Number(hunk[2])
-      return { key: `${index}:meta`, text, kind: 'meta', oldLine: null, newLine: null }
-    }
-    if (text.startsWith('+++') || text.startsWith('---') || text.startsWith('diff ') || text.startsWith('index ')) {
-      return { key: `${index}:meta`, text, kind: 'meta', oldLine: null, newLine: null }
-    }
-    if (text.startsWith('+')) {
-      const line = { key: `${index}:add`, text, kind: 'added' as const, oldLine: null, newLine }
-      newLine += 1
-      return line
-    }
-    if (text.startsWith('-')) {
-      const line = { key: `${index}:remove`, text, kind: 'removed' as const, oldLine, newLine: null }
-      oldLine += 1
-      return line
-    }
-    const line = { key: `${index}:context`, text, kind: 'context' as const, oldLine, newLine }
-    oldLine += 1
-    newLine += 1
-    return line
-  })
-}
 </script>
 
 <template>
@@ -278,7 +230,6 @@ function parseDiff(diff: string): RenderedDiffLine[] {
     <div
       v-if="activeTab === 'changes'"
       class="extension-content changes-view"
-      :class="{ 'is-diff-collapsed': fileDiff === null && !fileDiffPending && fileDiffError === null }"
     >
       <section class="changed-files-panel">
         <h2 v-if="gitStatus">
@@ -288,37 +239,14 @@ function parseDiff(diff: string): RenderedDiffLine[] {
         <div v-else-if="gitStatusPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Git 状态…</div>
         <div v-else-if="gitStatusError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ gitStatusError }}</div>
         <div v-else class="extension-state">选择一个 Kimi Session 后读取更改。</div>
-        <button
-          v-for="file in changedFiles"
-          :key="file.path"
-          type="button"
-          class="changed-file-row"
-          :class="{ 'is-active': fileDiff?.path === file.path }"
-          @click="emit('selectDiff', file.path)"
-        >
-          <PhFile :size="16" />
-          <span>{{ file.path }}</span>
-          <strong :class="`git-${file.status}`">{{ statusLabel(file.status) }}</strong>
-        </button>
-        <div v-if="gitStatus && changedFiles.length === 0" class="extension-state">工作区没有未提交更改。</div>
-      </section>
-
-      <section v-if="fileDiff || fileDiffPending || fileDiffError" class="diff-panel">
-        <header>
-          <strong>{{ fileDiff?.path ?? '选择文件查看 Diff' }}</strong>
-          <button v-if="fileDiff" type="button" aria-label="复制 Diff" @click="copyDiff"><PhCopy :size="16" /></button>
-        </header>
-        <div v-if="fileDiffPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Diff…</div>
-        <div v-else-if="fileDiffError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ fileDiffError }}</div>
-        <div v-else-if="fileDiff && diffLines.length > 0" class="diff-code" aria-label="代码差异">
-          <div v-for="line in diffLines" :key="line.key" :class="line.kind">
-            <span>{{ line.oldLine ?? '' }}</span>
-            <span>{{ line.newLine ?? '' }}</span>
-            <code>{{ line.text }}</code>
+        <div v-if="changedFiles.length > 0" class="changed-files-list" aria-label="已更改文件">
+          <div v-for="file in changedFiles" :key="file.path" class="changed-file-row">
+            <PhFile :size="16" />
+            <span>{{ file.path }}</span>
+            <strong :class="`git-${file.status}`">{{ statusLabel(file.status) }}</strong>
           </div>
         </div>
-        <div v-else class="extension-state">{{ fileDiff ? '这个文件没有可显示的文本 Diff。' : '从上方 Changed Files 选择一个文件。' }}</div>
-        <div v-if="fileDiff?.truncated || diffClipped" class="diff-context">Diff 较大，当前仅显示前 {{ diffLines.length }} 行</div>
+        <div v-if="gitStatus && changedFiles.length === 0" class="extension-state">工作区没有未提交更改。</div>
       </section>
 
       <section class="todo-panel">
@@ -468,6 +396,7 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       :pending="browserPending"
       :error="browserError"
       :capture="browserCapture"
+      :annotation-backdrop="browserAnnotationBackdrop"
       :annotation-drafts="browserAnnotationDrafts"
       :annotation-picking="browserAnnotationPicking"
       :annotation-submitting="browserAnnotationSubmitting"

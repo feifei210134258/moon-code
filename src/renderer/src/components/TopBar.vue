@@ -147,11 +147,24 @@ function resetHintLabel(hint: string): string {
     </div>
 
     <div class="topbar-actions">
-      <button class="usage-pill" :class="usageTone(contextRatio)" type="button" aria-label="查看上下文窗口" aria-controls="context-popover" :aria-expanded="contextOpen" @click="$emit('toggleContext')">
-        <span>上下文</span>
-        <strong>{{ percent(contextRatio) }}</strong>
-        <span class="usage-track"><span :style="{ width: percent(contextRatio) }" /></span>
-      </button>
+      <div class="context-meter" :class="usageTone(contextRatio)">
+        <button class="usage-pill context-pill" type="button" aria-label="查看上下文窗口" aria-controls="context-popover" :aria-expanded="contextOpen" @click="$emit('toggleContext')">
+          <span>上下文</span>
+          <strong>{{ percent(contextRatio) }}</strong>
+          <span class="usage-track"><span :style="{ width: percent(contextRatio) }" /></span>
+        </button>
+        <button
+          class="context-compact-button"
+          type="button"
+          aria-label="压缩当前会话上下文"
+          title="压缩当前会话上下文"
+          :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null"
+          @click="emit('compact')"
+        >
+          <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="14" />
+          <PhArrowsIn v-else :size="15" />
+        </button>
+      </div>
       <button class="usage-pill plan-usage" :class="usageTone(tightestWindow?.ratio ?? null)" type="button" aria-label="查看 Kimi 套餐用量" aria-controls="usage-popover" :aria-expanded="usageOpen" @click="$emit('toggleUsage')">
         <span>套餐</span>
         <strong>{{ percent(tightestWindow?.ratio ?? null) }}</strong>
@@ -167,17 +180,6 @@ function resetHintLabel(hint: string): string {
             <strong>上下文窗口</strong>
             <span>当前会话的上下文占用</span>
           </div>
-          <button
-            class="context-compact-button"
-            type="button"
-            :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null"
-            title="压缩当前会话上下文"
-            @click="emit('compact')"
-          >
-            <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="13" />
-            <PhArrowsIn v-else :size="14" />
-            压缩
-          </button>
         </header>
         <div class="usage-section">
           <div class="usage-token-grid">

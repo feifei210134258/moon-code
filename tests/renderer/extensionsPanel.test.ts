@@ -36,9 +36,6 @@ const baseProps = {
   },
   gitStatusPending: false,
   gitStatusError: null,
-  fileDiff: { path: 'src/app.ts', diff: '@@ -1 +1 @@\n-old\n+new', truncated: false },
-  fileDiffPending: false,
-  fileDiffError: null,
   browserState: {
     url: '', title: '', loading: false, canGoBack: false, canGoForward: false, visible: false,
     viewport: { mode: 'auto' as const, width: null, height: null, deviceScaleFactor: 1 },
@@ -50,23 +47,22 @@ const baseProps = {
 }
 
 describe('ExtensionsPanel', () => {
-  it('renders authoritative Git status and emits on-demand Diff selection', async () => {
+  it('renders authoritative Git status as a non-interactive scrollable file list', () => {
     const wrapper = mount(ExtensionsPanel, { props: baseProps })
 
     expect(wrapper.get('.git-summary').text()).toContain('main')
-    expect(wrapper.findAll('.diff-code .removed')).toHaveLength(1)
-    expect(wrapper.findAll('.diff-code .added')).toHaveLength(1)
-    await wrapper.get('.changed-file-row').trigger('click')
-    expect(wrapper.emitted('selectDiff')).toEqual([['src/app.ts']])
+    expect(wrapper.find('.changed-files-list').exists()).toBe(true)
+    expect(wrapper.get('.changed-file-row').element.tagName).toBe('DIV')
+    expect(wrapper.find('.diff-panel').exists()).toBe(false)
+    expect(wrapper.emitted('selectDiff')).toBeUndefined()
   })
 
-  it('keeps Diff collapsed until a changed file is selected, giving the plan room to expand', () => {
+  it('keeps the plan expanded without exposing the unfinished Diff viewer', () => {
     const wrapper = mount(ExtensionsPanel, {
-      props: { ...baseProps, fileDiff: null }
+      props: baseProps
     })
 
     expect(wrapper.find('.diff-panel').exists()).toBe(false)
-    expect(wrapper.get('.changes-view').classes()).toContain('is-diff-collapsed')
     expect(wrapper.get('.todo-panel').text()).toContain('计划')
   })
 

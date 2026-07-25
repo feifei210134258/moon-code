@@ -79,6 +79,9 @@ describe('BrowserPanel', () => {
         pending: false,
         error: null,
         capture: null,
+        annotationBackdrop: {
+          dataUrl: 'data:image/png;base64,BB==', width: 800, height: 600, fullPage: false
+        },
         annotationDrafts: [{
           id: 'draft-1',
           annotation: {
@@ -115,6 +118,9 @@ describe('BrowserPanel', () => {
     await nextTick()
     expect(wrapper.emitted('overlay')).toEqual([[true]])
     expect(wrapper.get('.browser-annotation-popover').text()).toContain('元素批注')
+    expect(wrapper.get('.browser-overlay-backdrop').attributes('src')).toBe('data:image/png;base64,BB==')
+    expect(wrapper.find('.browser-annotation-target').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('页面已暂时隐藏')
     expect(wrapper.get('.browser-guest-host').classes()).not.toContain('has-overlay')
     expect(wrapper.get('.browser-annotation-popover').attributes('style')).toContain('top:')
     await wrapper.get('.browser-annotation-popover textarea').setValue('把按钮间距加大')

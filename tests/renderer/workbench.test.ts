@@ -199,6 +199,27 @@ describe('workbench transcript hydration', () => {
     expect(store.rightPanelWidth).toBe(1_040)
   })
 
+  it('maps busy and completed Kimi sessions to explicit navigation states', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects([{
+      id: 'workspace-a', name: 'A', root: '/a', sessions: [
+        {
+          id: 'session-running', title: 'Running', updatedAt: null, busy: true,
+          pendingInteraction: 'none', lastTurnReason: null, lastPrompt: null
+        },
+        {
+          id: 'session-completed', title: 'Completed', updatedAt: null, busy: false,
+          pendingInteraction: 'none', lastTurnReason: 'completed', lastPrompt: null
+        }
+      ]
+    }])
+
+    expect(store.projects[0]?.sessions).toEqual([
+      expect.objectContaining({ id: 'session-running', tone: 'running' }),
+      expect.objectContaining({ id: 'session-completed', tone: 'completed' })
+    ])
+  })
+
   it('moves workspace selection with an explicitly selected session', () => {
     const store = useWorkbenchStore()
     store.hydrateProjects([

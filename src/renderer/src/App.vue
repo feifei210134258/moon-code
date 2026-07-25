@@ -353,11 +353,6 @@ function openWorkspaceFile(reference: string): void {
   void runtimeBridge.openFile(path)
 }
 
-function selectChangedFile(path: string): void {
-  store.setExtension('changes')
-  void runtimeBridge.loadFileDiff(path)
-}
-
 function onWindowKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && (usageOpen.value || contextOpen.value || settingsOpen.value)) {
     event.preventDefault()
@@ -662,9 +657,6 @@ onBeforeUnmount(() => {
           :git-status="runtimeBridge.gitStatus.value"
           :git-status-pending="runtimeBridge.gitStatusPending.value"
           :git-status-error="runtimeBridge.gitStatusError.value"
-          :file-diff="runtimeBridge.fileDiff.value"
-          :file-diff-pending="runtimeBridge.fileDiffPending.value"
-          :file-diff-error="runtimeBridge.fileDiffError.value"
           :file-search="runtimeBridge.fileSearch.value"
           :file-search-pending="runtimeBridge.fileSearchPending.value"
           :file-search-error="runtimeBridge.fileSearchError.value"
@@ -678,6 +670,7 @@ onBeforeUnmount(() => {
           :browser-pending="browserBridge.pending.value"
           :browser-error="browserBridge.error.value"
           :browser-capture="browserBridge.capture.value"
+          :browser-annotation-backdrop="browserBridge.annotationBackdrop.value"
           :browser-annotation-drafts="browserBridge.annotationDrafts.value"
           :browser-annotation-picking="browserBridge.annotationPicking.value"
           :browser-annotation-submitting="browserBridge.annotationSubmitting.value"
@@ -697,7 +690,6 @@ onBeforeUnmount(() => {
           @open-external-file="runtimeBridge.openWorkspaceFile"
           @open-file-in="runtimeBridge.openWorkspaceFileIn"
           @reveal-file="runtimeBridge.revealWorkspaceFile"
-          @select-diff="selectChangedFile"
           @refresh="runtimeBridge.refreshWorkspaceContext(activeSessionId)"
           @browser-bounds="browserBridge.setBounds"
           @browser-viewport="browserBridge.setViewport"

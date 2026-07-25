@@ -23,6 +23,7 @@ export function useBrowserBridge() {
   const networkDetails = ref<BrowserNetworkDetails | null>(null)
   const networkDetailsPending = ref(false)
   const capture = ref<BrowserCaptureResult | null>(null)
+  const annotationBackdrop = ref<BrowserCaptureResult | null>(null)
   const localServers = ref<string[]>([])
   const localServersPending = ref(false)
   const annotationDrafts = ref<BrowserAnnotationDraft[]>([])
@@ -38,6 +39,7 @@ export function useBrowserBridge() {
     networkDetails.value = null
     networkDetailsPending.value = false
     capture.value = null
+    annotationBackdrop.value = null
   }
 
   const runStateOperation = async (operation: () => Promise<BrowserViewState>): Promise<void> => {
@@ -175,6 +177,13 @@ export function useBrowserBridge() {
     annotationError.value = null
     try {
       const draft = await window.kimiAgent.pickBrowserAnnotation(mode)
+      // 原生 BrowserView 必须在 DOM 批注层显示时暂时摘下；先捕获页面快照，
+      // 以保持批注时的页面上下文，捕获失败时至少展示选中区域。
+      try {
+        annotationBackdrop.value = await window.kimiAgent.captureBrowser(false)
+      } catch {
+        annotationBackdrop.value = { ...draft.screenshot }
+      }
       annotationDrafts.value = [...annotationDrafts.value, draft]
     } catch (reason) {
       const message = errorMessage(reason)
@@ -190,6 +199,7 @@ export function useBrowserBridge() {
     try {
       await window.kimiAgent.deleteBrowserAnnotation(draftId)
       annotationDrafts.value = annotationDrafts.value.filter((draft) => draft.id !== draftId)
+      if (annotationDrafts.value.length === 0) annotationBackdrop.value = null
     } catch (reason) {
       annotationError.value = errorMessage(reason)
     }
@@ -210,6 +220,7 @@ export function useBrowserBridge() {
         toCloneablePromptControls(controls)
       )
       annotationDrafts.value = annotationDrafts.value.filter((draft) => draft.id !== input.draftId)
+      if (annotationDrafts.value.length === 0) annotationBackdrop.value = null
     } catch (reason) {
       annotationError.value = ipcErrorMessage(reason)
     } finally {
@@ -232,6 +243,7 @@ export function useBrowserBridge() {
     networkDetails,
     networkDetailsPending,
     capture,
+    annotationBackdrop,
     localServers,
     localServersPending,
     annotationDrafts,

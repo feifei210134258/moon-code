@@ -12,6 +12,7 @@ import {
   PhNotePencil,
   PhPencilSimple,
   PhPlus,
+  PhSpinnerGap,
   PhTrash,
   PhX
 } from '@phosphor-icons/vue'
@@ -89,6 +90,16 @@ function createSession(): void {
 
 function closeMenu(): void {
   menuKey.value = null
+}
+
+function sessionStatusLabel(session: SessionItem): string {
+  return ({
+    running: '进行中',
+    completed: '已结束',
+    attention: '等待操作',
+    unread: '有新消息',
+    neutral: '尚未开始'
+  } as const)[session.tone ?? 'neutral']
 }
 
 function toggleMenu(key: string, event: MouseEvent): void {
@@ -217,7 +228,19 @@ onBeforeUnmount(() => {
                 type="button"
                 @click="$emit('selectSession', session.id)"
               >
-                <span class="session-title"><PhGitFork v-if="session.parentSessionId" :size="12" />{{ session.title }}</span>
+                <span class="session-title">
+                  <span
+                    class="session-status"
+                    :class="`is-${session.tone ?? 'neutral'}`"
+                    :title="sessionStatusLabel(session)"
+                    :aria-label="sessionStatusLabel(session)"
+                  >
+                    <PhSpinnerGap v-if="session.tone === 'running'" class="spin" :size="13" />
+                    <i v-else aria-hidden="true" />
+                  </span>
+                  <PhGitFork v-if="session.parentSessionId" :size="12" />
+                  <span class="session-title-text">{{ session.title }}</span>
+                </span>
                 <span v-if="session.relativeTime" class="session-time">{{ session.relativeTime }}</span>
               </button>
               <div class="tree-action-area session-action-area">

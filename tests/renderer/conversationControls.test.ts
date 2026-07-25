@@ -107,7 +107,7 @@ describe('Conversation controls', () => {
     wrapper.unmount()
   })
 
-  it('renders a Codex-style TOC rail for user turns and scrolls to a turn on click', async () => {
+  it('renders a compact TOC rail with immediate content cards and scrolls to a turn on click', async () => {
     const wrapper = mountConversation()
     stubRailLayout(wrapper)
     window.dispatchEvent(new Event('resize'))
@@ -117,10 +117,13 @@ describe('Conversation controls', () => {
     expect(rail.attributes('style')).toContain('height: 500px')
     const ticks = wrapper.findAll('.toc-tick')
     expect(ticks).toHaveLength(2)
-    expect(ticks[0]!.attributes('title')).toBe('实现 Compact、Undo 和会话目录')
-    expect(ticks[1]!.attributes('title')).toBe('再补一个左侧目录')
-    /* 刻度纵向位置 ∝ 回合位置：turn-3 在 2000px 内容的 900px 处 → 500px 轨道的 225px 附近 */
-    expect(ticks[1]!.attributes('style')).toContain('top: 221px')
+    expect(ticks[0]!.attributes('aria-label')).toBe('跳转到：实现 Compact、Undo 和会话目录')
+    expect(ticks[1]!.attributes('aria-label')).toBe('跳转到：再补一个左侧目录')
+    /* 相邻目录项固定紧凑排列，不再被 2000px 全文高度拉开。 */
+    expect(ticks[0]!.attributes('style')).toContain('top: 10px')
+    expect(ticks[1]!.attributes('style')).toContain('top: 28px')
+    expect(ticks[0]!.get('.toc-preview-card').text()).toContain('实现 Compact、Undo 和会话目录')
+    expect(ticks[0]!.get('.toc-preview-card').text()).toContain('用户消息· 10:24')
     expect(ticks[0]!.classes()).toContain('is-active')
 
     const turn = document.getElementById('conversation-turn-turn-3') as HTMLElement

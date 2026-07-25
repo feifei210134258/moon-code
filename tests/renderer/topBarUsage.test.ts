@@ -86,7 +86,7 @@ describe('TopBar usage', () => {
     expect(popover).not.toContain('resets in')
   })
 
-  it('emits compact from the header button and undo from the session actions row', async () => {
+  it('keeps the compact icon in the context strip and undo inside the popover', async () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
@@ -96,8 +96,9 @@ describe('TopBar usage', () => {
       }
     })
 
-    const compactButton = wrapper.get('.context-compact-button')
-    expect(compactButton.text()).toContain('压缩')
+    const compactButton = wrapper.get('[aria-label="压缩当前会话上下文"]')
+    expect(compactButton.element.parentElement?.classList).toContain('context-meter')
+    expect(wrapper.find('.context-popover .context-compact-button').exists()).toBe(false)
     await compactButton.trigger('click')
     expect(wrapper.emitted('compact')).toEqual([[]])
 
@@ -107,6 +108,6 @@ describe('TopBar usage', () => {
     expect(wrapper.emitted('undo')).toEqual([[]])
 
     await wrapper.setProps({ promptRunning: true })
-    expect((wrapper.get('.context-compact-button').element as HTMLButtonElement).disabled).toBe(true)
+    expect((wrapper.get('[aria-label="压缩当前会话上下文"]').element as HTMLButtonElement).disabled).toBe(true)
   })
 })

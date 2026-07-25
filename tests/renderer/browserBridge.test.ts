@@ -36,6 +36,9 @@ describe('useBrowserBridge', () => {
       setBrowserBounds: vi.fn(async () => undefined),
       setBrowserOverlay: vi.fn(async () => undefined),
       discoverBrowserLocalServers: vi.fn(async () => ['http://localhost:5173/']),
+      captureBrowser: vi.fn(async () => ({
+        dataUrl: 'data:image/png;base64,BB==', width: 800, height: 600, fullPage: false
+      })),
       pickBrowserAnnotation: vi.fn(async () => ({
         id: 'draft-1',
         annotation: {
@@ -85,7 +88,9 @@ describe('useBrowserBridge', () => {
 
     await bridge.pickAnnotation('region')
     expect(api.pickBrowserAnnotation).toHaveBeenCalledWith('region')
+    expect(api.captureBrowser).toHaveBeenCalledWith(false)
     expect(bridge.annotationDrafts.value).toHaveLength(1)
+    expect(bridge.annotationBackdrop.value?.dataUrl).toBe('data:image/png;base64,BB==')
     await bridge.submitAnnotation('session-1', reactive({
       draftId: 'draft-1', comment: '调整这个区域', pageUrl: state.url,
       includeSelector: false, includeText: false, includeScreenshot: true
@@ -94,6 +99,7 @@ describe('useBrowserBridge', () => {
       draftId: 'draft-1', comment: '调整这个区域'
     }), controls)
     expect(bridge.annotationDrafts.value).toEqual([])
+    expect(bridge.annotationBackdrop.value).toBeNull()
 
     bridge.networkDetails.value = {
       requestId: 'old', requestHeaders: {}, responseHeaders: {}, body: 'old',

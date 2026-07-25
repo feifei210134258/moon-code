@@ -11,8 +11,8 @@ const projects = [
     name: 'Kimi Agent',
     expanded: true,
     sessions: [
-      { id: 'session-a', title: '实现 Session 生命周期', relativeTime: '2m' },
-      { id: 'session-b', title: '完善浏览器批注', relativeTime: '9m' }
+      { id: 'session-a', title: '实现 Session 生命周期', relativeTime: '2m', tone: 'running' as const },
+      { id: 'session-b', title: '完善浏览器批注', relativeTime: '9m', tone: 'completed' as const }
     ]
   },
   {
@@ -46,6 +46,15 @@ async function clickSessionMenuAction(label: string): Promise<void> {
 }
 
 describe('ProjectSidebar', () => {
+  it('shows a loading indicator for running sessions and a completed dot for finished sessions', () => {
+    const wrapper = mountSidebar()
+    expect(wrapper.get('.session-status.is-running').find('.spin').exists()).toBe(true)
+    expect(wrapper.get('.session-status.is-running').attributes('title')).toBe('进行中')
+    expect(wrapper.get('.session-status.is-completed').find('i').exists()).toBe(true)
+    expect(wrapper.get('.session-status.is-completed').attributes('title')).toBe('已结束')
+    wrapper.unmount()
+  })
+
   it('searches sessions across projects and creates in the selected workspace', async () => {
     const wrapper = mountSidebar()
     expect(wrapper.find('.sidebar-icon-button').exists()).toBe(false)

@@ -27,12 +27,14 @@ const props = withDefaults(defineProps<{
   pending: boolean
   error: string | null
   capture: BrowserCaptureResult | null
+  annotationBackdrop?: BrowserCaptureResult | null
   annotationDrafts?: BrowserAnnotationDraft[]
   annotationPicking?: boolean
   annotationSubmitting?: boolean
   annotationError?: string | null
 }>(), {
   annotationDrafts: () => [],
+  annotationBackdrop: null,
   annotationPicking: false,
   annotationSubmitting: false,
   annotationError: null
@@ -86,6 +88,21 @@ const annotationPopoverStyle = computed<CSSProperties>(() => {
   const left = Math.max(12, Math.min(desiredLeft, Math.max(12, surfaceWidth - popoverWidth - 12)))
   const top = Math.max(12, Math.min(targetTop, Math.max(12, surfaceHeight - 220)))
   return { left: `${Math.round(left)}px`, top: `${Math.round(top)}px`, width: `${Math.round(popoverWidth)}px` }
+})
+const annotationTargetStyle = computed<CSSProperties>(() => {
+  const annotation = activeAnnotation.value
+  const { width: surfaceWidth, height: surfaceHeight } = surfaceSize.value
+  if (annotation === null || surfaceWidth < 1 || surfaceHeight < 1) return {}
+  const pageViewport = annotation.annotation.page.viewport
+  const rect = annotation.annotation.target.rect
+  const scaleX = surfaceWidth / Math.max(1, pageViewport.width)
+  const scaleY = surfaceHeight / Math.max(1, pageViewport.height)
+  return {
+    left: `${Math.round(rect.x * scaleX)}px`,
+    top: `${Math.round(rect.y * scaleY)}px`,
+    width: `${Math.max(4, Math.round(rect.width * scaleX))}px`,
+    height: `${Math.max(4, Math.round(rect.height * scaleY))}px`
+  }
 })
 
 watch(() => props.state.viewport, (viewport) => {
@@ -237,11 +254,30 @@ onBeforeUnmount(() => {
           <strong>从项目文件打开 HTML 预览</strong>
           <span>预览会通过 Workspace 隔离的本地服务加载。</span>
         </div>
+        <img
+          v-else-if="overlayOpen && activeAnnotation && annotationBackdrop"
+          class="browser-overlay-backdrop"
+          :src="annotationBackdrop.dataUrl"
+          alt="当前批注页面快照"
+        />
+        <img
+          v-else-if="overlayOpen && capture && captureOpen"
+          class="browser-overlay-backdrop"
+          :src="capture.dataUrl"
+          alt="当前浏览器截图"
+        />
         <div v-else-if="overlayOpen" class="browser-empty">
           <PhChatTeardropText :size="30" weight="duotone" />
-          <strong>页面已暂时隐藏</strong>
-          <span>完成批注编辑或关闭截图预览后恢复显示。</span>
+          <strong>正在准备页面快照</strong>
+          <span>快照将在操作卡片后保持可见。</span>
         </div>
+        <span
+          v-if="overlayOpen && activeAnnotation && annotationBackdrop"
+          class="browser-annotation-target"
+          :class="`is-${activeAnnotation.annotation.target.kind}`"
+          :style="annotationTargetStyle"
+          aria-hidden="true"
+        />
         <div v-if="state.loading" class="browser-loading"><PhSpinnerGap class="spin" :size="17" /></div>
       </div>
       <section v-if="activeAnnotation && annotationOpen" class="browser-annotation-popover" :style="annotationPopoverStyle" aria-label="正在编辑批注">

@@ -1,4 +1,4 @@
-export type SessionTone = 'neutral' | 'running' | 'attention' | 'unread'
+export type SessionTone = 'neutral' | 'running' | 'completed' | 'attention' | 'unread'
 
 export interface SessionItem {
   id: string

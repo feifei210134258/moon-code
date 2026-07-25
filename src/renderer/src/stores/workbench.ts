@@ -127,7 +127,7 @@ export const useWorkbenchStore = defineStore('workbench', {
               : session.busy
                 ? 'running'
                 : session.lastTurnReason === 'completed'
-                  ? 'neutral'
+                  ? 'completed'
                   : 'unread'
           }
         })
@@ -165,7 +165,9 @@ export const useWorkbenchStore = defineStore('workbench', {
             ? 'attention'
             : child.busy
               ? 'running'
-              : 'neutral'
+              : child.lastTurnReason === 'completed'
+                ? 'completed'
+                : 'neutral'
         })
         seen.add(child.id)
       }

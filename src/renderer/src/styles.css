@@ -106,6 +106,7 @@ select:focus-visible {
 .topbar-context,
 .topbar-actions,
 .topbar-item,
+.context-meter,
 .usage-pill,
 .account-button {
   -webkit-app-region: no-drag;
@@ -190,6 +191,33 @@ select:focus-visible {
   background: rgba(255, 255, 255, 0.78);
   font-size: 12px;
 }
+
+.context-meter {
+  min-height: 31px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.context-meter .context-pill {
+  min-height: 29px;
+  border: 0;
+  border-radius: 9px 0 0 9px;
+  background: transparent;
+}
+
+.context-meter.is-info { border-color: rgba(48, 133, 250, 0.2); }
+.context-meter.is-warning {
+  border-color: rgba(213, 139, 37, 0.3);
+  background: rgba(255, 249, 238, 0.72);
+}
+.context-meter.is-critical {
+  border-color: rgba(226, 85, 85, 0.32);
+  background: rgba(255, 244, 244, 0.76);
+}
+.context-meter.is-warning .usage-track > span { background: var(--amber); }
+.context-meter.is-critical .usage-track > span { background: var(--red); }
 
 .usage-pill strong {
   font-weight: 650;
@@ -377,29 +405,29 @@ select:focus-visible {
   margin-left: auto;
 }
 
-/* 上下文卡内的会话操作（压缩/撤销） */
+/* 压缩作为上下文长条的紧邻 icon 操作，无需先打开弹窗。 */
 .context-session-actions {
   gap: 9px;
 }
 
 .context-compact-button {
   flex: none;
-  min-height: 27px;
-  display: inline-flex;
+  width: 32px;
+  min-height: 29px;
+  display: grid;
+  place-items: center;
   align-items: center;
-  gap: 5px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
   color: var(--blue);
-  background: var(--blue-soft);
+  background: transparent;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
-  white-space: nowrap;
 }
 
-.context-compact-button:hover { border-color: rgba(48, 133, 250, 0.38); }
+.context-compact-button:hover { background: var(--blue-soft); }
 .context-compact-button:disabled { opacity: 0.45; cursor: default; }
 
 .context-action-row {
@@ -874,9 +902,37 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.session-title-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-status {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+}
+
+.session-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.session-status.is-running { color: var(--blue); }
+.session-status.is-completed { color: var(--green); }
+.session-status.is-attention { color: var(--amber); }
+.session-status.is-unread { color: #5f82ad; }
 }
 
 .session-row.is-child {
@@ -939,18 +995,18 @@ select:focus-visible {
   min-width: 0;
 }
 
-/* Codex 式会话目录刻度轨：悬浮在会话区左缘，不占用布局宽度 */
+/* 紧凑会话目录：刻度聚合在轨道顶部，悬停即显示内容摘要。 */
 .toc-rail {
   position: absolute;
   left: 0;
-  z-index: 5;
-  width: 20px;
+  z-index: 7;
+  width: 32px;
   pointer-events: none;
 }
 
 .toc-tick {
   position: absolute;
-  left: 3px;
+  left: 5px;
   box-sizing: content-box;
   height: 2px;
   padding: 0;
@@ -967,8 +1023,77 @@ select:focus-visible {
 }
 
 .toc-tick.is-active {
-  width: 17px !important;
+  width: 22px !important;
   background: var(--blue) padding-box;
+}
+
+.toc-preview-card {
+  position: absolute;
+  top: -10px;
+  left: 31px;
+  width: min(360px, calc(100vw - 90px));
+  display: grid;
+  gap: 9px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: var(--text);
+  background: #ffffff;
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.16);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-4px);
+  pointer-events: none;
+  text-align: left;
+  white-space: normal;
+  transition: opacity 80ms ease-out, transform 80ms ease-out, visibility 80ms;
+}
+
+.toc-preview-card strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-preview-card > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #6f7783;
+  font-size: 12px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.toc-preview-card small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8a929e;
+  font-size: 11px;
+}
+
+.toc-preview-card small i {
+  width: 9px;
+  height: 9px;
+  border: 2px solid #8a929e;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px #ffffff;
+  background: #8a929e;
+}
+
+.toc-tick:hover .toc-preview-card,
+.toc-tick:focus-visible .toc-preview-card {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toc-tick,
+  .toc-preview-card { transition: none; }
 }
 
 .conversation-action-error {
@@ -3232,16 +3357,8 @@ select:focus-visible {
 
 .changes-view {
   display: grid;
-  grid-template-rows: auto minmax(250px, 1fr) auto auto;
-  gap: 10px;
-}
-
-.changes-view.is-diff-collapsed {
   grid-template-rows: auto minmax(260px, 1fr) auto;
-}
-
-.changes-view.is-diff-collapsed .todo-panel {
-  min-height: 260px;
+  gap: 10px;
 }
 
 .changed-files-panel,
@@ -3252,6 +3369,20 @@ select:focus-visible {
   border: 1px solid var(--border);
   border-radius: 11px;
   background: #ffffff;
+}
+
+.changed-files-panel {
+  max-height: min(34vh, 300px);
+  display: flex;
+  flex-direction: column;
+}
+
+.changed-files-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 116, 138, 0.24) transparent;
 }
 
 .changed-files-panel h2,
@@ -3290,15 +3421,9 @@ select:focus-visible {
   border: 0;
   background: transparent;
   text-align: left;
-  cursor: pointer;
   font-size: 10.5px;
 }
 
-.changed-file-row:hover {
-  background: rgba(15, 23, 42, 0.04);
-}
-
-.changed-file-row.is-active,
 .file-row.is-active {
   background: var(--blue-soft);
 }
@@ -4090,15 +4215,39 @@ select:focus-visible {
   min-height: 0;
 }
 
+.browser-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  background: #ffffff;
+}
+
+.browser-annotation-target {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 2px solid var(--blue);
+  border-radius: 5px;
+  background: rgba(48, 133, 250, 0.1);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+}
+
+.browser-annotation-target.is-region {
+  border-style: dashed;
+  border-radius: 2px;
+}
+
 .browser-annotation-popover,
 .browser-capture-popover,
 .browser-annotation-reopen {
   position: absolute;
   z-index: 4;
-  border: 1px solid rgba(71, 137, 190, 0.24);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 16px 36px rgba(41, 77, 112, 0.18);
-  backdrop-filter: blur(18px);
+  border: 0;
+  background: #ffffff;
+  box-shadow: 0 4px 8px rgba(41, 77, 112, 0.2);
 }
 
 .browser-annotation-popover {

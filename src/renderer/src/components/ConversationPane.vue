@@ -125,16 +125,29 @@ const tocItems = computed(() => props.turns.flatMap((turn) => {
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return [{ id: turn.id, label: text.length > 0 ? compactTocLabel(text) : '附件消息', time: turn.time }]
+  const content = text.length > 0 ? text : '附件消息'
+  return [{
+    id: turn.id,
+    title: compactTocTitle(content),
+    preview: compactTocLabel(content),
+    time: turn.time
+  }]
 }))
 
-/* Codex 式左侧刻度轨：每个 user 回合一枚刻度，纵向位置 ∝ 回合在全文中的位置，
-   横向长度 ∝ 回合高度；当前视口所在回合高亮。 */
+/* Codex 式左侧刻度轨：每个 user 回合一枚紧凑刻度，
+   横向长度反映回合高度，当前视口所在回合高亮。 */
 interface TocMeasurement {
   railTop: number
   railHeight: number
   scrollHeight: number
-  ticks: { id: string; label: string; contentTop: number; turnHeight: number }[]
+  ticks: {
+    id: string
+    title: string
+    preview: string
+    time: string
+    contentTop: number
+    turnHeight: number
+  }[]
 }
 const tocMeasure = ref<TocMeasurement>({ railTop: 0, railHeight: 0, scrollHeight: 0, ticks: [] })
 const transcriptScrollTop = ref(0)
@@ -145,11 +158,13 @@ const tocTicks = computed(() => {
   const { railHeight, scrollHeight, ticks } = tocMeasure.value
   if (railHeight < 1 || scrollHeight < 1) return []
   const activeId = activeTocId.value
-  return ticks.map((tick) => ({
-    id: tick.id,
-    label: tick.label,
-    top: Math.max(0, Math.min(railHeight - 6, (tick.contentTop / scrollHeight) * railHeight)),
-    length: Math.max(6, Math.min(15, (tick.turnHeight / scrollHeight) * railHeight * 2.4)),
+  const availableHeight = Math.max(0, railHeight - 24)
+  const step = ticks.length <= 1 ? 0 : Math.min(18, availableHeight / (ticks.length - 1))
+  return ticks.map((tick, index) => ({
+    ...tick,
+    // 目录是一组紧凑导航，不应按全文高度把相邻回合拉到视口两端。
+    top: Math.min(railHeight - 8, 10 + index * step),
+    length: Math.max(8, Math.min(18, 8 + tick.turnHeight / 70)),
     active: tick.id === activeId
   }))
 })
@@ -177,7 +192,9 @@ function measureTocRail(): void {
     const rect = node.getBoundingClientRect()
     return [{
       id: item.id,
-      label: item.label,
+      title: item.title,
+      preview: item.preview,
+      time: item.time,
       contentTop: rect.top - containerTop + element.scrollTop,
       turnHeight: rect.height
     }]
@@ -222,7 +239,12 @@ function turnDomId(turnId: string): string {
 }
 
 function compactTocLabel(text: string): string {
-  return text.length > 72 ? `${text.slice(0, 69)}…` : text
+  return text.length > 110 ? `${text.slice(0, 107)}…` : text
+}
+
+function compactTocTitle(text: string): string {
+  const sentence = text.split(/[\n。！？!?]/, 1)[0]?.trim() ?? text
+  return sentence.length > 34 ? `${sentence.slice(0, 31)}…` : sentence
 }
 
 function markerLabel(marker: SessionTranscriptMarker): string {
@@ -381,11 +403,16 @@ watch(
         type="button"
         class="toc-tick"
         :class="{ 'is-active': tick.active }"
-        :style="{ top: `${tick.top - 4}px`, width: `${tick.length}px` }"
-        :title="tick.label"
-        :aria-label="`跳转到：${tick.label}`"
+        :style="{ top: `${tick.top}px`, width: `${tick.length}px` }"
+        :aria-label="`跳转到：${tick.title}`"
         @click="scrollToTurn(tick.id)"
-      />
+      >
+        <span class="toc-preview-card" role="tooltip">
+          <strong>{{ tick.title }}</strong>
+          <span>{{ tick.preview }}</span>
+          <small><i aria-hidden="true" />用户消息<span v-if="tick.time">· {{ tick.time }}</span></small>
+        </span>
+      </button>
     </div>
 
     <AgentRoster :agents="agents" @open="emit('openAgent', $event)" />
