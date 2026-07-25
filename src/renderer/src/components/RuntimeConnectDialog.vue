@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { PhArrowClockwise, PhTerminalWindow } from '@phosphor-icons/vue'
 
 const props = defineProps<{
@@ -9,17 +9,32 @@ const props = defineProps<{
   missing: boolean
 }>()
 const emit = defineEmits<{ retry: [] }>()
+const dismissed = ref(false)
 
 const title = computed(() => props.missing ? '需要安装 Kimi Code CLI' : 'Kimi Code CLI 无法启动')
 const description = computed(() => props.missing
   ? 'Moon Code 未在你的系统中检测到 Kimi Code CLI。安装后会自动连接，无需再选择连接方式。'
   : 'Moon Code 已检测到 Kimi Code CLI，但当前版本或启动状态不可用。更新或修复 CLI 后可重新检测。'
 )
+const visible = computed(() => props.open && !dismissed.value)
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !visible.value) return
+  event.preventDefault()
+  dismissed.value = true
+}
+
+watch(() => props.open, (open) => {
+  if (!open) dismissed.value = false
+})
+
+onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="runtime-connect-backdrop">
+    <div v-if="visible" class="runtime-connect-backdrop">
       <section class="runtime-connect-dialog glass-panel" role="dialog" aria-modal="true" aria-label="Kimi Code CLI 安装提示">
         <header><div><PhTerminalWindow :size="19" /><strong>{{ title }}</strong></div></header>
         <p>{{ description }}</p>

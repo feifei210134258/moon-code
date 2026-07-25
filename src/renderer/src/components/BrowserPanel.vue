@@ -162,18 +162,27 @@ function reportBounds(): void {
   })
 }
 
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || (!annotationOpen.value && !captureOpen.value)) return
+  event.preventDefault()
+  annotationOpen.value = false
+  captureOpen.value = false
+}
+
 onMounted(() => {
   if (typeof ResizeObserver !== 'undefined') {
     observer = new ResizeObserver(reportBounds)
     if (surface.value !== null) observer.observe(surface.value)
   }
   window.addEventListener('resize', reportBounds)
+  window.addEventListener('keydown', onWindowKeydown)
   void nextTick(reportBounds)
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
   window.removeEventListener('resize', reportBounds)
+  window.removeEventListener('keydown', onWindowKeydown)
 })
 </script>
 

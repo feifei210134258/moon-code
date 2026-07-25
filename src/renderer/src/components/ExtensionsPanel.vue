@@ -18,7 +18,7 @@ import {
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -141,6 +141,16 @@ const todoItems = computed(() => activeTodo.value?.items ?? [])
 const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
 const fileSearchQuery = ref('')
 const grepPattern = ref('')
+const filePreviewActions = ref<HTMLDetailsElement | null>(null)
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || filePreviewActions.value?.open !== true) return
+  event.preventDefault()
+  filePreviewActions.value.open = false
+}
+
+onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 
 function submitFileSearch(): void {
   const query = fileSearchQuery.value.trim()
@@ -429,7 +439,7 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       <section v-if="filePreviewPending || filePreviewError || filePreview" class="file-preview-panel">
         <header>
           <strong>{{ filePreview?.path ?? '文件预览' }}</strong>
-          <details v-if="filePreview" class="file-preview-actions">
+          <details v-if="filePreview" ref="filePreviewActions" class="file-preview-actions">
             <summary aria-label="文件操作">⋯</summary>
             <div>
               <button type="button" :disabled="fileActionPending !== null" @click="emit('downloadFile', filePreview.path)"><PhDownloadSimple :size="14" />下载</button>

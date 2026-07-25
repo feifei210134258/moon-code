@@ -164,7 +164,7 @@ function startInputResize(event: PointerEvent): void {
   const startY = event.clientY
   const startHeight = textarea.getBoundingClientRect().height
   const onMove = (moveEvent: PointerEvent): void => {
-    composerHeight.value = Math.round(Math.min(maxComposerHeight(), Math.max(96, startHeight + startY - moveEvent.clientY)))
+    composerHeight.value = Math.round(Math.min(maxComposerHeight(), Math.max(96, startHeight + moveEvent.clientY - startY)))
   }
   const onUp = (): void => {
     window.removeEventListener('pointermove', onMove)
@@ -412,29 +412,29 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || (!optionsOpen.value && !commandOpen.value && !mentionOpen.value)) return
+  event.preventDefault()
+  optionsOpen.value = false
+  commandOpen.value = false
+  closeMention()
+}
+
 onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown)
   window.addEventListener('resize', resizeTextareaToContent)
   resizeTextareaToContent()
 })
-
 onBeforeUnmount(() => {
   closeMention()
   stopInputResize?.()
+  window.removeEventListener('keydown', onWindowKeydown)
   window.removeEventListener('resize', resizeTextareaToContent)
 })
 </script>
 
 <template>
   <div class="composer-wrap">
-    <div
-      class="composer-top-resize"
-      role="separator"
-      aria-label="拖动调整输入框高度"
-      aria-orientation="horizontal"
-      tabindex="0"
-      @pointerdown="startInputResize"
-      @keydown="onResizeKeydown"
-    />
     <div v-if="attachments.length > 0 || attachmentPending" class="composer-attachments" aria-label="待发送附件">
       <div v-for="file in attachments" :key="file.fileId" class="composer-attachment-chip">
         <PhImage v-if="file.mediaType.startsWith('image/')" :size="15" />
@@ -459,6 +459,15 @@ onBeforeUnmount(() => {
         @keydown="onKeydown"
         @input="onComposerInput"
         @paste="onPaste"
+      />
+      <div
+        class="composer-resize-handle"
+        role="separator"
+        aria-label="调整输入框高度"
+        aria-orientation="horizontal"
+        tabindex="0"
+        @pointerdown="startInputResize"
+        @keydown="onResizeKeydown"
       />
     </div>
     <div v-if="goalMode" class="goal-mode-banner"><strong>目标</strong><span>下一条消息会创建持续目标并立即开始执行</span></div>
@@ -521,7 +530,6 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
-
     <div v-if="optionsOpen" class="composer-popover" aria-label="Kimi 会话控制">
       <label>
         <span>模型</span>

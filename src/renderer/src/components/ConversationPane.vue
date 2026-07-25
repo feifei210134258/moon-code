@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PhCaretDown, PhChatCircleText, PhListBullets, PhSpinnerGap } from '@phosphor-icons/vue'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ChatTurn } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
 import type {
@@ -123,6 +123,7 @@ const stickToBottom = ref(true)
 const composer = ref<InstanceType<typeof ComposerBar> | null>(null)
 const tocOpen = ref(false)
 const compactInstruction = ref('')
+const conversationActionMenu = ref<HTMLDetailsElement | null>(null)
 const tocItems = computed(() => props.turns.flatMap((turn) => {
   if (turn.role !== 'user') return []
   const text = turn.blocks
@@ -202,6 +203,16 @@ function requestCompact(): void {
   if (instruction.length === 0) emit('compact')
   else emit('compact', instruction)
 }
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || (!tocOpen.value && conversationActionMenu.value?.open !== true)) return
+  event.preventDefault()
+  tocOpen.value = false
+  if (conversationActionMenu.value !== null) conversationActionMenu.value.open = false
+}
+
+onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 
 defineExpose({ focusFromPet, loadPromptDraft })
 
@@ -415,7 +426,7 @@ watch(
               title="发起 BTW 侧边会话"
               @click="emit('startSideChat')"
             ><PhChatCircleText :size="14" /><span>BTW</span></button>
-            <details class="conversation-action-menu">
+            <details ref="conversationActionMenu" class="conversation-action-menu">
               <summary class="conversation-tool-button" title="会话操作"><span>会话操作</span><PhCaretDown :size="12" /></summary>
               <div class="conversation-action-popover">
                 <label>

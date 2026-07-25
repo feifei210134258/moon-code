@@ -42,6 +42,19 @@ describe('BrowserPanel', () => {
     expect(wrapper.get('.browser-capture-popover').text()).toContain('390 × 844')
   })
 
+  it('closes browser overlays with Escape', async () => {
+    const wrapper = mount(BrowserPanel, {
+      props: {
+        state, pending: false, error: null,
+        capture: { dataUrl: 'data:image/png;base64,AA==', width: 390, height: 844, fullPage: false }
+      }
+    })
+    expect(wrapper.find('.browser-capture-popover').exists()).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.find('.browser-capture-popover').exists()).toBe(false)
+  })
+
   it('previews editable annotations and emits only the reviewed submission options', async () => {
     const wrapper = mount(BrowserPanel, {
       props: {

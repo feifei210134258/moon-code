@@ -194,6 +194,8 @@ describe('ExtensionsPanel', () => {
     await resultButtons[1]!.trigger('click')
     expect(wrapper.emitted('openDirectory')).toEqual([['src']])
     expect(wrapper.emitted('openFile')).toEqual([['src/index.html']])
+    expect(wrapper.get('[aria-label="提交文件名搜索"]').text()).toBe('')
+    expect(wrapper.get('[aria-label="提交文件内容搜索"]').text()).toBe('')
   })
 
   it('exposes download, external open, IDE open and reveal from a file preview menu', async () => {

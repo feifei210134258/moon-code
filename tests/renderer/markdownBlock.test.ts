@@ -56,6 +56,15 @@ describe('MarkdownBlock', () => {
     expect((window as unknown as Record<string, unknown>).pwned).toBeUndefined()
   })
 
+  it('opens explicit local Markdown links through the workspace file bridge', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: { text: '[打开预览](./app/index.html:24)' }
+    })
+
+    await wrapper.get('a').trigger('click')
+    expect(wrapper.emitted('openFile')).toEqual([['./app/index.html']])
+  })
+
   it('loads local Markdown images through the bounded Kimi Session FS bridge', async () => {
     const readMarkdownImage = vi.fn(async () => ({
       path: 'assets/preview.png',
