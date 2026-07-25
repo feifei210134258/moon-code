@@ -55,9 +55,12 @@ export class SessionPetStateReducer {
   }
 
   get trackedSessionIds(): string[] {
-    return [...this.#sessions.values()]
+    const tracked = [...this.#sessions.values()]
       .filter((session) => session.tracked)
       .map((session) => session.id)
+    if (tracked.length > 0) return tracked
+    const fallback = this.#latestSession()
+    return fallback === null ? [] : [fallback.id]
   }
 
   reset(serverId: string | null): void {
@@ -165,10 +168,14 @@ export class SessionPetStateReducer {
     const now = this.#now()
     for (const session of this.#sessions.values()) this.#expireTracking(session, now)
 
-    const candidates = [...this.#sessions.values()]
+    let candidates = [...this.#sessions.values()]
       .filter((session) => session.tracked)
       .map((session) => this.#toPublicState(session, now))
       .sort(comparePetPriority)
+    if (candidates.length === 0) {
+      const fallback = this.#latestSession()
+      if (fallback !== null) candidates = [this.#toPublicState(fallback, now)]
+    }
     const items = candidates.slice(0, this.#maxVisible).map((item) => ({ ...item }))
     const overflow = Math.max(0, candidates.length - items.length)
     if (overflow > 0 && items.length > 0) items[items.length - 1]!.overflowCount = overflow + 1
@@ -238,6 +245,20 @@ export class SessionPetStateReducer {
       latestTool: null,
       overflowCount: 0
     }
+  }
+
+  #latestSession(): TrackedPetSession | null {
+    let latest: TrackedPetSession | null = null
+    let latestTime = Number.NEGATIVE_INFINITY
+    for (const session of this.#sessions.values()) {
+      const timestamp = session.updatedAt === null ? Number.NEGATIVE_INFINITY : Date.parse(session.updatedAt)
+      const time = Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY
+      if (latest === null || time > latestTime) {
+        latest = session
+        latestTime = time
+      }
+    }
+    return latest
   }
 
   #statusFor(session: TrackedPetSession, now: number): PetVisualState {

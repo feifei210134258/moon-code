@@ -2178,6 +2178,68 @@ select:focus-visible {
   background: #f0f1f3;
 }
 
+.media-image-trigger {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.media-image-trigger img {
+  transition: filter 140ms ease;
+}
+
+.media-image-trigger:hover img {
+  filter: brightness(0.97);
+}
+
+.media-preview-backdrop {
+  position: fixed;
+  z-index: 420;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(13, 18, 27, 0.78);
+  backdrop-filter: blur(10px);
+}
+
+.media-preview-dialog {
+  position: relative;
+  width: min(94vw, 1440px);
+  height: min(90vh, 960px);
+  display: grid;
+  place-items: center;
+}
+
+.media-preview-dialog > img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  object-fit: contain;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+}
+
+.media-preview-dialog > button {
+  position: absolute;
+  z-index: 1;
+  top: -12px;
+  right: -12px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  color: #ffffff;
+  background: rgba(19, 27, 39, 0.82);
+  cursor: pointer;
+}
+
 .media-block figcaption,
 .media-block-state {
   display: flex;
@@ -2257,7 +2319,7 @@ select:focus-visible {
   position: relative;
   width: calc(100% - 46px);
   max-width: 810px;
-  min-height: 152px;
+  min-height: 120px;
   margin: 0 auto 14px;
   padding: 13px 14px 10px;
   border: 1px solid var(--border-strong);
@@ -2786,7 +2848,7 @@ select:focus-visible {
   display: block;
   width: 100%;
   field-sizing: content;
-  min-height: 96px;
+  min-height: 64px;
   max-height: 50dvh;
   padding: 4px 6px 1px 4px;
   resize: none;
@@ -2812,23 +2874,6 @@ select:focus-visible {
   opacity: 0.72;
 }
 
-.goal-mode-banner {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 1px 3px 5px;
-  color: var(--muted);
-  font-size: 9.5px;
-}
-
-.goal-mode-banner strong {
-  padding: 2px 5px;
-  border-radius: 5px;
-  color: var(--blue);
-  background: var(--blue-soft);
-  font-size: 9px;
-}
-
 .composer-toggle-row.is-goal {
   margin-top: 3px;
   border-top: 1px solid var(--border);
@@ -2846,6 +2891,30 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.composer-mode-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.composer-actions .composer-mode-chips > button {
+  min-height: 23px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px 0 7px;
+  border-radius: 7px;
+  color: #3c6cb8;
+  background: var(--blue-soft);
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.composer-actions .composer-mode-chips > button:hover {
+  color: #2d5ca7;
+  background: rgba(48, 133, 250, 0.14);
 }
 
 .composer-actions button {
@@ -3387,7 +3456,7 @@ select:focus-visible {
 .changes-view {
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: 36px;
 }
 
 .changes-view .extension-state {

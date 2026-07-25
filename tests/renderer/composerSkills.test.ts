@@ -128,6 +128,30 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.emitted('updateGoalMode')).toEqual([[true]])
   })
 
+  it('shows active Plan, Goal, and Swarm modes before the model and closes each from its chip', async () => {
+    const activeControls = { ...controls, planMode: true, swarmMode: true }
+    const wrapper = mount(ComposerBar, {
+      props: { skills: [], models, controls: activeControls, goalMode: true }
+    })
+
+    const settings = wrapper.get('.composer-settings')
+    const chips = settings.get('.composer-mode-chips')
+    expect(chips.text()).toContain('规划')
+    expect(chips.text()).toContain('目标')
+    expect(chips.text()).toContain('Swarm')
+    expect(settings.element.firstElementChild).toBe(chips.element)
+    expect(chips.element.nextElementSibling?.classList).toContain('model-summary')
+
+    await wrapper.get('[aria-label="关闭规划模式"]').trigger('click')
+    await wrapper.get('[aria-label="关闭目标模式"]').trigger('click')
+    await wrapper.get('[aria-label="关闭 Swarm 模式"]').trigger('click')
+    expect(wrapper.emitted('updateControls')).toEqual([
+      [{ ...activeControls, planMode: false }],
+      [{ ...activeControls, swarmMode: false }]
+    ])
+    expect(wrapper.emitted('updateGoalMode')).toEqual([[false]])
+  })
+
   it('uploads through Kimi, shows removable chips, and submits attachment descriptors', async () => {
     const attachment = { fileId: 'file-1', name: 'design.png', mediaType: 'image/png', size: 2048 }
     window.kimiAgent = {

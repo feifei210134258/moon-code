@@ -19,6 +19,21 @@ function session(overrides: Partial<PetSessionFact> & Pick<PetSessionFact, 'id'>
 }
 
 describe('SessionPetStateReducer', () => {
+  it('keeps the latest idle session available for the static desktop pet', () => {
+    const reducer = new SessionPetStateReducer()
+    reducer.reset('server-1')
+    reducer.seed([{ id: 'workspace-1', name: 'Project' }], [
+      session({ id: 'older', updatedAt: '2026-07-23T07:00:00.000Z' }),
+      session({ id: 'latest', updatedAt: '2026-07-23T08:00:00.000Z' })
+    ])
+    reducer.setConnected(true)
+
+    expect(reducer.getRoster().items).toEqual([
+      expect.objectContaining({ sessionId: 'latest', status: 'idle' })
+    ])
+    expect(reducer.trackedSessionIds).toEqual(['latest'])
+  })
+
   it('starts from real active sessions and ignores old completed history', () => {
     const reducer = new SessionPetStateReducer()
     reducer.reset('server-1')

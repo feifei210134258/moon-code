@@ -134,6 +134,11 @@ function updateBoolean(key: 'planMode' | 'swarmMode', event: Event): void {
   emit('updateControls', { ...props.controls, [key]: (event.target as HTMLInputElement).checked })
 }
 
+function disableBooleanMode(key: 'planMode' | 'swarmMode'): void {
+  if (props.controls === null) return
+  emit('updateControls', { ...props.controls, [key]: false })
+}
+
 function toggleCommands(): void {
   commandOpen.value = !commandOpen.value
   if (commandOpen.value) {
@@ -410,7 +415,6 @@ onBeforeUnmount(() => {
         @paste="onPaste"
       />
     </div>
-    <div v-if="goalMode" class="goal-mode-banner"><strong>目标</strong><span>下一条消息会创建持续目标并立即开始执行</span></div>
     <div class="composer-actions">
       <div class="composer-primary-tools">
         <button type="button" aria-label="添加附件" :disabled="disabled || attachmentPending" @click="pickAttachments"><PhPaperclip :size="19" /></button>
@@ -434,6 +438,17 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <div class="composer-settings">
+        <div v-if="controls?.planMode || goalMode || controls?.swarmMode" class="composer-mode-chips" aria-label="已启用模式">
+          <button v-if="controls?.planMode" type="button" aria-label="关闭规划模式" @click="disableBooleanMode('planMode')">
+            <span>规划</span><PhX :size="11" />
+          </button>
+          <button v-if="goalMode" type="button" aria-label="关闭目标模式" @click="emit('updateGoalMode', false)">
+            <span>目标</span><PhX :size="11" />
+          </button>
+          <button v-if="controls?.swarmMode" type="button" aria-label="关闭 Swarm 模式" @click="disableBooleanMode('swarmMode')">
+            <span>Swarm</span><PhX :size="11" />
+          </button>
+        </div>
         <button class="model-summary" type="button" :disabled="disabled" @click="optionsOpen = !optionsOpen; commandOpen = false; closeMention()">
           <span>{{ selectedModel?.displayName ?? controls?.model ?? (controlsPending ? '读取模型…' : '未配置模型') }}</span>
           <span v-if="controls?.thinking" class="model-effort-chip">{{ thinkingLabel(controls.thinking) }}</span>

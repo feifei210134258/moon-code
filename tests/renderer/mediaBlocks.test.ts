@@ -21,12 +21,18 @@ describe('Kimi media blocks', () => {
     }))
     window.kimiAgent = { readAttachment } as unknown as KimiAgentDesktopApi
     const wrapper = mount(MediaBlock, {
-      props: { mediaType: 'image', fileId: 'image-1', sourceMediaType: null, base64Data: null }
+      props: { mediaType: 'image', fileId: 'image-1', sourceMediaType: null, base64Data: null },
+      global: { stubs: { Teleport: true } }
     })
     await flushPromises()
 
     expect(readAttachment).toHaveBeenCalledWith('image-1', 'application/octet-stream')
-    expect(wrapper.get('img').attributes('src')).toBe('blob:kimi-image')
+    expect(wrapper.get('.media-image-trigger img').attributes('src')).toBe('blob:kimi-image')
+    await wrapper.get('.media-image-trigger').trigger('click')
+    expect(wrapper.get('.media-preview-dialog img').attributes('src')).toBe('blob:kimi-image')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.media-preview-dialog').exists()).toBe(false)
     wrapper.unmount()
   })
 
