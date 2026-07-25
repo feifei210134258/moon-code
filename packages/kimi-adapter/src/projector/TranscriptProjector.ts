@@ -39,6 +39,8 @@ export type TranscriptPart =
       sourceUrl: string | null
       sourceMediaType: string | null
       base64Data: string | null
+      originToolCallId?: string
+      toolOutputIndex?: number
     }
   | { type: 'unknown'; rawType: string }
 
@@ -177,7 +179,7 @@ export class TranscriptProjector {
         const message = state.messages.find((item) => item.id === messageId)
         if (message === undefined) return { changed: false, resyncRequired: true, reason: 'history_rewrite' }
         if (!state.sanitizedMessageIds.has(messageId)) {
-          message.content = payload.content.map((part) => projectContentPart(asPart(part)))
+          message.content = payload.content.flatMap((part) => projectContentPart(asPart(part)))
         }
         rememberTerminalTools(state, message.content)
         applyTerminalTools(state, message.content)
@@ -237,7 +239,7 @@ export class TranscriptProjector {
           id: userMessageId,
           sessionId,
           role: 'user',
-          content: payload.content.map((part) => projectContentPart(asPart(part))),
+          content: payload.content.flatMap((part) => projectContentPart(asPart(part))),
           createdAt: timestampValue(payload.createdAt, frame.timestamp),
           promptId,
           status: payload.status === 'queued' || payload.status === 'blocked' ? 'pending' : 'completed'
@@ -350,6 +352,7 @@ export class TranscriptProjector {
         const existing = findTool(state.messages, toolCallId)
         const isError = payload.isError === true
         const outputPreview = previewValue(payload.output)
+        const outputMedia = projectToolOutputMedia(payload.output, toolCallId)
         if (existing !== null) {
           const terminal: ToolTerminalState = {
             state: isError ? 'error' : 'done',
@@ -359,6 +362,8 @@ export class TranscriptProjector {
           }
           state.terminalTools.set(toolCallId, terminal)
           applyTerminalTool(existing, terminal)
+          const owner = findToolOwner(state.messages, toolCallId)
+          if (owner !== null) appendToolOutputMedia(owner.content, outputMedia)
         } else {
           state.messages.push({
             id: this.#syntheticId(state, 'tool'),
@@ -371,7 +376,7 @@ export class TranscriptProjector {
               state: isError ? 'error' : 'done',
               progress: 100,
               ...(outputPreview === undefined ? {} : { outputPreview })
-            }],
+            }, ...outputMedia],
             createdAt: frame.timestamp,
             promptId: state.currentPromptId,
             status: isError ? 'error' : 'completed'
@@ -676,11 +681,11 @@ function projectMessage(message: SessionMessage): TranscriptMessage | null {
 }
 
 function projectDisplayableMessageContent(message: SessionMessage): TranscriptPart[] | null {
-  if (message.role !== 'user') return message.content.map(projectContentPart)
+  if (message.role !== 'user') return message.content.flatMap(projectContentPart)
   const origin = recordValue(message.metadata?.origin)
   const kind = stringValue(origin?.kind)
   if (kind === null || kind === 'user' || kind === 'cron' || kind === 'compaction') {
-    return message.content.map(projectContentPart)
+    return message.content.flatMap(projectContentPart)
   }
   if (origin?.trigger !== 'user-slash') return null
   if (kind === 'skill_activation') {
@@ -709,41 +714,43 @@ function slashCommandText(name: string, args: string | null): string {
   return args === null || args.length === 0 ? command : `${command} ${args}`
 }
 
-function projectContentPart(part: MessageContentPart): TranscriptPart {
+function projectContentPart(part: MessageContentPart): TranscriptPart[] {
   switch (part.type) {
     case 'text':
-      return { type: 'text', text: stringValue(part.text) ?? '' }
+      return [{ type: 'text', text: stringValue(part.text) ?? '' }]
     case 'thinking':
-      return { type: 'thinking', text: stringValue(part.thinking) ?? '' }
+      return [{ type: 'thinking', text: stringValue(part.thinking) ?? '' }]
     case 'tool_use':
-      return {
+      return [{
         type: 'tool',
         toolCallId: stringValue(part.tool_call_id) ?? 'unknown',
         toolName: previewLabel(part.tool_name, 160) ?? 'tool',
         state: 'running',
         ...optionalPreview('inputPreview', part.input)
-      }
-    case 'tool_result':
-      return {
+      }]
+    case 'tool_result': {
+      const toolCallId = stringValue(part.tool_call_id) ?? 'unknown'
+      return [{
         type: 'tool',
-        toolCallId: stringValue(part.tool_call_id) ?? 'unknown',
+        toolCallId,
         toolName: 'tool',
         state: part.is_error === true ? 'error' : 'done',
         progress: 100,
         ...optionalPreview('outputPreview', part.output)
-      }
+      }, ...projectToolOutputMedia(part.output, toolCallId)]
+    }
     case 'file':
-      return {
+      return [{
         type: 'file',
         fileId: stringValue(part.file_id) ?? '',
         name: stringValue(part.name) ?? '未命名文件',
         mediaType: stringValue(part.media_type) ?? 'application/octet-stream',
         size: numberValue(part.size) ?? 0
-      }
+      }]
     case 'image':
     case 'video': {
       const source = recordValue(part.source)
-      return {
+      return [{
         type: 'media',
         mediaType: part.type,
         sourceKind: stringValue(source?.kind) ?? 'unknown',
@@ -751,10 +758,81 @@ function projectContentPart(part: MessageContentPart): TranscriptPart {
         sourceUrl: stringValue(source?.url),
         sourceMediaType: stringValue(source?.media_type),
         base64Data: stringValue(source?.data)
-      }
+      }]
     }
     default:
-      return { type: 'unknown', rawType: part.type }
+      return [{ type: 'unknown', rawType: part.type }]
+  }
+}
+
+/* Kimi CLI browser/computer tools return screenshots inside a tool_result
+ * output array using the OpenAI image_url content-block shape. The web client
+ * renders those blocks directly; keep the tool preview, but also project the
+ * embedded image as first-class transcript media for the desktop renderer. */
+function projectToolOutputMedia(output: unknown, originToolCallId: string): TranscriptPart[] {
+  if (!Array.isArray(output)) return []
+  const media: TranscriptPart[] = []
+  for (const [toolOutputIndex, value] of output.entries()) {
+    const block = recordValue(value)
+    if (block === null) continue
+    const type = stringValue(block.type)
+    if (type === 'image_url') {
+      const imageUrl = recordValue(block.imageUrl) ?? recordValue(block.image_url)
+      const projected = mediaFromDataUrl(
+        stringValue(imageUrl?.url) ?? stringValue(block.url),
+        originToolCallId,
+        toolOutputIndex
+      )
+      if (projected !== null) media.push(projected)
+      continue
+    }
+    if (type !== 'image') continue
+    const sourceMediaType = stringValue(block.mimeType) ?? stringValue(block.mime_type)
+    const base64Data = stringValue(block.data)
+    if (sourceMediaType === null || base64Data === null || !sourceMediaType.startsWith('image/')) continue
+    media.push({
+      type: 'media',
+      mediaType: 'image',
+      sourceKind: 'base64',
+      fileId: null,
+      sourceUrl: null,
+      sourceMediaType,
+      base64Data,
+      originToolCallId,
+      toolOutputIndex
+    })
+  }
+  return media
+}
+
+function mediaFromDataUrl(
+  value: string | null,
+  originToolCallId: string,
+  toolOutputIndex: number
+): Extract<TranscriptPart, { type: 'media' }> | null {
+  if (value === null) return null
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=_-]+)$/i.exec(value)
+  if (match === null) return null
+  return {
+    type: 'media',
+    mediaType: 'image',
+    sourceKind: 'base64',
+    fileId: null,
+    sourceUrl: null,
+    sourceMediaType: match[1]!,
+    base64Data: match[2]!,
+    originToolCallId,
+    toolOutputIndex
+  }
+}
+
+function appendToolOutputMedia(content: TranscriptPart[], media: TranscriptPart[]): void {
+  for (const part of media) {
+    if (part.type !== 'media') continue
+    const duplicate = content.some((candidate) => candidate.type === 'media' &&
+      candidate.originToolCallId === part.originToolCallId &&
+      candidate.toolOutputIndex === part.toolOutputIndex)
+    if (!duplicate) content.push(part)
   }
 }
 
@@ -1125,10 +1203,27 @@ function reconcileToolMessages(messages: TranscriptMessage[]): void {
       }
     }
   }
-  if (removed.size === 0) return
-  for (const message of messages) message.content = message.content.filter((part) => !removed.has(part))
+  if (removed.size > 0) {
+    for (const message of messages) message.content = message.content.filter((part) => !removed.has(part))
+  }
+  deduplicateToolOutputMedia(messages)
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index]?.role === 'tool' && messages[index]?.content.length === 0) messages.splice(index, 1)
+  }
+}
+
+function deduplicateToolOutputMedia(messages: TranscriptMessage[]): void {
+  const seen = new Set<string>()
+  for (const message of messages) {
+    message.content = message.content.filter((part) => {
+      if (part.type !== 'media' || part.originToolCallId === undefined || part.toolOutputIndex === undefined) {
+        return true
+      }
+      const key = `${part.originToolCallId}\u0000${part.toolOutputIndex}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   }
 }
 

@@ -194,7 +194,7 @@ select:focus-visible {
 
 .context-meter {
   min-height: 31px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.78);
@@ -410,6 +410,12 @@ select:focus-visible {
   gap: 9px;
 }
 
+.context-compact-control {
+  position: relative;
+  display: grid;
+  align-self: stretch;
+}
+
 .context-compact-button {
   flex: none;
   width: 32px;
@@ -429,6 +435,31 @@ select:focus-visible {
 
 .context-compact-button:hover { background: var(--blue-soft); }
 .context-compact-button:disabled { opacity: 0.45; cursor: default; }
+
+.context-compact-tooltip {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 7px);
+  right: 0;
+  width: max-content;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: #ffffff;
+  background: rgba(31, 41, 55, 0.94);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.16);
+  font-size: 11px;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.context-compact-button:hover + .context-compact-tooltip,
+.context-compact-button:focus-visible + .context-compact-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 .context-action-row {
   display: flex;

@@ -253,6 +253,62 @@ describe('TranscriptProjector', () => {
     expect(rendered).not.toContain('QUJDREVGRw==')
   })
 
+  it('projects CLI tool-result screenshots as visible transcript media', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+    projector.project(frame('event.message.created', {
+      message: {
+        id: 'tool-result-screenshot',
+        session_id: 'session-1',
+        role: 'tool',
+        content: [{
+          type: 'tool_result',
+          tool_call_id: 'tool-screenshot',
+          output: [
+            { type: 'text', text: 'Screenshot captured' },
+            { type: 'image_url', imageUrl: { url: 'data:image/png;base64,QUJDREVGRw==' } }
+          ]
+        }],
+        created_at: '2026-07-23T00:02:00.000Z'
+      }
+    }))
+
+    expect(projector.getProjection('session-1').messages
+      .find((message) => message.id === 'tool-result-screenshot')?.content).toContainEqual({
+      type: 'media',
+      mediaType: 'image',
+      sourceKind: 'base64',
+      fileId: null,
+      sourceUrl: null,
+      sourceMediaType: 'image/png',
+      base64Data: 'QUJDREVGRw==',
+      originToolCallId: 'tool-screenshot',
+      toolOutputIndex: 1
+    })
+  })
+
+  it('shows a tool-result screenshot from the live result event without waiting for durable history', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+
+    projector.project(frame('tool.result', {
+      turnId: 2,
+      toolCallId: 'tool-1',
+      output: [{ type: 'image_url', imageUrl: { url: 'data:image/jpeg;base64,QUJD' } }],
+      isError: false
+    }))
+
+    expect(projector.getProjection('session-1').messages
+      .flatMap((message) => message.content)).toContainEqual(expect.objectContaining({
+      type: 'media',
+      mediaType: 'image',
+      sourceMediaType: 'image/jpeg',
+      base64Data: 'QUJD',
+      originToolCallId: 'tool-1',
+      toolOutputIndex: 0
+    }))
+  })
+
   it('projects durable assistant deltas by message content index', () => {
     const projector = new TranscriptProjector()
     projector.seedSnapshot('session-1', snapshot())

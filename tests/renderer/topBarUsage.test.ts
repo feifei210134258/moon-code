@@ -97,7 +97,9 @@ describe('TopBar usage', () => {
     })
 
     const compactButton = wrapper.get('[aria-label="压缩当前会话上下文"]')
-    expect(compactButton.element.parentElement?.classList).toContain('context-meter')
+    expect(compactButton.element.closest('.context-meter')).not.toBeNull()
+    expect(compactButton.attributes('title')).toBe('压缩上下文')
+    expect(wrapper.get('[role="tooltip"]').text()).toBe('压缩上下文')
     expect(wrapper.find('.context-popover .context-compact-button').exists()).toBe(false)
     await compactButton.trigger('click')
     expect(wrapper.emitted('compact')).toEqual([[]])

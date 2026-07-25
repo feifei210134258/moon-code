@@ -153,17 +153,21 @@ function resetHintLabel(hint: string): string {
           <strong>{{ percent(contextRatio) }}</strong>
           <span class="usage-track"><span :style="{ width: percent(contextRatio) }" /></span>
         </button>
-        <button
-          class="context-compact-button"
-          type="button"
-          aria-label="压缩当前会话上下文"
-          title="压缩当前会话上下文"
-          :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null"
-          @click="emit('compact')"
-        >
-          <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="14" />
-          <PhArrowsInLineVertical v-else :size="15" />
-        </button>
+        <span class="context-compact-control">
+          <button
+            class="context-compact-button"
+            type="button"
+            aria-label="压缩当前会话上下文"
+            aria-describedby="context-compact-tooltip"
+            title="压缩上下文"
+            :disabled="sessionReady !== true || promptRunning === true || conversationActionPending != null"
+            @click="emit('compact')"
+          >
+            <PhSpinnerGap v-if="conversationActionPending === 'compact'" class="spin" :size="14" />
+            <PhArrowsInLineVertical v-else :size="15" />
+          </button>
+          <span id="context-compact-tooltip" class="context-compact-tooltip" role="tooltip">压缩上下文</span>
+        </span>
       </div>
       <button class="usage-pill plan-usage" :class="usageTone(tightestWindow?.ratio ?? null)" type="button" aria-label="查看 Kimi 套餐用量" aria-controls="usage-popover" :aria-expanded="usageOpen" @click="$emit('toggleUsage')">
         <span>套餐</span>
