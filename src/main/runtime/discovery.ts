@@ -1,4 +1,7 @@
 import { execFile } from 'node:child_process'
+import { access, constants } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { createRequire } from 'node:module'
 import type { RuntimeCandidate, RuntimeDiscovery } from '../../shared/contracts.js'
@@ -12,13 +15,42 @@ import {
 const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 
+export function systemKimiFallbackPaths(
+  homeDirectory = homedir(),
+  platform = process.platform
+): string[] {
+  if (platform !== 'darwin') return []
+  return [join(homeDirectory, '.kimi-code', 'bin', 'kimi')]
+}
+
+export async function selectSystemKimiExecutable(
+  pathExecutable: string | null,
+  fallbackPaths: readonly string[],
+  isExecutable: (path: string) => Promise<boolean> = isExecutableFile
+): Promise<string | null> {
+  if (pathExecutable !== null) return pathExecutable
+  for (const path of fallbackPaths) {
+    if (await isExecutable(path)) return path
+  }
+  return null
+}
+
 async function locateSystemKimi(): Promise<string | null> {
   const locator = process.platform === 'win32' ? 'where' : 'which'
+  let pathExecutable: string | null = null
   try {
     const { stdout } = await execFileAsync(locator, ['kimi'], { timeout: 3_000 })
-    return stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? null
+    pathExecutable = stdout.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? null
+  } catch {}
+  return selectSystemKimiExecutable(pathExecutable, systemKimiFallbackPaths())
+}
+
+async function isExecutableFile(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.X_OK)
+    return true
   } catch {
-    return null
+    return false
   }
 }
 
