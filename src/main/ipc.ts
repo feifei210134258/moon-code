@@ -858,6 +858,11 @@ export function registerIpc(
       return await browser.setVisible(visible)
     }
   )
+  ipcMain.handle(ipcChannels.browserSetOverlay, (event, open?: unknown): void => {
+    assertTrustedSender(event)
+    if (typeof open !== 'boolean') throw new TypeError('Invalid browser overlay state')
+    browser.setOverlayOpen(open)
+  })
   ipcMain.handle(
     ipcChannels.browserSetWorkspace,
     async (event, scope?: unknown): Promise<BrowserViewState> => {

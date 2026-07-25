@@ -109,6 +109,7 @@ const api: KimiAgentDesktopApi = {
   browserStop: () => ipcRenderer.invoke(ipcChannels.browserStop),
   setBrowserBounds: (bounds) => ipcRenderer.invoke(ipcChannels.browserSetBounds, bounds),
   setBrowserVisible: (visible) => ipcRenderer.invoke(ipcChannels.browserSetVisible, visible),
+  setBrowserOverlay: (open) => ipcRenderer.invoke(ipcChannels.browserSetOverlay, open),
   setBrowserWorkspace: (scope) => ipcRenderer.invoke(ipcChannels.browserSetWorkspace, scope),
   setBrowserViewport: (viewport) => ipcRenderer.invoke(ipcChannels.browserSetViewport, viewport),
   clearBrowserConsole: () => ipcRenderer.invoke(ipcChannels.browserClearConsole),

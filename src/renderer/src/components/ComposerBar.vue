@@ -57,10 +57,8 @@ const mentionLoading = ref(false)
 const mentionItems = ref<WorkspaceFileSearchItem[]>([])
 const mentionActiveIndex = ref(0)
 const input = ref<HTMLTextAreaElement | null>(null)
-const composerHeight = ref(96)
 let mentionTimer: ReturnType<typeof setTimeout> | null = null
 let mentionGeneration = 0
-let stopInputResize: (() => void) | null = null
 const selectedModel = computed(() => props.models.find((model) => model.id === props.controls?.model) ?? null)
 const thinkingOptions = computed(() => {
   const efforts = selectedModel.value?.supportEfforts ?? []
@@ -143,49 +141,7 @@ function toggleCommands(): void {
   }
 }
 
-function maxComposerHeight(): number {
-  return Math.max(96, Math.floor(window.innerHeight * 0.5))
-}
-
-function resizeTextareaToContent(): void {
-  void nextTick(() => {
-    const textarea = input.value
-    if (textarea === null) return
-    textarea.style.height = '0px'
-    composerHeight.value = Math.min(maxComposerHeight(), Math.max(96, textarea.scrollHeight))
-  })
-}
-
-function startInputResize(event: PointerEvent): void {
-  if (event.button !== 0) return
-  const textarea = input.value
-  if (textarea === null) return
-  event.preventDefault()
-  const startY = event.clientY
-  const startHeight = textarea.getBoundingClientRect().height
-  const onMove = (moveEvent: PointerEvent): void => {
-    composerHeight.value = Math.round(Math.min(maxComposerHeight(), Math.max(96, startHeight + moveEvent.clientY - startY)))
-  }
-  const onUp = (): void => {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    stopInputResize = null
-  }
-  stopInputResize?.()
-  stopInputResize = onUp
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-}
-
-function onResizeKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
-  event.preventDefault()
-  const delta = event.key === 'ArrowUp' ? 24 : -24
-  composerHeight.value = Math.round(Math.min(maxComposerHeight(), Math.max(96, composerHeight.value + delta)))
-}
-
 function onComposerInput(): void {
-  resizeTextareaToContent()
   if (slashQuery.value !== null && props.disabled !== true) {
     commandOpen.value = true
     optionsOpen.value = false
@@ -210,7 +166,6 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   optionsOpen.value = false
   closeMention()
   await nextTick()
-  resizeTextareaToContent()
   input.value?.focus()
 }
 
@@ -352,7 +307,6 @@ function selectMention(item: WorkspaceFileSearchItem): void {
     const caret = token.start + item.path.length
     input.value?.setSelectionRange(caret, caret)
     input.value?.focus()
-    resizeTextareaToContent()
   })
 }
 
@@ -422,14 +376,10 @@ function onWindowKeydown(event: KeyboardEvent): void {
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeydown)
-  window.addEventListener('resize', resizeTextareaToContent)
-  resizeTextareaToContent()
 })
 onBeforeUnmount(() => {
   closeMention()
-  stopInputResize?.()
   window.removeEventListener('keydown', onWindowKeydown)
-  window.removeEventListener('resize', resizeTextareaToContent)
 })
 </script>
 
@@ -446,7 +396,6 @@ onBeforeUnmount(() => {
     </div>
     <div v-if="attachmentError" class="composer-attachment-error" role="alert">{{ attachmentError }}</div>
     <div class="composer-input-area">
-      <slot name="session-actions" />
       <textarea
         ref="input"
         v-model="value"
@@ -455,19 +404,9 @@ onBeforeUnmount(() => {
         :disabled="disabled"
         aria-label="输入任务"
         aria-autocomplete="list"
-        :style="{ height: `${composerHeight}px` }"
         @keydown="onKeydown"
         @input="onComposerInput"
         @paste="onPaste"
-      />
-      <div
-        class="composer-resize-handle"
-        role="separator"
-        aria-label="调整输入框高度"
-        aria-orientation="horizontal"
-        tabindex="0"
-        @pointerdown="startInputResize"
-        @keydown="onResizeKeydown"
       />
     </div>
     <div v-if="goalMode" class="goal-mode-banner"><strong>目标</strong><span>下一条消息会创建持续目标并立即开始执行</span></div>
@@ -492,10 +431,12 @@ onBeforeUnmount(() => {
         <button type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="disabled" @click="emit('toggleTerminal')">
           <PhTerminalWindow :size="19" />
         </button>
+        <slot name="session-actions" />
       </div>
       <div class="composer-settings">
         <button class="model-summary" type="button" :disabled="disabled" @click="optionsOpen = !optionsOpen; commandOpen = false; closeMention()">
           <span>{{ selectedModel?.displayName ?? controls?.model ?? (controlsPending ? '读取模型…' : '未配置模型') }}</span>
+          <span v-if="controls?.thinking" class="model-effort-chip">{{ thinkingLabel(controls.thinking) }}</span>
           <PhCaretDown :size="12" />
         </button>
         <button

@@ -86,6 +86,7 @@ export const ipcChannels = {
   browserStop: 'browser:stop',
   browserSetBounds: 'browser:set-bounds',
   browserSetVisible: 'browser:set-visible',
+  browserSetOverlay: 'browser:set-overlay',
   browserSetWorkspace: 'browser:set-workspace',
   browserSetViewport: 'browser:set-viewport',
   browserClearConsole: 'browser:clear-console',
@@ -1092,6 +1093,7 @@ export interface KimiAgentDesktopApi {
   browserStop(): Promise<BrowserViewState>
   setBrowserBounds(bounds: BrowserBounds): Promise<void>
   setBrowserVisible(visible: boolean): Promise<BrowserViewState>
+  setBrowserOverlay(open: boolean): Promise<void>
   setBrowserWorkspace(scope: string | null): Promise<BrowserViewState>
   setBrowserViewport(viewport: BrowserViewport): Promise<BrowserViewState>
   clearBrowserConsole(): Promise<BrowserViewState>

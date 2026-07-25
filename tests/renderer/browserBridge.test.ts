@@ -29,6 +29,7 @@ describe('useBrowserBridge', () => {
       setBrowserVisible: vi.fn(async (visible: boolean) => ({ ...state, visible })),
       setBrowserWorkspace: vi.fn(async () => ({ ...state, url: '', networkEntries: [] })),
       setBrowserBounds: vi.fn(async () => undefined),
+      setBrowserOverlay: vi.fn(async () => undefined),
       discoverBrowserLocalServers: vi.fn(async () => ['http://localhost:5173/']),
       pickBrowserAnnotation: vi.fn(async () => ({
         id: 'draft-1',
@@ -65,6 +66,8 @@ describe('useBrowserBridge', () => {
     expect(bridge.state.value.title).toBe('Preview')
     await bridge.setBounds({ x: 1000, y: 100, width: 400, height: 500 })
     expect(api.setBrowserBounds).toHaveBeenCalledWith({ x: 1000, y: 100, width: 400, height: 500 })
+    await bridge.setOverlay(true)
+    expect(api.setBrowserOverlay).toHaveBeenCalledWith(true)
     await bridge.setVisible(true)
     await flushPromises()
     expect(api.discoverBrowserLocalServers).toHaveBeenCalledOnce()

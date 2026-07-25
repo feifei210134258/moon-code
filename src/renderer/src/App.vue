@@ -701,6 +701,7 @@ onBeforeUnmount(() => {
           @browser-pick-annotation="browserBridge.pickAnnotation"
           @browser-delete-annotation="browserBridge.deleteAnnotation"
           @browser-submit-annotation="submitBrowserAnnotation"
+          @browser-overlay="browserBridge.setOverlay"
           @cancel-task="cancelTask"
           @collapse="store.rightPanelOpen = false"
         />

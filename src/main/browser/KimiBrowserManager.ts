@@ -75,6 +75,9 @@ export class KimiBrowserManager extends EventEmitter {
   #guestGeneration = 0
   #attachedWindow: BrowserWindow | null = null
   #bounds: BrowserBounds | null = null
+  /* 渲染端弹层（批注编辑/截图预览）打开时置 true：原生 WebContentsView 会盖住 DOM，
+     需暂时把 guest 从窗口摘下来，弹层关闭后再挂回。页面本身不销毁。 */
+  #overlayOpen = false
   #emitTimer: NodeJS.Timeout | null = null
   #operation: Promise<void> = Promise.resolve()
   #closing = false
@@ -158,6 +161,13 @@ export class KimiBrowserManager extends EventEmitter {
     void this.#applyViewport()
   }
 
+  setOverlayOpen(open: boolean): void {
+    if (this.#overlayOpen === open) return
+    this.#overlayOpen = open
+    if (open) this.#detach()
+    else this.#attachIfNeeded()
+  }
+
   async setVisible(visible: boolean): Promise<BrowserViewState> {
     return await this.#serialize(async () => {
       this.#state.visible = visible
@@ -196,6 +206,7 @@ export class KimiBrowserManager extends EventEmitter {
   destroyGuest(): void {
     this.#guestGeneration += 1
     this.#state.visible = false
+    this.#overlayOpen = false
     this.#annotationDrafts.clear()
     this.#destroyView()
     this.#resetPageState()
@@ -736,7 +747,7 @@ export class KimiBrowserManager extends EventEmitter {
   }
 
   #attachIfNeeded(): void {
-    if (!this.#state.visible || this.#view === null || this.#bounds === null) return
+    if (this.#overlayOpen || !this.#state.visible || this.#view === null || this.#bounds === null) return
     const window = this.#getMainWindow()
     if (window === null || window.isDestroyed()) return
     if (this.#attachedWindow !== null && this.#attachedWindow !== window) this.#detach()

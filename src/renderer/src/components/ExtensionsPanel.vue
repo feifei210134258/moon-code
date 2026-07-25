@@ -119,6 +119,7 @@ const emit = defineEmits<{
   browserPickAnnotation: [mode: BrowserAnnotationMode]
   browserDeleteAnnotation: [draftId: string]
   browserSubmitAnnotation: [input: BrowserAnnotationSubmitInput]
+  browserOverlay: [open: boolean]
   cancelTask: [taskId: string]
 }>()
 
@@ -477,6 +478,7 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       @pick-annotation="emit('browserPickAnnotation', $event)"
       @delete-annotation="emit('browserDeleteAnnotation', $event)"
       @submit-annotation="emit('browserSubmitAnnotation', $event)"
+      @overlay="emit('browserOverlay', $event)"
     />
   </aside>
 </template>

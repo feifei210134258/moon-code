@@ -10,6 +10,7 @@ import {
   PhMagnifyingGlass,
   PhNotePencil,
   PhPencilSimple,
+  PhPlus,
   PhTrash,
   PhX
 } from '@phosphor-icons/vue'
@@ -193,6 +194,9 @@ onBeforeUnmount(() => {
           <div class="tree-action-area project-action-area">
             <button class="tree-more-button" type="button" :aria-label="`${project.name} 项目操作`" @click.stop="toggleMenu(`workspace:${project.id}`, $event)">
               <PhDotsThree :size="17" weight="bold" />
+            </button>
+            <button class="tree-more-button" type="button" :aria-label="`${project.name} 新建任务`" title="新建任务" @click.stop="emit('createSession', project.id)">
+              <PhPlus :size="16" weight="bold" />
             </button>
           </div>
         </div>

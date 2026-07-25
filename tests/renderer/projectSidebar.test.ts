@@ -91,6 +91,13 @@ describe('ProjectSidebar', () => {
     wrapper.unmount()
   })
 
+  it('exposes a per-project new-task button next to the project menu', async () => {
+    const wrapper = mountSidebar()
+    await wrapper.get('[aria-label="Website 新建任务"]').trigger('click')
+    expect(wrapper.emitted('createSession')).toEqual([['workspace-b']])
+    wrapper.unmount()
+  })
+
   it('loads older sessions and exposes child-session discovery', async () => {
     const wrapper = mount(ProjectSidebar, {
       props: {

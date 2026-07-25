@@ -193,3 +193,24 @@ final result: passed
 
 - `pnpm typecheck` 通过。
 - `pnpm test`：307 passed / 2 skipped / 0 failed（新增 3 用例：图片粘贴 ×2、回合聚合 ×1；更新 2 用例：trailing thinking、usage pill）。
+
+---
+
+# Round 5: Composer Rework / Sidebar New-task / Usage Bars / Browser Overlay / Plan Card (fix/ui-polish-issues)
+
+## 本轮改动
+
+1. **Composer 重做**：
+   - 高度自适应改为纯 CSS `field-sizing: content`（`min-height:96px; max-height:50dvh`），删除上一版全部 JS 高度管理（`composerHeight` ref、`resizeTextareaToContent`、`startInputResize`、window resize 监听）与右下角/顶边拖拽手柄——用户反馈 JS 方案真实键入路径下不生效且拖拽功能不再需要。独立 HTML 环境实测：空 96px → 10 行 208px → 60 行封顶 300px（等比 50dvh）。
+   - "目录 / BTW / 会话操作"三个按钮从 textarea 右上角悬浮位移到底部工具行（`.composer-primary-tools` 末尾，带左侧细分隔线），消除内容多时的重叠 bug；`.conversation-toc` 弹层定位祖先改为 `position:relative` 的静态容器，仍向上弹出。
+   - 模型按钮右侧新增思维强度 chip（`model-effort-chip`，蓝底胶囊，显示 低/中/高 等）。
+2. **项目行"新建任务"外置**：`.project-action-area` 在"三个点"右侧新增 PhPlus 按钮（hover 才显示，与三个点同机制；容器改 `grid-auto-flow:column` 避免竖排），点击 emit `createSession(project.id)`。测试 `projectSidebar.test.ts` 新增用例。
+3. **套餐弹窗进度条**：每条限额行新增全宽 `.usage-detail-track`（行容器改 `flex-wrap:wrap`），绿色系区别于上下文弹窗的蓝条；`usageTone` 达 warning/critical 阈值时转琥珀/红。胶囊按钮保留英文 resetHint 不动。
+4. **右侧栏浏览器三功能修复（核心）**：排查结论——批注/窗口截图/框选链路全部已实现，用户感知"没实现"的根因是**原生 WebContentsView 永远合成在 DOM 之上**，批注编辑弹层/截图预览/"N 条批注"按钮虽创建成功却被浏览器画面完全盖住。修复：新增 overlay 机制——渲染端 `BrowserPanel` 计算 `overlayOpen`（有批注草稿或截图预览打开、且非选择中）→ emit `overlay` → 新 IPC `browser:set-overlay` → 主进程 `KimiBrowserManager.setOverlayOpen()` 暂时把 guest 从窗口摘下（`#detach`，页面不销毁），弹层关闭后 `#attachIfNeeded` 挂回；guest 隐藏期间 surface 显示"页面已暂时隐藏"提示。附带修框选拖到 webview 外松开卡 dragging 的 bug（`mousemove` 检测 `buttons===0` 复位）。测试 `browserPanel.test.ts`（overlay emit ×2）+ `browserBridge.test.ts`（setOverlay 路由）。
+5. **计划卡片改版**（纯 CSS）：条目字号 10px→11.5px 并允许折行（原 nowrap 截断）；状态文字改彩色小 chip（完成绿/进行中蓝/待办灰）；右上"4/4"大数字改小号灰底胶囊；行间距加大。
+
+## 验证
+
+- `pnpm typecheck` 通过；`pnpm test`：320 passed / 2 skipped / 0 failed（更新 `composerSkills.test.ts` 高度断言为"无内联高度+无拖拽手柄"）。
+- 截图：`r5-composer.png`（按钮已在底行）、`r5-project-row.png`（新建任务外置）、`r5-usage-popover.png`（绿/琥珀进度条）、`r5-plan-card.png`（新样式）。fixture 无套餐/todo 数据，两者用静态 DOM 注入验证 CSS；组件 wiring 由单测覆盖。
+- 备注：fixture 下 composer 禁用且 controls 为 null，思维强度 chip 与真实键入拉高需在真实会话复核；浏览器 overlay 的遮挡解除效果涉及原生视图，dev 环境无法截图验证，依赖代码路径与单测。

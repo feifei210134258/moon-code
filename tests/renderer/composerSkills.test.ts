@@ -68,15 +68,15 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.get('.command-popover').text()).toContain('没有匹配的技能')
   })
 
-  it('grows with entered text and closes composer popovers with Escape', async () => {
+  it('leaves height to CSS field-sizing (no inline style, no drag handle) and closes composer popovers with Escape', async () => {
     const wrapper = mount(ComposerBar, {
       props: { models, controls, skills: [{ name: 'review', description: 'Review', source: 'project', type: null, userInvocableOnly: false }] }
     })
     const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
-    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 196 })
     await wrapper.get('textarea').setValue('/rev')
     await wrapper.vm.$nextTick()
-    expect(textarea.style.height).toBe('196px')
+    expect(textarea.style.height).toBe('')
+    expect(wrapper.find('.composer-resize-handle').exists()).toBe(false)
     expect(wrapper.find('.command-popover').exists()).toBe(true)
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await wrapper.vm.$nextTick()

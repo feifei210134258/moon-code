@@ -315,6 +315,27 @@ select:focus-visible {
 
 .usage-detail-row {
   min-height: 42px;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+}
+
+/* 套餐进度条用绿色系，与上下文弹窗的蓝色条区分；偏紧时按 tone 转琥珀/红。 */
+.usage-detail-track {
+  flex-basis: 100%;
+  width: 100%;
+  height: 6px;
+}
+
+.usage-detail-track > span {
+  background: var(--green);
+}
+
+.usage-detail-row.is-warning .usage-detail-track > span {
+  background: var(--amber);
+}
+
+.usage-detail-row.is-critical .usage-detail-track > span {
+  background: var(--red);
 }
 
 .usage-detail-row strong,
@@ -659,6 +680,8 @@ select:focus-visible {
   right: 4px;
   z-index: 3;
   display: none;
+  grid-auto-flow: column;
+  gap: 1px;
   transform: translateY(-50%);
 }
 
@@ -868,13 +891,13 @@ select:focus-visible {
 }
 
 .composer-session-actions {
-  position: absolute;
-  z-index: 24;
-  top: 6px;
-  right: 5px;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 3px;
+  margin-left: 2px;
+  padding-left: 7px;
+  border-left: 1px solid var(--border);
 }
 
 .conversation-tool-button {
@@ -976,14 +999,13 @@ select:focus-visible {
 .conversation-toc small { color: var(--faint); font-size: 9px; }
 
 @media (max-width: 640px) {
-  .composer-session-actions { gap: 1px; }
+  .composer-session-actions { gap: 1px; padding-left: 4px; }
   .composer-session-actions .conversation-tool-button {
     width: 27px;
     justify-content: center;
     padding: 0;
   }
   .composer-session-actions .conversation-tool-button > span { display: none; }
-  .composer-wrap textarea { padding-right: 100px; }
 }
 
 .conversation-action-error {
@@ -2640,10 +2662,10 @@ select:focus-visible {
 .composer-wrap textarea {
   display: block;
   width: 100%;
+  field-sizing: content;
   min-height: 96px;
-  height: 96px;
   max-height: 50dvh;
-  padding: 4px 168px 1px 4px;
+  padding: 4px 6px 1px 4px;
   resize: none;
   border: 0;
   outline: 0;
@@ -2694,38 +2716,6 @@ select:focus-visible {
   justify-content: space-between;
   align-items: center;
   margin-top: 3px;
-}
-
-.composer-resize-handle {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 17px;
-  height: 17px;
-  border-radius: 5px;
-  cursor: ns-resize;
-  touch-action: none;
-}
-
-.composer-resize-handle::before {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  width: 9px;
-  height: 9px;
-  content: '';
-  background: repeating-linear-gradient(
-    135deg,
-    transparent 0 2px,
-    rgba(92, 108, 128, 0.68) 2px 3px,
-    transparent 3px 5px
-  );
-}
-
-.composer-resize-handle:hover,
-.composer-resize-handle:focus-visible {
-  background: rgba(37, 99, 235, 0.09);
-  outline: none;
 }
 
 .composer-primary-tools,
@@ -2781,6 +2771,17 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.model-summary .model-effort-chip {
+  flex: none;
+  max-width: none;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: var(--blue);
+  background: var(--blue-soft);
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .queue-hint {
@@ -3443,6 +3444,15 @@ select:focus-visible {
   justify-content: space-between;
 }
 
+.todo-panel header > span {
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(15, 23, 42, 0.05);
+  font-size: 10px;
+  font-weight: 620;
+}
+
 .todo-panel ol,
 .plan-panel ol {
   display: grid;
@@ -3468,19 +3478,24 @@ select:focus-visible {
 
 .todo-panel li {
   grid-template-columns: 8px minmax(0, 1fr) auto;
-  gap: 7px;
+  gap: 8px;
+  padding: 3px 2px;
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
 .todo-panel li > span:nth-child(2) {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .todo-panel li em {
+  padding: 1px 6px;
+  border-radius: 999px;
   color: var(--muted);
-  font-size: 8.5px;
+  background: rgba(15, 23, 42, 0.045);
+  font-size: 9px;
   font-style: normal;
+  white-space: nowrap;
 }
 
 .todo-status-dot {
@@ -3500,6 +3515,9 @@ select:focus-visible {
   border-color: var(--green);
   background: var(--green);
 }
+
+.todo-panel li.is-in_progress em { color: #3b6fd4; background: rgba(59, 111, 212, 0.09); }
+.todo-panel li.is-done em { color: var(--green); background: var(--green-soft); }
 
 .todo-panel li.is-done > span:nth-child(2) { color: var(--muted); text-decoration: line-through; }
 

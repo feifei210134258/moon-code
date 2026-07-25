@@ -45,6 +45,7 @@ const emit = defineEmits<{
   pickAnnotation: [mode: BrowserAnnotationMode]
   deleteAnnotation: [draftId: string]
   submitAnnotation: [input: BrowserAnnotationSubmitInput]
+  overlay: [open: boolean]
 }>()
 
 const surface = ref<HTMLElement | null>(null)
@@ -59,6 +60,13 @@ let observer: ResizeObserver | null = null
 
 const visibleError = computed(() => props.error ?? props.state.error)
 const activeAnnotation = computed(() => props.annotationDrafts.at(-1) ?? null)
+/* 原生 guest 视图永远盖在 DOM 之上：批注草稿存在或截图预览打开时，
+   让主进程暂时摘下 guest，弹层才能看得见、点得到。选择（pick）期间不能摘，
+   否则用户无法在页面上点选元素/拖框。 */
+const overlayOpen = computed(() =>
+  !props.annotationPicking &&
+  (props.annotationDrafts.length > 0 || (props.capture !== null && captureOpen.value))
+)
 const annotationPopoverStyle = computed<CSSProperties>(() => {
   const annotation = activeAnnotation.value
   const { width: surfaceWidth, height: surfaceHeight } = surfaceSize.value
@@ -87,6 +95,8 @@ watch(() => props.state.viewport, (viewport) => {
 }, { immediate: true })
 
 watch(() => props.capture, (capture) => { if (capture !== null) captureOpen.value = true }, { immediate: true })
+
+watch(overlayOpen, (open) => emit('overlay', open), { immediate: true })
 
 watch(() => props.annotationDrafts, (drafts) => {
   const ids = new Set(drafts.map((draft) => draft.id))
@@ -183,6 +193,7 @@ onBeforeUnmount(() => {
   observer?.disconnect()
   window.removeEventListener('resize', reportBounds)
   window.removeEventListener('keydown', onWindowKeydown)
+  if (overlayOpen.value) emit('overlay', false)
 })
 </script>
 
@@ -225,6 +236,11 @@ onBeforeUnmount(() => {
           <PhGlobe :size="34" weight="duotone" />
           <strong>从项目文件打开 HTML 预览</strong>
           <span>预览会通过 Workspace 隔离的本地服务加载。</span>
+        </div>
+        <div v-else-if="overlayOpen" class="browser-empty">
+          <PhChatTeardropText :size="30" weight="duotone" />
+          <strong>页面已暂时隐藏</strong>
+          <span>完成批注编辑或关闭截图预览后恢复显示。</span>
         </div>
         <div v-if="state.loading" class="browser-loading"><PhSpinnerGap class="spin" :size="17" /></div>
       </div>
