@@ -126,3 +126,34 @@ No additional crop was required: both source and implementation were opened toge
 - 本轮内置浏览器交互后控制台 0 warning、0 error。
 
 final result: passed
+
+---
+
+# Design Color Re-alignment (feat/design-color-alignment)
+
+- Source visual truth: `docs/assets/main-workspace-visual-baseline.png`（即需求中提供的设计图）.
+- Implementation: `http://127.0.0.1:5173/` (Vite renderer preview), viewport `1487 × 1058`.
+- 采集脚本： `node artifacts/design-qa/shots.mjs <prefix>`（Playwright 无头截取主界面与各 fixture 状态）。
+- Before: `artifacts/design-qa/baseline-before.png`; After: `main-workspace-after.png` 及 `*-after.png` 状态图。
+
+## 本轮改动范围
+
+仅颜色/背景/聚焦态；三栏排版、栅格、字号与功能一律未动。
+
+- 全局 token：窗口底色改为 `#f6f9fc` 珍珠白族；`--border/--border-strong` 由蓝灰 rgba 改为中性 `rgba(15, 23, 42, …)`；主蓝 `#2563eb → #3085fa`（对齐设计图发送按钮/进度条采样 `#3085fa`）；成功绿 `#16a36a → #43a047`（对齐设计图状态点 `#2fb031` 与计数 `#5ab159` 的色相）。
+- 表面材质：侧栏/右栏/顶栏/设置等由半透明玻璃改为近实心珍珠面；会话区 `#f7fafd`；Thinking/Tool 卡 `#f2f7fb`；Changed Files、Diff、计划、Composer、Popover、交互卡统一白底 + 中性 1px 边。像素采样对齐：sidebar `(246,249,252)`、chat `(247,250,253)`、topbar `(248,250,253)` 与设计图完全一致。
+- 选中态：项目/任务选中行由蓝灰改为珍珠蓝灰 `#eaf1f8/#e7eef7`；Hover 统一 `rgba(15, 23, 42, 0.045)`。
+- 修复：补齐未定义即被引用的 `--ink/--ink-soft/--ink-faint/--mono` 变量（此前 `var(--ink)` 等声明在计算值阶段失效、仅靠继承兜底）。
+- 输入框聚焦：新增统一 `--input-focus-border` 与 `--focus-ring`；Composer 容器 `:focus-within` 蓝色描边 + 光晕（并移除内部 textarea 的重复聚焦环）；会话搜索、树内联重命名、Runtime 连接、偏好设置数字/下拉、Provider 表单、Composer 设置浮层 select、Question Other 输入、浏览器批注输入、侧栏聊天输入等全部补齐/统一聚焦样式；新增全局 `::selection` 选区色。
+- 侧栏 BTW 发送按钮由灰蓝 `#5378b7` 统一为主蓝。
+
+## 保留项（刻意不动）
+
+- 用户消息仍为右对齐浅蓝气泡（设计图为左对齐纯文本，但属排版结构差异，按要求保持现状）。
+- Pet 桌宠与 xterm ANSI 配色不参与本轮对齐（视觉基线第 10 节明确桌宠不在主工作台验收范围）。
+- Changed Files 行首仍用线性文件图标，未替换为设计图的彩色扩展名徽标（涉及模板结构，非颜色范畴）。
+
+## 验证
+
+- `vue-tsc -p tsconfig.web.json` 通过（渲染层零 TS 错误）。
+- `pnpm test`：302 passed / 1 failed；唯一失败 `tests/runtime/externalRuntime.test.ts` 源自工作区并行改动的 `src/main/runtime/KimiRuntimeManager.ts`（`connectExternal` 引用未定义 `meta`），与本轮样式改动无关。
