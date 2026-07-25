@@ -58,10 +58,12 @@ function mountConversation() {
 }
 
 describe('Conversation controls', () => {
-  it('marks user turns for right-aligned bubble styling', () => {
+  it('keeps user identity and time above the right-aligned message bubble', () => {
     const wrapper = mountConversation()
     expect(wrapper.get('.turn').classes()).toContain('is-user')
     expect(wrapper.find('.turn.is-user .turn-content').exists()).toBe(true)
+    expect(wrapper.find('.turn.is-user .turn-header').element.parentElement?.className).toContain('turn-body')
+    expect(wrapper.find('.turn.is-user .turn-content .turn-header').exists()).toBe(false)
   })
 
   it('removes the top conversation bar and keeps its actions with the composer', () => {

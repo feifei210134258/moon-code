@@ -128,6 +128,7 @@ export function useRuntimeBridge() {
   let fileActionGeneration = 0
   let skillsGeneration = 0
   let controlsGeneration = 0
+  let runtimeStatusGeneration = 0
   let operationalGeneration = 0
   let warningsGeneration = 0
   let agentTranscriptGeneration = 0
@@ -1067,6 +1068,7 @@ export function useRuntimeBridge() {
   const loadSessionControls = async (sessionId: string): Promise<void> => {
     if (window.kimiAgent === undefined || sessionId !== requestedSessionId) return
     const generation = ++controlsGeneration
+    const statusGeneration = ++runtimeStatusGeneration
     sessionControlsPending.value = true
     sessionControlsError.value = null
     try {
@@ -1074,7 +1076,11 @@ export function useRuntimeBridge() {
         window.kimiAgent.getSessionRuntimeStatus(sessionId),
         window.kimiAgent.getKimiSettings()
       ])
-      if (generation !== controlsGeneration || sessionId !== requestedSessionId) return
+      if (
+        generation !== controlsGeneration ||
+        statusGeneration !== runtimeStatusGeneration ||
+        sessionId !== requestedSessionId
+      ) return
       const model = status.model ?? settings.preferences.defaultModel ?? settings.models[0]?.id ?? null
       if (model === null) throw new Error('Kimi 没有可用模型，请先在设置中配置 Provider 与默认模型')
       const descriptor = settings.models.find((item) => item.id === model)
@@ -1104,12 +1110,27 @@ export function useRuntimeBridge() {
     promptControls.value = { ...controls }
   }
 
+  const refreshSessionRuntimeStatus = async (sessionId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || sessionId !== requestedSessionId) return
+    const generation = ++runtimeStatusGeneration
+    try {
+      const status = await window.kimiAgent.getSessionRuntimeStatus(sessionId)
+      if (generation === runtimeStatusGeneration && sessionId === requestedSessionId) {
+        sessionRuntimeStatus.value = status
+      }
+    } catch {
+      // Context telemetry is supplemental. Keep the last confirmed value and
+      // avoid disrupting the composer when a transient status request fails.
+    }
+  }
+
   const setGoalMode = (enabled: boolean): void => {
     goalMode.value = enabled
   }
 
   const resetSessionControls = (): void => {
     controlsGeneration += 1
+    runtimeStatusGeneration += 1
     sessionRuntimeStatus.value = null
     sessionModels.value = []
     promptControls.value = null
@@ -1227,6 +1248,7 @@ export function useRuntimeBridge() {
     operationalTimer = window.setInterval(() => {
       if (runtime.value.status === 'running' && requestedSessionId !== null) {
         void refreshSessionOperational(requestedSessionId, true)
+        void refreshSessionRuntimeStatus(requestedSessionId)
       }
     }, 2_500)
   })

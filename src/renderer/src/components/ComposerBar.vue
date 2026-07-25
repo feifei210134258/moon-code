@@ -56,8 +56,10 @@ const mentionLoading = ref(false)
 const mentionItems = ref<WorkspaceFileSearchItem[]>([])
 const mentionActiveIndex = ref(0)
 const input = ref<HTMLTextAreaElement | null>(null)
+const composerHeight = ref(96)
 let mentionTimer: ReturnType<typeof setTimeout> | null = null
 let mentionGeneration = 0
+let stopInputResize: (() => void) | null = null
 const selectedModel = computed(() => props.models.find((model) => model.id === props.controls?.model) ?? null)
 const thinkingOptions = computed(() => {
   const efforts = selectedModel.value?.supportEfforts ?? []
@@ -138,6 +140,27 @@ function toggleCommands(): void {
     optionsOpen.value = false
     closeMention()
   }
+}
+
+function startInputResize(event: PointerEvent): void {
+  if (event.button !== 0) return
+  const textarea = input.value
+  if (textarea === null) return
+  event.preventDefault()
+  const startY = event.clientY
+  const startHeight = textarea.getBoundingClientRect().height
+  const onMove = (moveEvent: PointerEvent): void => {
+    composerHeight.value = Math.round(Math.min(360, Math.max(96, startHeight + moveEvent.clientY - startY)))
+  }
+  const onUp = (): void => {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    stopInputResize = null
+  }
+  stopInputResize?.()
+  stopInputResize = onUp
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
 }
 
 function onComposerInput(): void {
@@ -330,7 +353,10 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
-onBeforeUnmount(closeMention)
+onBeforeUnmount(() => {
+  closeMention()
+  stopInputResize?.()
+})
 </script>
 
 <template>
@@ -354,6 +380,7 @@ onBeforeUnmount(closeMention)
         :disabled="disabled"
         aria-label="输入任务"
         aria-autocomplete="list"
+        :style="{ height: `${composerHeight}px` }"
         @keydown="onKeydown"
         @input="onComposerInput"
       />
@@ -418,6 +445,14 @@ onBeforeUnmount(closeMention)
         </button>
       </div>
     </div>
+    <div
+      class="composer-resize-handle"
+      role="separator"
+      aria-label="调整输入框高度"
+      aria-orientation="horizontal"
+      tabindex="0"
+      @pointerdown="startInputResize"
+    />
 
     <div v-if="optionsOpen" class="composer-popover" aria-label="Kimi 会话控制">
       <label>

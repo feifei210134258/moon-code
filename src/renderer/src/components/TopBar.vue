@@ -83,6 +83,16 @@ function updatedLabel(value: string | null): string {
   if (seconds < 60) return `${seconds} 秒前更新`
   return `${Math.round(seconds / 60)} 分钟前更新`
 }
+
+function usageWindowLabel(label: string): string {
+  const normalized = label.trim().toLocaleLowerCase()
+  if (normalized === 'plan') return '套餐总量'
+  const hourWindow = /^(\d+)\s*h(?:\s*window)?$/.exec(normalized)
+  if (hourWindow !== null) return `${hourWindow[1]} 小时窗口`
+  const dayWindow = /^(\d+)\s*d(?:\s*window)?$/.exec(normalized)
+  if (dayWindow !== null) return `${dayWindow[1]} 天窗口`
+  return label
+}
 </script>
 
 <template>
@@ -116,8 +126,8 @@ function updatedLabel(value: string | null): string {
     </div>
 
     <div class="topbar-actions">
-      <button class="usage-pill" :class="usageTone(contextRatio)" type="button" aria-label="查看 Context 用量" aria-controls="context-popover" :aria-expanded="contextOpen" @click="$emit('toggleContext')">
-        <span>Context</span>
+      <button class="usage-pill" :class="usageTone(contextRatio)" type="button" aria-label="查看上下文窗口" aria-controls="context-popover" :aria-expanded="contextOpen" @click="$emit('toggleContext')">
+        <span>上下文</span>
         <strong>{{ percent(contextRatio) }}</strong>
         <span class="usage-track"><span :style="{ width: percent(contextRatio) }" /></span>
       </button>
@@ -130,24 +140,24 @@ function updatedLabel(value: string | null): string {
       <button class="icon-button" type="button" :aria-label="extensionsOpen ? '收起扩展栏' : '展开扩展栏'" @click="$emit('toggleExtensions')">
         <PhSidebarSimple :size="19" />
       </button>
-      <section v-if="contextOpen" id="context-popover" class="context-popover" aria-label="当前 Session Context 用量">
+      <section v-if="contextOpen" id="context-popover" class="context-popover" aria-label="当前会话上下文用量">
         <header class="usage-popover-header">
           <div>
-            <strong>Context 窗口</strong>
-            <span>当前 Session 的上下文占用</span>
+            <strong>上下文窗口</strong>
+            <span>当前会话的上下文占用</span>
           </div>
         </header>
         <div class="usage-section">
           <div class="usage-token-grid">
-            <span>Input <strong>{{ compactNumber(sessionUsage?.inputTokens ?? 0) }}</strong></span>
-            <span>Output <strong>{{ compactNumber(sessionUsage?.outputTokens ?? 0) }}</strong></span>
-            <span>Cache read <strong>{{ compactNumber(sessionUsage?.cacheReadTokens ?? 0) }}</strong></span>
-            <span>Cache create <strong>{{ compactNumber(sessionUsage?.cacheCreationTokens ?? 0) }}</strong></span>
-            <span v-if="sessionUsage?.totalCostUsd !== null && sessionUsage?.totalCostUsd !== undefined">Cost <strong>{{ usd(sessionUsage.totalCostUsd) }}</strong></span>
-            <span v-if="sessionUsage?.turnCount !== null && sessionUsage?.turnCount !== undefined">Turns <strong>{{ sessionUsage.turnCount }}</strong></span>
+            <span>输入 <strong>{{ compactNumber(sessionUsage?.inputTokens ?? 0) }}</strong></span>
+            <span>输出 <strong>{{ compactNumber(sessionUsage?.outputTokens ?? 0) }}</strong></span>
+            <span>缓存读取 <strong>{{ compactNumber(sessionUsage?.cacheReadTokens ?? 0) }}</strong></span>
+            <span>缓存写入 <strong>{{ compactNumber(sessionUsage?.cacheCreationTokens ?? 0) }}</strong></span>
+            <span v-if="sessionUsage?.totalCostUsd !== null && sessionUsage?.totalCostUsd !== undefined">费用 <strong>{{ usd(sessionUsage.totalCostUsd) }}</strong></span>
+            <span v-if="sessionUsage?.turnCount !== null && sessionUsage?.turnCount !== undefined">轮次 <strong>{{ sessionUsage.turnCount }}</strong></span>
           </div>
           <div class="usage-context-row">
-            <span>Context</span>
+            <span>上下文</span>
             <strong>{{ percent(contextRatio) }}</strong>
             <span>{{ compactNumber(sessionUsage?.contextTokens ?? 0) }} / {{ compactNumber(sessionUsage?.contextLimit ?? 0) }}</span>
           </div>
@@ -156,7 +166,7 @@ function updatedLabel(value: string | null): string {
       <section v-if="usageOpen" id="usage-popover" class="usage-popover" aria-label="Kimi 用量详情">
         <header class="usage-popover-header">
           <div>
-            <strong>Kimi 用量</strong>
+            <strong>Kimi 套餐用量</strong>
             <span>套餐数据为准实时轮询</span>
           </div>
           <button class="icon-button" type="button" aria-label="刷新用量" :disabled="usage.refreshing" @click="$emit('refreshUsage')">
@@ -168,7 +178,7 @@ function updatedLabel(value: string | null): string {
           <span class="usage-section-label">套餐限额</span>
           <div v-for="window in usageWindows" :key="window.key" class="usage-detail-row">
             <div>
-              <strong>{{ window.label }}</strong>
+              <strong>{{ usageWindowLabel(window.label) }}</strong>
               <span>{{ compactNumber(window.used) }} / {{ compactNumber(window.limit) }}</span>
             </div>
             <div class="usage-detail-value">
@@ -179,7 +189,7 @@ function updatedLabel(value: string | null): string {
         </div>
 
         <div v-if="usage.extraUsage" class="usage-section">
-          <span class="usage-section-label">Extra Usage</span>
+          <span class="usage-section-label">额外用量</span>
           <div class="usage-detail-row">
             <div><strong>余额</strong><span>{{ money(usage.extraUsage.balanceCents, usage.extraUsage.currency) }}</span></div>
             <div class="usage-detail-value">
@@ -193,7 +203,7 @@ function updatedLabel(value: string | null): string {
         <footer class="usage-popover-footer" :class="{ 'is-stale': usage.phase === 'stale' || usage.phase === 'unavailable' }">
           <span>{{ updatedLabel(usage.updatedAt) }}</span>
           <span v-if="usage.error">{{ usage.error }}</span>
-          <span v-else>数据源：Kimi `/oauth/usage`</span>
+          <span v-else>数据来源：Kimi 用量接口</span>
         </footer>
       </section>
     </div>

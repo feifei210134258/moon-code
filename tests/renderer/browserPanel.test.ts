@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 import BrowserPanel from '../../src/renderer/src/components/BrowserPanel.vue'
 
@@ -76,7 +77,15 @@ describe('BrowserPanel', () => {
         annotationError: null
       }
     })
+    const host = wrapper.get('.browser-guest-host').element
+    Object.defineProperty(host, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 800, height: 600 })
+    })
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
     expect(wrapper.get('.browser-annotation-popover').text()).toContain('元素批注')
+    expect(wrapper.get('.browser-guest-host').classes()).not.toContain('has-overlay')
+    expect(wrapper.get('.browser-annotation-popover').attributes('style')).toContain('top:')
     await wrapper.get('.browser-annotation-popover textarea').setValue('把按钮间距加大')
     await wrapper.get('.browser-annotation-popover .is-primary').trigger('click')
     expect(wrapper.emitted('submitAnnotation')).toEqual([[

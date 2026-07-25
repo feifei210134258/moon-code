@@ -342,6 +342,7 @@ export class KimiBrowserManager extends EventEmitter {
             title: boundedText(this.#sanitize(selection.page.title), 512),
             viewport: { ...selection.page.viewport }
           },
+          scroll: { ...selection.scroll },
           target: {
             kind: selection.target.kind,
             ...(selection.target.selector === undefined ? {} : {
@@ -843,6 +844,7 @@ function cloneAnnotationDraft(draft: BrowserAnnotationDraft): BrowserAnnotationD
         ...draft.annotation.page,
         viewport: { ...draft.annotation.page.viewport }
       },
+      ...(draft.annotation.scroll === undefined ? {} : { scroll: { ...draft.annotation.scroll } }),
       target: {
         ...draft.annotation.target,
         rect: { ...draft.annotation.target.rect }

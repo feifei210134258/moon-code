@@ -274,36 +274,38 @@ watch(
       </div>
       <article :id="turnDomId(turn.id)" v-for="turn in turns" :key="turn.id" class="turn" :class="`is-${turn.role}`">
         <div class="turn-avatar" :class="`is-${turn.role}`">{{ turn.role === 'assistant' ? 'K' : 'U' }}</div>
-        <div class="turn-content">
+        <div class="turn-body">
           <header class="turn-header">
             <strong>{{ turn.author }}</strong>
             <span>{{ turn.time }}</span>
             <span v-if="turn.queued" class="queued-chip">已排队</span>
           </header>
-          <template v-for="block in turn.blocks" :key="block.id">
-            <MarkdownBlock
-              v-if="block.type === 'text'"
-              :text="block.text"
-              :session-id="sessionId"
-              @open-file="emit('openFile', $event)"
-            />
-            <ActivityBlock v-else-if="block.type === 'activity'" :activity="block.activity" />
-            <button v-else-if="block.type === 'file'" class="linked-file" type="button" @click="emit('openFile', block.name)">{{ block.name }}</button>
-            <AttachmentBlock
-              v-else-if="block.type === 'attachment'"
-              :file-id="block.fileId"
-              :name="block.name"
-              :media-type="block.mediaType"
-              :size="block.size"
-            />
-            <MediaBlock
-              v-else
-              :media-type="block.mediaType"
-              :file-id="block.fileId"
-              :source-media-type="block.sourceMediaType"
-              :base64-data="block.base64Data"
-            />
-          </template>
+          <div class="turn-content">
+            <template v-for="block in turn.blocks" :key="block.id">
+              <MarkdownBlock
+                v-if="block.type === 'text'"
+                :text="block.text"
+                :session-id="sessionId"
+                @open-file="emit('openFile', $event)"
+              />
+              <ActivityBlock v-else-if="block.type === 'activity'" :activity="block.activity" />
+              <button v-else-if="block.type === 'file'" class="linked-file" type="button" @click="emit('openFile', block.name)">{{ block.name }}</button>
+              <AttachmentBlock
+                v-else-if="block.type === 'attachment'"
+                :file-id="block.fileId"
+                :name="block.name"
+                :media-type="block.mediaType"
+                :size="block.size"
+              />
+              <MediaBlock
+                v-else
+                :media-type="block.mediaType"
+                :file-id="block.fileId"
+                :source-media-type="block.sourceMediaType"
+                :base64-data="block.base64Data"
+              />
+            </template>
+          </div>
         </div>
       </article>
     </div>

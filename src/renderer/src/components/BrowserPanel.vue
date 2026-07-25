@@ -11,7 +11,7 @@ import {
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type CSSProperties } from 'vue'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -54,10 +54,31 @@ const customWidth = ref(1024)
 const customHeight = ref(768)
 const annotationOpen = ref(false)
 const captureOpen = ref(false)
+const surfaceSize = ref({ width: 0, height: 0 })
 let observer: ResizeObserver | null = null
 
 const visibleError = computed(() => props.error ?? props.state.error)
 const activeAnnotation = computed(() => props.annotationDrafts.at(-1) ?? null)
+const annotationPopoverStyle = computed<CSSProperties>(() => {
+  const annotation = activeAnnotation.value
+  const { width: surfaceWidth, height: surfaceHeight } = surfaceSize.value
+  if (annotation === null || surfaceWidth < 1 || surfaceHeight < 1) return {}
+
+  const pageViewport = annotation.annotation.page.viewport
+  const rect = annotation.annotation.target.rect
+  const scaleX = surfaceWidth / Math.max(1, pageViewport.width)
+  const scaleY = surfaceHeight / Math.max(1, pageViewport.height)
+  const popoverWidth = Math.min(340, Math.max(220, surfaceWidth - 24))
+  const targetLeft = rect.x * scaleX
+  const targetTop = rect.y * scaleY
+  const targetRight = targetLeft + rect.width * scaleX
+  const rightCandidate = targetRight + 12
+  const leftCandidate = targetLeft - popoverWidth - 12
+  const desiredLeft = rightCandidate + popoverWidth <= surfaceWidth - 12 ? rightCandidate : leftCandidate
+  const left = Math.max(12, Math.min(desiredLeft, Math.max(12, surfaceWidth - popoverWidth - 12)))
+  const top = Math.max(12, Math.min(targetTop, Math.max(12, surfaceHeight - 220)))
+  return { left: `${Math.round(left)}px`, top: `${Math.round(top)}px`, width: `${Math.round(popoverWidth)}px` }
+})
 
 watch(() => props.state.viewport, (viewport) => {
   viewportMode.value = viewport.mode
@@ -132,6 +153,7 @@ function reportBounds(): void {
   if (element === null) return
   const rect = element.getBoundingClientRect()
   if (rect.width < 1 || rect.height < 1) return
+  surfaceSize.value = { width: rect.width, height: rect.height }
   emit('bounds', {
     x: Math.max(0, Math.round(rect.left)),
     y: Math.max(0, Math.round(rect.top)),
@@ -189,7 +211,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="browser-surface">
-      <div ref="surface" class="browser-guest-host" :class="{ 'has-overlay': (activeAnnotation && annotationOpen) || (capture && captureOpen) }">
+      <div ref="surface" class="browser-guest-host">
         <div v-if="state.url.length === 0" class="browser-empty">
           <PhGlobe :size="34" weight="duotone" />
           <strong>从项目文件打开 HTML 预览</strong>
@@ -197,7 +219,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="state.loading" class="browser-loading"><PhSpinnerGap class="spin" :size="17" /></div>
       </div>
-      <section v-if="activeAnnotation && annotationOpen" class="browser-annotation-popover" aria-label="正在编辑批注">
+      <section v-if="activeAnnotation && annotationOpen" class="browser-annotation-popover" :style="annotationPopoverStyle" aria-label="正在编辑批注">
         <header>
           <strong><PhChatTeardropText :size="15" />{{ activeAnnotation.annotation.target.kind === 'element' ? '元素批注' : '区域批注' }}</strong>
           <button type="button" aria-label="收起批注" @click="annotationOpen = false"><PhX :size="14" /></button>
@@ -223,6 +245,7 @@ onBeforeUnmount(() => {
         v-else-if="annotationDrafts.length > 0"
         class="browser-annotation-reopen"
         type="button"
+        :style="annotationPopoverStyle"
         @click="annotationOpen = true"
       ><PhChatTeardropText :size="15" />{{ annotationDrafts.length }} 条批注</button>
       <figure v-if="capture && captureOpen" class="browser-capture-popover">

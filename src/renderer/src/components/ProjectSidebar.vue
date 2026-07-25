@@ -48,6 +48,7 @@ const emit = defineEmits<{
 
 const searchQuery = ref('')
 const menuKey = ref<string | null>(null)
+const menuPosition = ref({ top: 0, left: 0 })
 const editingKey = ref<string | null>(null)
 const editingValue = ref('')
 const editInput = ref<HTMLInputElement | null>(null)
@@ -67,14 +68,41 @@ const filteredProjects = computed(() => {
     })
     .filter((project) => project.sessions.length > 0 || project.name.toLocaleLowerCase().includes(query))
 })
+const menuProject = computed(() => {
+  const key = menuKey.value
+  if (key === null || !key.startsWith('workspace:')) return null
+  return props.projects.find((project) => project.id === key.slice('workspace:'.length)) ?? null
+})
+const menuSession = computed(() => {
+  const key = menuKey.value
+  if (key === null || !key.startsWith('session:')) return null
+  const id = key.slice('session:'.length)
+  return props.projects.flatMap((project) => project.sessions).find((session) => session.id === id) ?? null
+})
 
 function createSession(): void {
   const workspaceId = props.activeWorkspaceId || props.projects[0]?.id
   if (workspaceId !== undefined) emit('createSession', workspaceId)
 }
 
-function toggleMenu(key: string): void {
-  menuKey.value = menuKey.value === key ? null : key
+function closeMenu(): void {
+  menuKey.value = null
+}
+
+function toggleMenu(key: string, event: MouseEvent): void {
+  if (menuKey.value === key) {
+    closeMenu()
+    return
+  }
+  const trigger = event.currentTarget
+  if (!(trigger instanceof HTMLElement)) return
+  const rect = trigger.getBoundingClientRect()
+  const menuWidth = 156
+  menuPosition.value = {
+    top: Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 224)),
+    left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
+  }
+  menuKey.value = key
 }
 
 function beginWorkspaceRename(project: ProjectItem): void {
@@ -115,12 +143,12 @@ function confirmArchiveSession(session: SessionItem): void {
   }
 }
 
-function closeMenu(event: MouseEvent): void {
-  if (!(event.target as HTMLElement).closest('.tree-action-area')) menuKey.value = null
+function closeMenuOnOutsideClick(event: MouseEvent): void {
+  if (!(event.target as HTMLElement).closest('.tree-action-area, .tree-menu-overlay')) closeMenu()
 }
 
-onMounted(() => document.addEventListener('click', closeMenu))
-onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
+onMounted(() => document.addEventListener('click', closeMenuOnOutsideClick))
+onBeforeUnmount(() => document.removeEventListener('click', closeMenuOnOutsideClick))
 </script>
 
 <template>
@@ -142,10 +170,9 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
 
     <nav class="project-tree" aria-label="项目和任务">
       <section v-for="project in filteredProjects" :key="project.id" class="project-group">
-        <div class="project-row-wrap">
+        <div class="project-row-wrap" :class="{ 'is-active': activeWorkspaceId === project.id, 'is-menu-open': menuKey === `workspace:${project.id}` }">
           <button
             class="project-row"
-            :class="{ 'is-active': activeWorkspaceId === project.id }"
             type="button"
             @click="$emit('toggleProject', project.id)"
           >
@@ -153,22 +180,17 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
             <PhFolderSimple :size="17" />
             <span>{{ project.name }}</span>
           </button>
-          <div class="tree-action-area">
-            <button class="tree-more-button" type="button" :aria-label="`${project.name} 项目操作`" @click.stop="toggleMenu(`workspace:${project.id}`)">
+          <div class="tree-action-area project-action-area">
+            <button class="tree-more-button" type="button" :aria-label="`${project.name} 项目操作`" @click.stop="toggleMenu(`workspace:${project.id}`, $event)">
               <PhDotsThree :size="17" weight="bold" />
             </button>
-            <div v-if="menuKey === `workspace:${project.id}`" class="tree-menu">
-              <button type="button" @click="emit('createSession', project.id); menuKey = null"><PhNotePencil :size="14" />新建任务</button>
-              <button type="button" @click="beginWorkspaceRename(project)"><PhPencilSimple :size="14" />重命名</button>
-              <button class="is-danger" type="button" @click="confirmDeleteWorkspace(project)"><PhTrash :size="14" />移除项目</button>
-            </div>
           </div>
         </div>
         <form v-if="editingKey === `workspace:${project.id}`" class="tree-inline-edit project-inline-edit" @submit.prevent="commitEdit">
           <input ref="editInput" v-model="editingValue" maxlength="120" aria-label="项目名称" @keydown.esc="editingKey = null" @blur="commitEdit" />
         </form>
         <div v-if="(project.expanded || searchQuery) && project.sessions.length > 0" class="session-list">
-            <div v-for="session in project.sessions" :key="session.id" class="session-row-wrap">
+            <div v-for="session in project.sessions" :key="session.id" class="session-row-wrap" :class="{ 'is-menu-open': menuKey === `session:${session.id}` }">
             <form v-if="editingKey === `session:${session.id}`" class="tree-inline-edit" @submit.prevent="commitEdit">
               <input ref="editInput" v-model="editingValue" maxlength="200" aria-label="任务名称" @keydown.esc="editingKey = null" @blur="commitEdit" />
             </form>
@@ -183,16 +205,9 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
                 <span v-if="session.relativeTime" class="session-time">{{ session.relativeTime }}</span>
               </button>
               <div class="tree-action-area session-action-area">
-                <button class="tree-more-button" type="button" :aria-label="`${session.title} 任务操作`" @click.stop="toggleMenu(`session:${session.id}`)">
+                <button class="tree-more-button" type="button" :aria-label="`${session.title} 任务操作`" @click.stop="toggleMenu(`session:${session.id}`, $event)">
                   <PhDotsThree :size="16" weight="bold" />
                 </button>
-                <div v-if="menuKey === `session:${session.id}`" class="tree-menu session-menu">
-                  <button type="button" @click="beginSessionRename(session)"><PhPencilSimple :size="14" />重命名</button>
-                  <button type="button" :disabled="childrenPendingSessionId != null" @click="emit('loadSessionChildren', session.id); menuKey = null"><PhGitFork :size="14" />查看子任务</button>
-                  <button type="button" @click="emit('forkSession', session.id); menuKey = null"><PhCopy :size="14" />创建分叉</button>
-                  <button type="button" @click="emit('exportSession', session.id); menuKey = null"><PhDownloadSimple :size="14" />导出 ZIP</button>
-                  <button class="is-danger" type="button" @click="confirmArchiveSession(session)"><PhArchive :size="14" />归档</button>
-                </div>
               </div>
             </template>
           </div>
@@ -215,4 +230,19 @@ onBeforeUnmount(() => document.removeEventListener('click', closeMenu))
       <span>设置</span>
     </button>
   </aside>
+
+  <Teleport to="body">
+    <div v-if="menuProject" class="tree-menu tree-menu-overlay" :style="menuPosition" @click.stop>
+      <button type="button" @click="emit('createSession', menuProject.id); closeMenu()"><PhNotePencil :size="14" />新建任务</button>
+      <button type="button" @click="beginWorkspaceRename(menuProject)"><PhPencilSimple :size="14" />重命名</button>
+      <button class="is-danger" type="button" @click="confirmDeleteWorkspace(menuProject)"><PhTrash :size="14" />移除项目</button>
+    </div>
+    <div v-else-if="menuSession" class="tree-menu tree-menu-overlay session-menu" :style="menuPosition" @click.stop>
+      <button type="button" @click="beginSessionRename(menuSession)"><PhPencilSimple :size="14" />重命名</button>
+      <button type="button" :disabled="childrenPendingSessionId != null" @click="emit('loadSessionChildren', menuSession.id); closeMenu()"><PhGitFork :size="14" />查看子任务</button>
+      <button type="button" @click="emit('forkSession', menuSession.id); closeMenu()"><PhCopy :size="14" />创建分叉</button>
+      <button type="button" @click="emit('exportSession', menuSession.id); closeMenu()"><PhDownloadSimple :size="14" />导出 ZIP</button>
+      <button class="is-danger" type="button" @click="confirmArchiveSession(menuSession)"><PhArchive :size="14" />归档</button>
+    </div>
+  </Teleport>
 </template>

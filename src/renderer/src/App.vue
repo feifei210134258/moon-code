@@ -70,6 +70,21 @@ const activeSessionView = computed(() => (
     ? runtimeBridge.sessionView.value
     : null
 ))
+const activeSessionUsage = computed<SessionUsageSummary | null>(() => {
+  const usage = activeSessionView.value?.usage ?? null
+  const status = runtimeBridge.sessionRuntimeStatus.value
+  if (status === null) return usage
+  return {
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0,
+    cacheReadTokens: usage?.cacheReadTokens ?? 0,
+    cacheCreationTokens: usage?.cacheCreationTokens ?? 0,
+    totalCostUsd: usage?.totalCostUsd ?? null,
+    contextTokens: status.contextTokens,
+    contextLimit: status.maxContextTokens,
+    turnCount: usage?.turnCount ?? null
+  }
+})
 const visibleApprovals = computed(() => activeSessionView.value?.pendingApprovals ?? (
   showInteractionFixture ? [approvalFixture] : []
 ))
@@ -510,7 +525,7 @@ onBeforeUnmount(() => {
       :workspace-name="activeWorkspaceName"
       :git-branch="runtimeBridge.gitStatus.value?.branch ?? null"
       :usage="usageBridge.state.value"
-      :session-usage="usageSessionFixture ?? activeSessionView?.usage ?? null"
+      :session-usage="usageSessionFixture ?? activeSessionUsage"
       :context-open="contextOpen"
       :usage-open="usageOpen"
       :extensions-open="rightPanelOpen"

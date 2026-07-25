@@ -122,7 +122,7 @@ export interface RuntimeCandidate {
 
 export interface RuntimePublicState {
   status: RuntimeStatus
-  mode: 'managed' | 'system' | 'external' | null
+  mode: 'managed' | 'system' | 'shared' | 'external' | null
   version: string | null
   serverId: string | null
   origin: string | null
@@ -890,6 +890,7 @@ export interface BrowserVisualAnnotation {
     title: string
     viewport: { width: number; height: number; dpr: number }
   }
+  scroll?: { x: number; y: number }
   target: {
     kind: BrowserAnnotationMode
     selector?: string
