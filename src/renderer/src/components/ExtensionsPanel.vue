@@ -11,12 +11,14 @@ import {
   PhFileJs,
   PhFileTs,
   PhFolderOpen,
+  PhMagnifyingGlass,
   PhSidebarSimple,
   PhSpinnerGap,
+  PhTextT,
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -139,6 +141,16 @@ const todoItems = computed(() => activeTodo.value?.items ?? [])
 const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
 const fileSearchQuery = ref('')
 const grepPattern = ref('')
+const filePreviewActions = ref<HTMLDetailsElement | null>(null)
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || filePreviewActions.value?.open !== true) return
+  event.preventDefault()
+  filePreviewActions.value.open = false
+}
+
+onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 
 function submitFileSearch(): void {
   const query = fileSearchQuery.value.trim()
@@ -354,11 +366,11 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       <div class="files-search-tools">
         <form @submit.prevent="submitFileSearch">
           <input v-model="fileSearchQuery" type="search" maxlength="512" placeholder="搜索文件名…" aria-label="搜索文件名" />
-          <button type="submit" :disabled="fileSearchPending">搜索</button>
+          <button type="submit" aria-label="提交文件名搜索" title="搜索文件名" :disabled="fileSearchPending"><PhMagnifyingGlass :size="15" /></button>
         </form>
         <form @submit.prevent="submitGrep">
           <input v-model="grepPattern" type="search" maxlength="512" placeholder="搜索文件内容…" aria-label="搜索文件内容" />
-          <button type="submit" :disabled="fileGrepPending">内容</button>
+          <button type="submit" aria-label="提交文件内容搜索" title="搜索文件内容" :disabled="fileGrepPending"><PhTextT :size="15" /></button>
         </form>
       </div>
       <section v-if="fileSearchPending || fileSearchError || fileSearch" class="file-search-results">
@@ -427,7 +439,7 @@ function parseDiff(diff: string): RenderedDiffLine[] {
       <section v-if="filePreviewPending || filePreviewError || filePreview" class="file-preview-panel">
         <header>
           <strong>{{ filePreview?.path ?? '文件预览' }}</strong>
-          <details v-if="filePreview" class="file-preview-actions">
+          <details v-if="filePreview" ref="filePreviewActions" class="file-preview-actions">
             <summary aria-label="文件操作">⋯</summary>
             <div>
               <button type="button" :disabled="fileActionPending !== null" @click="emit('downloadFile', filePreview.path)"><PhDownloadSimple :size="14" />下载</button>

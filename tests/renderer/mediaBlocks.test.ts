@@ -45,4 +45,25 @@ describe('Kimi media blocks', () => {
     await flushPromises()
     expect(readAttachment).toHaveBeenCalledWith('file-1', 'application/zip')
   })
+
+  it('opens HTML attachments in an in-app sandboxed preview', async () => {
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:kimi-html') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    window.kimiAgent = {
+      readAttachment: vi.fn(async () => ({
+        fileId: 'file-2', mediaType: 'text/html', bytes: new TextEncoder().encode('<h1>Preview</h1>')
+      }))
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(AttachmentBlock, {
+      props: { fileId: 'file-2', name: 'index.html', mediaType: 'text/html', size: 24 },
+      global: { stubs: { Teleport: true } }
+    })
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.attachment-preview-dialog iframe').attributes('src')).toBe('blob:kimi-html')
+    expect(wrapper.get('.attachment-preview-dialog iframe').attributes('sandbox')).toBe('')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.attachment-preview-dialog').exists()).toBe(false)
+  })
 })

@@ -145,7 +145,7 @@ describe('workbench transcript hydration', () => {
     expect(trailingThinking?.type === 'activity' ? trailingThinking.activity.status : null).toBe('running')
   })
 
-  it('keeps a workspace selected even when it has no sessions', () => {
+  it('only expands or collapses a workspace without replacing the selected session', () => {
     const store = useWorkbenchStore()
     store.hydrateProjects([
       { id: 'workspace-empty', name: 'Empty', root: '/empty', sessions: [] },
@@ -159,8 +159,15 @@ describe('workbench transcript hydration', () => {
 
     store.toggleProject('workspace-empty')
 
-    expect(store.activeWorkspaceId).toBe('workspace-empty')
-    expect(store.activeSessionId).toBe('')
+    expect(store.projects[0]?.expanded).toBe(false)
+    expect(store.activeWorkspaceId).toBe('workspace-active')
+    expect(store.activeSessionId).toBe('session-1')
+  })
+
+  it('allows the right panel to grow to twice its previous maximum width', () => {
+    const store = useWorkbenchStore()
+    store.setRightPanelWidth(2_000)
+    expect(store.rightPanelWidth).toBe(1_040)
   })
 
   it('moves workspace selection with an explicitly selected session', () => {

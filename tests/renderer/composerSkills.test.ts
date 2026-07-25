@@ -68,6 +68,21 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.get('.command-popover').text()).toContain('没有匹配的技能')
   })
 
+  it('grows with entered text and closes composer popovers with Escape', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: { models, controls, skills: [{ name: 'review', description: 'Review', source: 'project', type: null, userInvocableOnly: false }] }
+    })
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 196 })
+    await wrapper.get('textarea').setValue('/rev')
+    await wrapper.vm.$nextTick()
+    expect(textarea.style.height).toBe('196px')
+    expect(wrapper.find('.command-popover').exists()).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.command-popover').exists()).toBe(false)
+  })
+
   it('keeps Stop available and allows a follow-up to enter the Kimi prompt queue', async () => {
     const wrapper = mount(ComposerBar, {
       props: { skills: [], models, controls, running: true }

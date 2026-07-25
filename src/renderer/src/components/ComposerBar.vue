@@ -12,7 +12,7 @@ import {
   PhSpinnerGap,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {
   KimiModelCatalogItem,
   KimiPromptControls,
@@ -142,6 +142,19 @@ function toggleCommands(): void {
   }
 }
 
+function maxComposerHeight(): number {
+  return Math.max(96, Math.floor(window.innerHeight * 0.5))
+}
+
+function resizeTextareaToContent(): void {
+  void nextTick(() => {
+    const textarea = input.value
+    if (textarea === null) return
+    textarea.style.height = '0px'
+    composerHeight.value = Math.min(maxComposerHeight(), Math.max(96, textarea.scrollHeight))
+  })
+}
+
 function startInputResize(event: PointerEvent): void {
   if (event.button !== 0) return
   const textarea = input.value
@@ -150,7 +163,7 @@ function startInputResize(event: PointerEvent): void {
   const startY = event.clientY
   const startHeight = textarea.getBoundingClientRect().height
   const onMove = (moveEvent: PointerEvent): void => {
-    composerHeight.value = Math.round(Math.min(360, Math.max(96, startHeight + moveEvent.clientY - startY)))
+    composerHeight.value = Math.round(Math.min(maxComposerHeight(), Math.max(96, startHeight + moveEvent.clientY - startY)))
   }
   const onUp = (): void => {
     window.removeEventListener('pointermove', onMove)
@@ -164,6 +177,7 @@ function startInputResize(event: PointerEvent): void {
 }
 
 function onComposerInput(): void {
+  resizeTextareaToContent()
   if (slashQuery.value !== null && props.disabled !== true) {
     commandOpen.value = true
     optionsOpen.value = false
@@ -188,6 +202,7 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   optionsOpen.value = false
   closeMention()
   await nextTick()
+  resizeTextareaToContent()
   input.value?.focus()
 }
 
@@ -294,6 +309,7 @@ function selectMention(item: WorkspaceFileSearchItem): void {
     const caret = token.start + item.path.length
     input.value?.setSelectionRange(caret, caret)
     input.value?.focus()
+    resizeTextareaToContent()
   })
 }
 
@@ -353,9 +369,24 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || (!optionsOpen.value && !commandOpen.value && !mentionOpen.value)) return
+  event.preventDefault()
+  optionsOpen.value = false
+  commandOpen.value = false
+  closeMention()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown)
+  window.addEventListener('resize', resizeTextareaToContent)
+  resizeTextareaToContent()
+})
 onBeforeUnmount(() => {
   closeMention()
   stopInputResize?.()
+  window.removeEventListener('keydown', onWindowKeydown)
+  window.removeEventListener('resize', resizeTextareaToContent)
 })
 </script>
 
@@ -383,6 +414,14 @@ onBeforeUnmount(() => {
         :style="{ height: `${composerHeight}px` }"
         @keydown="onKeydown"
         @input="onComposerInput"
+      />
+      <div
+        class="composer-resize-handle"
+        role="separator"
+        aria-label="调整输入框高度"
+        aria-orientation="horizontal"
+        tabindex="0"
+        @pointerdown="startInputResize"
       />
     </div>
     <div v-if="goalMode" class="goal-mode-banner"><strong>目标</strong><span>下一条消息会创建持续目标并立即开始执行</span></div>
@@ -445,15 +484,6 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
-    <div
-      class="composer-resize-handle"
-      role="separator"
-      aria-label="调整输入框高度"
-      aria-orientation="horizontal"
-      tabindex="0"
-      @pointerdown="startInputResize"
-    />
-
     <div v-if="optionsOpen" class="composer-popover" aria-label="Kimi 会话控制">
       <label>
         <span>模型</span>

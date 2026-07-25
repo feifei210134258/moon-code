@@ -14,7 +14,7 @@ import {
   PhSpinnerGap,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   KimiOAuthFlow,
   KimiMcpServer,
@@ -373,7 +373,17 @@ watch(
   }
 )
 
-onBeforeUnmount(clearOAuthPoll)
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !props.open) return
+  event.preventDefault()
+  emit('close')
+}
+
+onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+onBeforeUnmount(() => {
+  clearOAuthPoll()
+  window.removeEventListener('keydown', onWindowKeydown)
+})
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
