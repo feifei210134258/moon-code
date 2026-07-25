@@ -13,11 +13,25 @@ export interface PetSpriteAnimation {
   row: number
   frames: number
   durations: readonly number[]
+  columns?: readonly number[]
   loop: boolean
 }
 
+const RUNNING_COLUMNS = [
+  0, 1, 0, 1, 0, 1,
+  2, 3,
+  4, 5, 4, 5, 4, 5,
+  6, 7
+] as const
+
 const TWO_STATE_ANIMATIONS = {
-  running: { row: 0, frames: 8, durations: [145, 135, 135, 135, 145, 135, 135, 135], loop: true },
+  running: {
+    row: 0,
+    frames: RUNNING_COLUMNS.length,
+    durations: [120, 120, 120, 120, 120, 120, 160, 160, 120, 120, 120, 120, 120, 120, 160, 160],
+    columns: RUNNING_COLUMNS,
+    loop: true
+  },
   completed: { row: 1, frames: 1, durations: [0], loop: false }
 } as const satisfies Record<'running' | 'completed', PetSpriteAnimation>
 

@@ -15,9 +15,10 @@ let timer: ReturnType<typeof setTimeout> | null = null
 let media: MediaQueryList | null = null
 
 const animation = computed(() => petAnimationFor(props.status))
+const column = computed(() => animation.value.columns?.[frame.value] ?? frame.value)
 const atlasStyle = computed<CSSProperties>(() => ({
   '--lumi-row': String(animation.value.row),
-  '--lumi-column': String(frame.value)
+  '--lumi-column': String(column.value)
 }))
 
 function clearTimer(): void {
@@ -64,7 +65,8 @@ onBeforeUnmount(() => {
     class="lumi-sprite"
     :class="{ 'is-failed': assetFailed }"
     :data-row="animation.row"
-    :data-column="frame"
+    :data-column="column"
+    :data-frame="frame"
     :data-reduced-motion="reducedMotion"
   >
     <img
