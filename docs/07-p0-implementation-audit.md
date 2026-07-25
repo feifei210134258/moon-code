@@ -75,7 +75,7 @@
 | --- | --- | --- |
 | Model / Thinking / Permission / Plan / Swarm | 完成 | 本轮切片；真实状态、动态能力、独立控制与 Prompt 映射 |
 | Goal | 完成 | 真实 Goal Strip、预算摘要、Composer Goal 模式创建与 pause/resume/cancel |
-| Todo | 完成 | Transcript 的 authoritative `todos` 映射至右栏“计划”；同一 Session 的 `todo_list` tool display 实时更新，重同步会回到上游事实 |
+| Todo | 完成 | Transcript 的 authoritative `todos` 映射至右栏“计划”；同一 Session 内实时更新（`todo_list` tool display，或 agent-core-v2 帧的 `args.todos` 回退），重同步会回到上游事实 |
 | Subagent / Swarm roster | 完成 | Kimi snapshot/event roster、状态、详细用量与 agent-scoped Transcript Detail Panel；Main 校验活跃 Session 的 authoritative Agent ID，见 ADR 0015 |
 | BTW side chat | 完成 | 官方 Web `:btw` 创建 agent、同 Session `agent_id` Prompt、独立流式 Panel 与主 Transcript 隔离；见 ADR 0014 |
 | Background tasks | 完成 | `/tasks` 轮询、状态/输出预览和运行中任务取消已替换右栏占位 |

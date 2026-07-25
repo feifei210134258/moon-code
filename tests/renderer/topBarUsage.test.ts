@@ -86,7 +86,7 @@ describe('TopBar usage', () => {
     expect(popover).not.toContain('resets in')
   })
 
-  it('emits compact and undo from the context popover session actions', async () => {
+  it('emits compact from the header button and undo from the session actions row', async () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
@@ -96,16 +96,17 @@ describe('TopBar usage', () => {
       }
     })
 
-    const section = wrapper.get('.context-session-actions')
-    expect(section.text()).toContain('会话操作')
-    await section.get('input').setValue('保留安全边界')
-    const buttons = section.findAll('.context-action-row > button')
-    await buttons[0]!.trigger('click')
-    await buttons[1]!.trigger('click')
-    expect(wrapper.emitted('compact')).toEqual([['保留安全边界']])
+    const compactButton = wrapper.get('.context-compact-button')
+    expect(compactButton.text()).toContain('压缩')
+    await compactButton.trigger('click')
+    expect(wrapper.emitted('compact')).toEqual([[]])
+
+    const undoButton = wrapper.get('.context-action-row > button')
+    expect(undoButton.text()).toContain('撤销上一轮')
+    await undoButton.trigger('click')
     expect(wrapper.emitted('undo')).toEqual([[]])
 
     await wrapper.setProps({ promptRunning: true })
-    expect((section.findAll('.context-action-row > button')[0]!.element as HTMLButtonElement).disabled).toBe(true)
+    expect((wrapper.get('.context-compact-button').element as HTMLButtonElement).disabled).toBe(true)
   })
 })
