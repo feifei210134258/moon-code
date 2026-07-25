@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { PetPointerPosition, PetSessionState } from '@shared/contracts'
-import MimoSprite from './components/MimoSprite.vue'
-import { petLookDirectionIndex, type PetDragDirection } from './utils/petSprite'
+import LumiSprite from './components/LumiSprite.vue'
 
 const state = ref<PetSessionState | null>(null)
+const fixtureStatus = import.meta.env.DEV
+  ? new URLSearchParams(window.location.search).get('pet-fixture')
+  : null
 const now = ref(Date.now())
 const dragging = ref(false)
-const dragDirection = ref<PetDragDirection>('right')
-const lookDirection = ref<number | null>(null)
 let startPointer: PetPointerPosition | null = null
 let lastPointer: PetPointerPosition | null = null
 let stopStateListener: (() => void) | null = null
@@ -47,7 +47,6 @@ function onPointerDown(event: PointerEvent): void {
   startPointer = pointer(event)
   lastPointer = startPointer
   dragging.value = false
-  lookDirection.value = null
   event.currentTarget instanceof HTMLElement && event.currentTarget.setPointerCapture(event.pointerId)
 }
 
@@ -59,9 +58,6 @@ function onPointerMove(event: PointerEvent): void {
     dragging.value = true
     window.kimiPet.beginDrag(startPointer)
   }
-  const deltaX = current.screenX - (lastPointer?.screenX ?? startPointer.screenX)
-  if (deltaX < 0) dragDirection.value = 'left'
-  else if (deltaX > 0) dragDirection.value = 'right'
   lastPointer = current
   window.kimiPet.moveDrag(current)
 }
@@ -82,20 +78,25 @@ function onPointerCancel(event: PointerEvent): void {
   dragging.value = false
 }
 
-function onPointerHover(event: PointerEvent): void {
-  if (startPointer !== null || dragging.value || !(event.currentTarget instanceof HTMLElement)) return
-  const bounds = event.currentTarget.getBoundingClientRect()
-  lookDirection.value = petLookDirectionIndex(
-    event.clientX - (bounds.left + bounds.width / 2),
-    event.clientY - (bounds.top + bounds.height * 0.62)
-  )
-}
-
-function onPointerLeave(): void {
-  if (!dragging.value) lookDirection.value = null
-}
-
 onMounted(async () => {
+  if (fixtureStatus === 'running' || fixtureStatus === 'completed') {
+    state.value = {
+      serverId: 'fixture-server',
+      workspaceId: 'fixture-workspace',
+      workspaceName: 'Moon Code',
+      sessionId: 'fixture-session',
+      title: fixtureStatus === 'running' ? '正在构建月狐宠物' : '月狐宠物已完成',
+      status: fixtureStatus,
+      pendingInteraction: 'none',
+      backgroundActivity: false,
+      unread: fixtureStatus === 'completed',
+      startedAt: fixtureStatus === 'running' ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString(),
+      latestTool: null,
+      overflowCount: 0
+    }
+    return
+  }
   const api = window.kimiPet
   if (api === undefined) return
   stopStateListener = api.onStateChanged((next) => { state.value = next })
@@ -116,10 +117,8 @@ onBeforeUnmount(() => {
     :aria-label="state === null ? 'Kimi 桌宠' : `${state.title}，${statusLabel}`"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
-    @pointermove.capture="onPointerHover"
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
-    @pointerleave="onPointerLeave"
     @contextmenu.prevent
   >
     <div class="pet-tooltip" role="status">
@@ -129,14 +128,9 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="pet-character" aria-hidden="true">
-      <MimoSprite
+      <LumiSprite
         :status="state?.status ?? 'disconnected'"
-        :dragging="dragging"
-        :drag-direction="dragDirection"
-        :look-direction="lookDirection"
       />
-      <div class="pet-status-dot" />
-      <div v-if="state?.pendingInteraction !== 'none'" class="pet-attention">!</div>
       <div v-if="(state?.overflowCount ?? 0) > 0" class="pet-overflow">+{{ state?.overflowCount }}</div>
     </div>
   </main>
@@ -167,11 +161,7 @@ onBeforeUnmount(() => {
 
 .pet-root.is-dragging { cursor: grabbing; }
 .pet-root.is-running { --pet-accent: #2563eb; --pet-soft: rgba(37, 99, 235, 0.18); }
-.pet-root.is-waiting { --pet-accent: #d58b25; --pet-soft: rgba(213, 139, 37, 0.2); }
-.pet-root.is-completed { --pet-accent: #16a36a; --pet-soft: rgba(22, 163, 106, 0.2); }
-.pet-root.is-failed { --pet-accent: #e25555; --pet-soft: rgba(226, 85, 85, 0.2); }
-.pet-root.is-review { --pet-accent: #7c5ce7; --pet-soft: rgba(124, 92, 231, 0.18); }
-.pet-root.is-disconnected { --pet-accent: #9aa4b1; --pet-soft: rgba(154, 164, 177, 0.16); filter: saturate(0.45); }
+.pet-root:not(.is-running) { --pet-accent: #16a36a; --pet-soft: rgba(22, 163, 106, 0.18); }
 
 .pet-tooltip {
   position: absolute;
@@ -203,10 +193,8 @@ onBeforeUnmount(() => {
 
 .pet-character {
   position: relative;
-  width: 64px;
-  height: 70px;
+  width: 96px;
+  height: 104px;
 }
-.pet-status-dot { position: absolute; right: 1px; bottom: 3px; width: 9px; height: 9px; border: 2px solid rgba(247,250,252,0.95); border-radius: 50%; background: var(--pet-accent); }
-.pet-attention { position: absolute; top: 1px; right: -1px; display: grid; width: 14px; height: 14px; place-items: center; border: 1px solid rgba(255,255,255,0.9); border-radius: 50%; color: white; background: var(--pet-accent); font-size: 9px; font-weight: 800; }
 .pet-overflow { position: absolute; left: -1px; bottom: 1px; display: grid; min-width: 17px; height: 14px; padding: 0 3px; place-items: center; border: 1px solid rgba(255,255,255,0.92); border-radius: 999px; color: #536273; background: rgba(247,250,252,0.96); font-size: 7px; font-weight: 760; }
 </style>

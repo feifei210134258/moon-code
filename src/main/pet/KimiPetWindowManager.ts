@@ -37,7 +37,7 @@ export interface KimiPetWindowManagerOptions {
   windowSize?: { width: number; height: number }
 }
 
-const DEFAULT_SIZE = { width: 88, height: 110 }
+const DEFAULT_SIZE = { width: 112, height: 140 }
 const EDGE_MARGIN = 8
 
 export class KimiPetWindowManager {

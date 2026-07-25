@@ -1,0 +1,30 @@
+{
+  "pet_id": "lumi",
+  "display_name": "Lumi",
+  "description": "A quiet lunar fox whose moon-phase tail circles while tasks run and becomes a resting crescent when work ends.",
+  "selected_concept": "references/selected-concept.png",
+  "canonical_base": "references/canonical-base.png",
+  "chroma_key": "#FF00FF",
+  "cell": {
+    "width": 192,
+    "height": 208
+  },
+  "atlas": {
+    "columns": 6,
+    "rows": 2,
+    "width": 1152,
+    "height": 416
+  },
+  "states": {
+    "running": {
+      "row": 0,
+      "frames": 6,
+      "loop": true
+    },
+    "completed": {
+      "row": 1,
+      "frames": 1,
+      "loop": false
+    }
+  }
+}

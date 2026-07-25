@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "input": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/final/lumi-spritesheet.png",
+  "output": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/final/lumi-spritesheet.png",
+  "chroma_key": "#FF00FF",
+  "algorithm": "edge-local-chroma-spill-suppression",
+  "strength": 1,
+  "edge_radius": 5,
+  "spill_tolerance": 0.15,
+  "minimum_saturation": 0.1,
+  "changed_pixels": 15627,
+  "decontaminated_pixels": 14009,
+  "spill_suppressed_pixels": 15627,
+  "rejected_pixels": 0,
+  "changed_by_cell": {
+    "r0c4": 2358,
+    "r0c2": 2351,
+    "r0c1": 2349,
+    "r0c0": 2340,
+    "r0c5": 2294,
+    "r0c3": 2206,
+    "r1c0": 1729
+  },
+  "alpha_preserved": true
+}
