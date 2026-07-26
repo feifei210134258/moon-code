@@ -58,7 +58,6 @@ const mentionError = ref<string | null>(null)
 const mentionItems = ref<WorkspaceFileSearchItem[]>([])
 const mentionActiveIndex = ref(0)
 const commandActiveIndex = ref(0)
-const advancedOpen = ref(false)
 const pendingPermissionMode = ref<KimiPromptControls['permissionMode'] | null>(null)
 const composerRoot = ref<HTMLElement | null>(null)
 const modelTrigger = ref<HTMLButtonElement | null>(null)
@@ -78,6 +77,12 @@ const thinkingOptions = computed(() => {
   const efforts = selectedModel.value?.supportEfforts ?? []
   if (efforts.length > 0) return efforts
   return [props.controls?.thinking || 'off']
+})
+const visibleThinkingOptions = computed(() => {
+  const available = thinkingOptions.value.filter((effort) => effort.trim().toLocaleLowerCase() !== 'off')
+  const candidates = available.length > 0 ? available : thinkingOptions.value
+  if (candidates.length <= 3) return candidates
+  return [candidates[0]!, candidates[Math.floor((candidates.length - 1) / 2)]!, candidates.at(-1)!]
 })
 const slashQuery = computed(() => {
   const match = /^\/([^\s]*)$/.exec(value.value)
@@ -99,15 +104,6 @@ const activeOptionId = computed(() => {
   if (mentionOpen.value && mentionItems.value.length > 0) return `composer-mention-option-${mentionActiveIndex.value}`
   if (commandOpen.value && filteredSkills.value.length > 0) return `composer-command-option-${commandActiveIndex.value}`
   return undefined
-})
-const advancedSummary = computed(() => {
-  const enabled = [
-    props.controls?.permissionMode === 'auto' ? '自动确认' : props.controls?.permissionMode === 'yolo' ? '完全自动' : null,
-    props.controls?.planMode ? '规划' : null,
-    props.goalMode ? '目标' : null,
-    props.controls?.swarmMode ? '协作' : null
-  ].filter((value): value is string => value !== null)
-  return enabled.length > 0 ? enabled.join(' · ') : '手动确认'
 })
 const permissionDescription = computed(() => ({
   manual: '每次敏感操作都由你确认。',
@@ -153,14 +149,13 @@ function updateModel(event: Event): void {
   emit('updateControls', { ...props.controls, model, thinking })
 }
 
-function updateThinking(event: Event): void {
+function updateThinking(thinking: string): void {
   if (props.controls === null) return
-  emit('updateControls', { ...props.controls, thinking: (event.target as HTMLSelectElement).value })
+  emit('updateControls', { ...props.controls, thinking })
 }
 
-function updatePermission(event: Event): void {
+function updatePermission(permissionMode: KimiPromptControls['permissionMode']): void {
   if (props.controls === null) return
-  const permissionMode = (event.target as HTMLSelectElement).value as KimiPromptControls['permissionMode']
   if (permissionMode === 'yolo' && props.controls.permissionMode !== 'yolo') {
     pendingPermissionMode.value = permissionMode
     return
@@ -179,9 +174,9 @@ function cancelPermissionMode(): void {
   pendingPermissionMode.value = null
 }
 
-function updateBoolean(key: 'planMode' | 'swarmMode', event: Event): void {
+function setBoolean(key: 'planMode' | 'swarmMode', enabled: boolean): void {
   if (props.controls === null) return
-  emit('updateControls', { ...props.controls, [key]: (event.target as HTMLInputElement).checked })
+  emit('updateControls', { ...props.controls, [key]: enabled })
 }
 
 function disableBooleanMode(key: 'planMode' | 'swarmMode'): void {
@@ -205,12 +200,6 @@ function toggleSessionControls(): void {
   closeMention()
   pendingPermissionMode.value = null
   if (optionsOpen.value) void nextTick(() => positionPopover('options'))
-}
-
-function toggleAdvancedControls(): void {
-  advancedOpen.value = !advancedOpen.value
-  pendingPermissionMode.value = null
-  void nextTick(() => positionPopover('options'))
 }
 
 function onComposerInput(): void {
@@ -429,7 +418,7 @@ function positionPopover(kind: PopoverKind): void {
   const rect = trigger.getBoundingClientRect()
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
-  const preferredWidth = kind === 'options' ? 300 : kind === 'command' ? 420 : 460
+  const preferredWidth = kind === 'options' ? 344 : kind === 'command' ? 420 : 460
   const width = Math.max(240, Math.min(preferredWidth, viewportWidth - 16))
   const alignedLeft = kind === 'options' ? rect.right - width : rect.left
   const left = Math.max(8, Math.min(alignedLeft, viewportWidth - width - 8))
@@ -677,41 +666,41 @@ onBeforeUnmount(() => {
       :style="popoverStyles.options"
     >
       <header class="composer-popover-header">
-        <div><strong>会话设置</strong><small>当前 Session</small></div>
+        <div><strong>模型与执行</strong><small>应用于当前 Session</small></div>
       </header>
       <div class="composer-popover-section">
-        <label>
-          <span>模型</span>
+        <label class="composer-model-row">
+          <span><strong>模型</strong><small>决定本次会话使用的能力</small></span>
           <select :value="controls?.model" :disabled="disabled || controls === null" @change="updateModel">
             <option v-for="model in models" :key="model.id" :value="model.id">{{ model.displayName }}</option>
           </select>
         </label>
-        <label>
-          <span>思考强度</span>
-          <select :value="controls?.thinking" :disabled="disabled || controls === null" @change="updateThinking">
-            <option v-for="effort in thinkingOptions" :key="effort" :value="effort">{{ thinkingLabel(effort) }}</option>
-          </select>
-        </label>
+        <div class="composer-control-block">
+          <div class="composer-control-heading"><strong>思考强度</strong><small>更高强度适合复杂任务</small></div>
+          <div class="composer-segments" role="radiogroup" aria-label="思考强度">
+            <button
+              v-for="effort in visibleThinkingOptions"
+              :key="effort"
+              type="button"
+              role="radio"
+              :class="{ 'is-selected': controls?.thinking === effort }"
+              :aria-checked="controls?.thinking === effort"
+              :disabled="disabled || controls === null"
+              @click="updateThinking(effort)"
+            >{{ thinkingLabel(effort) }}</button>
+          </div>
+        </div>
       </div>
-      <button
-        class="composer-advanced-toggle"
-        type="button"
-        :aria-expanded="advancedOpen"
-        aria-controls="composer-advanced-controls"
-        @click="toggleAdvancedControls"
-      >
-        <span><strong>高级执行</strong><small>{{ advancedSummary }}</small></span>
-        <PhCaretDown :size="13" :class="{ 'is-expanded': advancedOpen }" />
-      </button>
-      <div v-if="advancedOpen" id="composer-advanced-controls" class="composer-advanced-controls">
-        <label class="composer-permission-row">
-          <span><strong>执行审批</strong><small>{{ permissionDescription }}</small></span>
-          <select :value="controls?.permissionMode" :disabled="disabled || controls === null" @change="updatePermission">
-            <option value="manual">手动确认</option>
-            <option value="auto">自动确认</option>
-            <option value="yolo">完全自动</option>
-          </select>
-        </label>
+      <div id="composer-advanced-controls" class="composer-advanced-controls">
+        <div class="composer-section-label"><strong>高级执行</strong><small>无需展开，直接调整</small></div>
+        <div class="composer-control-block composer-permission-row">
+          <div class="composer-control-heading"><strong>执行审批</strong><small>{{ permissionDescription }}</small></div>
+          <div class="composer-segments" role="radiogroup" aria-label="执行审批">
+            <button type="button" role="radio" :class="{ 'is-selected': controls?.permissionMode === 'manual' }" :aria-checked="controls?.permissionMode === 'manual'" :disabled="disabled || controls === null" @click="updatePermission('manual')">手动</button>
+            <button type="button" role="radio" :class="{ 'is-selected': controls?.permissionMode === 'auto' }" :aria-checked="controls?.permissionMode === 'auto'" :disabled="disabled || controls === null" @click="updatePermission('auto')">自动</button>
+            <button type="button" role="radio" :class="{ 'is-selected': controls?.permissionMode === 'yolo' }" :aria-checked="controls?.permissionMode === 'yolo'" :disabled="disabled || controls === null" @click="updatePermission('yolo')">完全自动</button>
+          </div>
+        </div>
         <div v-if="pendingPermissionMode === 'yolo'" class="composer-permission-warning" role="alert">
           <strong>完全自动会跳过逐次审批</strong>
           <span>该设置应用于当前 Session 的后续操作。</span>
@@ -720,18 +709,18 @@ onBeforeUnmount(() => {
             <button class="is-danger" type="button" @click="confirmPermissionMode">启用完全自动</button>
           </div>
         </div>
-        <label class="composer-toggle-row">
+        <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': controls?.planMode }" :aria-checked="controls?.planMode" :disabled="disabled || controls === null" @click="setBoolean('planMode', !controls?.planMode)">
           <span><strong>规划模式</strong><small>先形成计划，再开始执行</small></span>
-          <input type="checkbox" :checked="controls?.planMode" :disabled="disabled || controls === null" @change="updateBoolean('planMode', $event)">
-        </label>
-        <label class="composer-toggle-row is-goal">
+          <i aria-hidden="true"><b /></i>
+        </button>
+        <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': goalMode }" :aria-checked="goalMode" :disabled="disabled" @click="emit('updateGoalMode', !goalMode)">
           <span><strong>目标模式</strong><small>将下一条消息设为持续目标</small></span>
-          <input type="checkbox" :checked="goalMode" :disabled="disabled" @change="emit('updateGoalMode', ($event.target as HTMLInputElement).checked)">
-        </label>
-        <label class="composer-toggle-row">
+          <i aria-hidden="true"><b /></i>
+        </button>
+        <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': controls?.swarmMode }" :aria-checked="controls?.swarmMode" :disabled="disabled || controls === null" @click="setBoolean('swarmMode', !controls?.swarmMode)">
           <span><strong>协作模式</strong><small>让多个 Agent 在当前任务中协作</small></span>
-          <input type="checkbox" :checked="controls?.swarmMode" :disabled="disabled || controls === null" @change="updateBoolean('swarmMode', $event)">
-        </label>
+          <i aria-hidden="true"><b /></i>
+        </button>
       </div>
     </div>
 

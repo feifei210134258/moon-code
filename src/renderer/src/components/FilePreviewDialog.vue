@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   PhArrowSquareOut,
-  PhCode,
   PhDownloadSimple,
   PhFile,
   PhFolderOpen,
@@ -10,7 +9,7 @@ import {
   PhX
 } from '@phosphor-icons/vue'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
-import type { WorkspaceFilePreview, WorkspaceOpenApp } from '@shared/contracts'
+import type { WorkspaceFilePreview } from '@shared/contracts'
 
 const props = defineProps<{
   preview: WorkspaceFilePreview | null
@@ -25,7 +24,6 @@ const emit = defineEmits<{
   close: []
   download: [path: string]
   openExternal: [path: string]
-  openFileIn: [appId: WorkspaceOpenApp, path: string]
   reveal: [path: string]
 }>()
 
@@ -82,12 +80,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
             </button>
             <button type="button" :disabled="actionPending !== null" @click="emit('openExternal', preview.path)">
               <PhArrowSquareOut :size="15" /><span>系统打开</span>
-            </button>
-            <button type="button" :disabled="actionPending !== null" @click="emit('openFileIn', 'cursor', preview.path)">
-              <PhCode :size="15" /><span>Cursor</span>
-            </button>
-            <button type="button" :disabled="actionPending !== null" @click="emit('openFileIn', 'vscode', preview.path)">
-              <PhCode :size="15" /><span>VS Code</span>
             </button>
             <button type="button" :disabled="actionPending !== null" @click="emit('reveal', preview.path)">
               <PhFolderOpen :size="15" /><span>Finder</span>

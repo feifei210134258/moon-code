@@ -775,7 +775,6 @@ onBeforeUnmount(() => {
       @close="runtimeBridge.closeFilePreview"
       @download="runtimeBridge.downloadWorkspaceFile"
       @open-external="runtimeBridge.openWorkspaceFile"
-      @open-file-in="runtimeBridge.openWorkspaceFileIn"
       @reveal="runtimeBridge.revealWorkspaceFile"
     />
     <SettingsPanel
