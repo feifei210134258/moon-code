@@ -67,7 +67,7 @@ export function installSettingsApiFixture(): void {
       }
     }),
     getWorkspaceTree: async () => [{
-      id: 'workspace-1', name: 'Kimi-agent', root: '/Users/feili/codes/Kimi-agent',
+      id: 'workspace-1', name: 'moon-code', root: '/path/to/moon-code',
       sessions: [{
         id: 'session-1', title: '实现 Skills 与 MCP', updatedAt: '2026-07-23T07:00:00.000Z',
         busy: true, pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: '继续实现 Kimi parity'
@@ -103,7 +103,7 @@ export function installSettingsApiFixture(): void {
       phase: 'available' as const,
       currentVersion: '0.29.0',
       latestVersion: '0.29.1',
-      executable: '/Users/feili/.kimi-code/bin/kimi',
+      executable: '/path/to/.kimi-code/bin/kimi',
       checkedAt: new Date().toISOString(),
       error: null,
       requiresRestart: false
@@ -112,7 +112,7 @@ export function installSettingsApiFixture(): void {
       phase: 'installed' as const,
       currentVersion: '0.29.1',
       latestVersion: '0.29.1',
-      executable: '/Users/feili/.kimi-code/bin/kimi',
+      executable: '/path/to/.kimi-code/bin/kimi',
       checkedAt: new Date().toISOString(),
       error: null,
       requiresRestart: true

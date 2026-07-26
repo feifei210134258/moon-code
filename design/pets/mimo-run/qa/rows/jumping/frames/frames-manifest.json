@@ -13,11 +13,11 @@
     {
       "state": "jumping",
       "frames": [
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/jumping/frames/jumping/00.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/jumping/frames/jumping/01.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/jumping/frames/jumping/02.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/jumping/frames/jumping/03.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/jumping/frames/jumping/04.png"
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/jumping/frames/jumping/00.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/jumping/frames/jumping/01.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/jumping/frames/jumping/02.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/jumping/frames/jumping/03.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/jumping/frames/jumping/04.png"
       ],
       "method": "components"
     }

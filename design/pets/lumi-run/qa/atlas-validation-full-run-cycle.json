@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "atlas": "/Users/feili/codes/Kimi-agent/design/pets/lumi-run/final/lumi-spritesheet.png",
+  "atlas": "/path/to/moon-code/design/pets/lumi-run/final/lumi-spritesheet.png",
   "width": 3072,
   "height": 416,
   "cell": {

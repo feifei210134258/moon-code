@@ -40,5 +40,6 @@ crash-dumps/
 
 # Local app state and generated research artifacts
 .local/
+.impeccable/
 tmp/
 artifacts/

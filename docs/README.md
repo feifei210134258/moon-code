@@ -52,4 +52,4 @@
 
 ## 当前推进
 
-P0 的非上游阻塞能力已经实现：真实 Session 的 snapshot/Transcript/Prompt/Approval/Question/Tool/Thinking/WS resync，Files/Changes/Diff、Session Terminal、Model/Provider/OAuth/Settings、Skills、MCP/Tools、Agent roster 与独立 Agent Detail 均已接入。Browser 支持 HTML 路由、隔离 WebContentsView、受限 Workspace Preview、localhost、视口、Console/Network、截图与元素/区域批注；Usage、Pet、Attachment/Media、GFM、代码、KaTeX、Mermaid 和多客户端状态失效也已有实现与打包态验证。当前可构建带正式图标的未签名 arm64 `.app`、DMG 和 ZIP；公开 Beta 前仍需完成签名/公证和耐久性验证。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。
+P0 的非上游阻塞能力已经实现：真实 Session 的 snapshot/Transcript/Prompt/Approval/Question/Tool/Thinking/WS resync，Files/Changes/Diff、Session Terminal、Model/Provider/OAuth/Settings、Skills、MCP/Tools、Agent roster 与独立 Agent Detail 均已接入。Browser 支持 HTML 路由、隔离 WebContentsView、受限 Workspace Preview、localhost、视口、Console/Network、截图与元素/区域批注；Usage、Pet、Attachment/Media、GFM、代码、KaTeX、Mermaid 和多客户端状态失效也已有实现与打包态验证。当前可构建带正式图标的未签名 arm64 `.app` 和 DMG；公开 Beta 前仍需完成签名/公证和耐久性验证。逐项证据见 [P0 实现审计](./07-p0-implementation-audit.md)。

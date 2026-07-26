@@ -13,14 +13,14 @@
     {
       "state": "running-right",
       "frames": [
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/00.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/01.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/02.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/03.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/04.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/05.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/06.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running-right/frames/running-right/07.png"
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/00.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/01.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/02.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/03.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/04.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/05.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/06.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/running-right/frames/running-right/07.png"
       ],
       "method": "components"
     }

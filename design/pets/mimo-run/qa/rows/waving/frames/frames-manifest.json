@@ -13,10 +13,10 @@
     {
       "state": "waving",
       "frames": [
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waving/frames/waving/00.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waving/frames/waving/01.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waving/frames/waving/02.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waving/frames/waving/03.png"
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waving/frames/waving/00.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waving/frames/waving/01.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waving/frames/waving/02.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waving/frames/waving/03.png"
       ],
       "method": "components"
     }

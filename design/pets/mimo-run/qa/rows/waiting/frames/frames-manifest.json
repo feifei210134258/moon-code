@@ -13,12 +13,12 @@
     {
       "state": "waiting",
       "frames": [
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waiting/frames/waiting/00.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waiting/frames/waiting/01.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waiting/frames/waiting/02.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waiting/frames/waiting/03.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waiting/frames/waiting/04.png",
-        "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/waiting/frames/waiting/05.png"
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waiting/frames/waiting/00.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waiting/frames/waiting/01.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waiting/frames/waiting/02.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waiting/frames/waiting/03.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waiting/frames/waiting/04.png",
+        "/path/to/moon-code/design/pets/mimo-run/qa/rows/waiting/frames/waiting/05.png"
       ],
       "method": "components"
     }

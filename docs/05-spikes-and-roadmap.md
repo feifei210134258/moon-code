@@ -227,8 +227,8 @@ Spike 通过后，正式代码按以下顺序落地：
 
 ## 11. 开工前最后检查
 
-- [ ] 确认产品名、bundle ID 和仓库 license。
-- [ ] 确认 Kimi MIT LICENSE/NOTICE 分发方式。
+- [x] 确认产品名、bundle ID 和仓库 license（Moon Code；项目采用 MIT）。
+- [x] 确认 Kimi MIT LICENSE/NOTICE 分发方式。
 - [ ] 确认首个支持区间和 runtime 更新签名方案。
 - [ ] 将功能对照表转成 issue/测试用例，而不是只留在文档。
 - [x] 为桌宠设计原创素材 brief，不复制 Codex built-in pet（Mimo：月白云猫，见 `design/pets/mimo-run/pet_request.json`）。

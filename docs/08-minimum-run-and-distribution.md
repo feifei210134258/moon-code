@@ -27,7 +27,7 @@ pnpm dev
 pnpm package:dir
 ```
 
-产物位于 `release/mac-arm64/Moon Code.app`。需要便于传递的未签名 DMG 与 ZIP 时：
+产物位于 `release/mac-arm64/Moon Code.app`。生成未签名 DMG：
 
 ```bash
 pnpm package:unsigned:mac

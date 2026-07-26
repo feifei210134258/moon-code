@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "frames_root": "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running/frames",
+  "frames_root": "/path/to/moon-code/design/pets/mimo-run/qa/rows/running/frames",
   "states": [
     "running"
   ],
@@ -18,7 +18,7 @@
       "frames": [
         {
           "index": 0,
-          "file": "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running/frames/running/00.png",
+          "file": "/path/to/moon-code/design/pets/mimo-run/qa/rows/running/frames/running/00.png",
           "width": 192,
           "height": 208,
           "nontransparent_pixels": 24764,
@@ -33,7 +33,7 @@
         },
         {
           "index": 1,
-          "file": "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running/frames/running/01.png",
+          "file": "/path/to/moon-code/design/pets/mimo-run/qa/rows/running/frames/running/01.png",
           "width": 192,
           "height": 208,
           "nontransparent_pixels": 24087,
@@ -48,7 +48,7 @@
         },
         {
           "index": 2,
-          "file": "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running/frames/running/02.png",
+          "file": "/path/to/moon-code/design/pets/mimo-run/qa/rows/running/frames/running/02.png",
           "width": 192,
           "height": 208,
           "nontransparent_pixels": 24183,
@@ -63,7 +63,7 @@
         },
         {
           "index": 3,
-          "file": "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running/frames/running/03.png",
+          "file": "/path/to/moon-code/design/pets/mimo-run/qa/rows/running/frames/running/03.png",
           "width": 192,
           "height": 208,
           "nontransparent_pixels": 22418,
@@ -78,7 +78,7 @@
         },
         {
           "index": 4,
-          "file": "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running/frames/running/04.png",
+          "file": "/path/to/moon-code/design/pets/mimo-run/qa/rows/running/frames/running/04.png",
           "width": 192,
           "height": 208,
           "nontransparent_pixels": 24520,
@@ -93,7 +93,7 @@
         },
         {
           "index": 5,
-          "file": "/Users/feili/codes/Kimi-agent/design/pets/mimo-run/qa/rows/running/frames/running/05.png",
+          "file": "/path/to/moon-code/design/pets/mimo-run/qa/rows/running/frames/running/05.png",
           "width": 192,
           "height": 208,
           "nontransparent_pixels": 24910,

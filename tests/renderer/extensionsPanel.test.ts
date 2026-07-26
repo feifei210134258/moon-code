@@ -7,7 +7,7 @@ import ExtensionsPanel from '../../src/renderer/src/components/ExtensionsPanel.v
 const baseProps = {
   width: 382,
   activeTab: 'changes' as const,
-  workspaceName: 'Kimi-agent',
+      workspaceName: 'moon-code',
   fileList: {
     path: '.',
     items: [
