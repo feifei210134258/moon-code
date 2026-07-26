@@ -3194,21 +3194,20 @@ select:focus-visible {
   flex: 0 0 auto;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 0;
+  gap: 2px;
   width: 52%;
   min-width: 150px;
-  padding: 0;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-quiet);
 }
 
 .composer-segments button {
-  position: relative;
   min-height: 29px;
   padding: 0 4px;
-  border: 0;
-  border-radius: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
   color: var(--muted);
   background: transparent;
   cursor: pointer;
@@ -3219,24 +3218,14 @@ select:focus-visible {
 
 .composer-segments button:hover:not(:disabled) {
   color: var(--text);
-  background: var(--surface-quiet);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .composer-segments button.is-selected {
   color: var(--blue);
-  background: transparent;
+  border-color: rgba(48, 133, 250, 0.16);
+  background: var(--blue-soft);
   font-weight: 650;
-}
-
-.composer-segments button.is-selected::after {
-  position: absolute;
-  right: 9px;
-  bottom: -1px;
-  left: 9px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--blue);
-  content: '';
 }
 
 .composer-permission-row .composer-segments {
