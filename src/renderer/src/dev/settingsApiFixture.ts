@@ -99,6 +99,24 @@ export function installSettingsApiFixture(): void {
       branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
     }),
     getKimiSettings: async () => structuredClone(snapshot),
+    checkKimiCliUpdate: async () => ({
+      phase: 'available' as const,
+      currentVersion: '0.29.0',
+      latestVersion: '0.29.1',
+      executable: '/Users/feili/.kimi-code/bin/kimi',
+      checkedAt: new Date().toISOString(),
+      error: null,
+      requiresRestart: false
+    }),
+    downloadKimiCliUpdate: async () => ({
+      phase: 'installed' as const,
+      currentVersion: '0.29.1',
+      latestVersion: '0.29.1',
+      executable: '/Users/feili/.kimi-code/bin/kimi',
+      checkedAt: new Date().toISOString(),
+      error: null,
+      requiresRestart: true
+    }),
     setDefaultModel: async (modelId: string) => {
       snapshot.preferences.defaultModel = modelId
       return structuredClone(snapshot)

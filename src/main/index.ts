@@ -12,6 +12,7 @@ import { KimiPetService } from './pet/KimiPetService.js'
 import { KimiPetWindowManager } from './pet/KimiPetWindowManager.js'
 import { PetPositionStore } from './pet/PetPositionStore.js'
 import { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
+import { KimiCliUpdateService } from './runtime/KimiCliUpdateService.js'
 import { isTrustedRendererUrl, rendererEntryUrl } from './security/trustedRenderer.js'
 import { PACKAGED_PTY_SMOKE_MARKER, runPackagedPtySmoke } from './packagedPtySmoke.js'
 import { PACKAGED_BROWSER_SMOKE_MARKER, runPackagedBrowserSmoke } from './packagedBrowserSmoke.js'
@@ -20,6 +21,7 @@ import { ipcChannels, type KimiUsageState, type PetOpenSessionIntent } from '../
 
 let mainWindow: BrowserWindow | null = null
 const runtime = new KimiRuntimeManager()
+const cliUpdates = new KimiCliUpdateService()
 const sessions = new KimiSessionBridge(runtime)
 const settings = new KimiSettingsBridge(runtime)
 const capabilities = new KimiCapabilitiesBridge(runtime)
@@ -160,7 +162,7 @@ if (process.argv.includes('--smoke-node-pty')) {
     usage.start()
     pets.start()
     const trustedRendererUrl = getTrustedRendererUrl()
-    registerIpc(runtime, sessions, settings, capabilities, browser, usage, pets, () => mainWindow, trustedRendererUrl)
+    registerIpc(runtime, sessions, settings, capabilities, browser, usage, pets, cliUpdates, () => mainWindow, trustedRendererUrl)
     petWindows = new KimiPetWindowManager(pets, {
       trustedRendererUrl,
       positionStore: new PetPositionStore(join(app.getPath('userData'), 'pet-positions.json')),

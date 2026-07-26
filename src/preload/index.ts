@@ -15,6 +15,8 @@ import {
 const api: KimiAgentDesktopApi = {
   getBootstrapState: () => ipcRenderer.invoke(ipcChannels.appBootstrap),
   discoverRuntime: () => ipcRenderer.invoke(ipcChannels.runtimeDiscover),
+  checkKimiCliUpdate: () => ipcRenderer.invoke(ipcChannels.kimiCliUpdateCheck),
+  downloadKimiCliUpdate: () => ipcRenderer.invoke(ipcChannels.kimiCliUpdateDownload),
   startRuntime: (mode) => ipcRenderer.invoke(ipcChannels.runtimeStart, mode),
   connectExternalRuntime: (input) => ipcRenderer.invoke(ipcChannels.runtimeConnectExternal, input),
   stopRuntime: () => ipcRenderer.invoke(ipcChannels.runtimeStop),

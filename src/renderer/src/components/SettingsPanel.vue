@@ -6,6 +6,7 @@ import {
   PhCheck,
   PhCpu,
   PhChartDonut,
+  PhDownloadSimple,
   PhGearSix,
   PhKey,
   PhMagicWand,
@@ -18,6 +19,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   KimiOAuthFlow,
   KimiMcpServer,
+  KimiCliUpdateState,
   KimiPreferencesPatch,
   KimiSettingsSnapshot,
   KimiSkill,
@@ -52,6 +54,8 @@ const mcpServers = ref<KimiMcpServer[]>([])
 const capabilitiesPending = ref(false)
 const archivedSessions = ref<SessionNavigationItem[]>([])
 const archivesPending = ref(false)
+const cliUpdate = ref<KimiCliUpdateState | null>(null)
+const cliUpdateAction = ref<'check' | 'download' | null>(null)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let oauthGeneration = 0
 let capabilitiesGeneration = 0
@@ -66,6 +70,43 @@ const accountStatusLabel = computed(() => {
   if (status === 'revoked') return '授权已撤销'
   return '未登录'
 })
+const cliUpdateDescription = computed(() => {
+  const state = cliUpdate.value
+  if (cliUpdateAction.value === 'check') return '正在向 Kimi 官方服务检查最新版本…'
+  if (cliUpdateAction.value === 'download') return `正在下载并安装 ${state?.latestVersion ?? '最新版本'}…`
+  if (state === null || state.phase === 'idle') return '尚未检查更新。'
+  if (state.phase === 'available') return `发现 ${state.latestVersion}，当前版本为 ${state.currentVersion}。`
+  if (state.phase === 'up-to-date') return `当前 ${state.currentVersion} 已是最新版本。`
+  if (state.phase === 'installed') return `已安装 ${state.currentVersion}，重启 Moon Code 后生效。`
+  if (state.phase === 'error') return state.error ?? '检查更新失败，请稍后重试。'
+  return '正在处理 Kimi Code CLI 更新…'
+})
+
+async function checkCliUpdate(): Promise<void> {
+  const api = window.kimiAgent
+  if (api?.checkKimiCliUpdate === undefined || cliUpdateAction.value !== null) return
+  cliUpdateAction.value = 'check'
+  try {
+    cliUpdate.value = await api.checkKimiCliUpdate()
+  } catch (reason) {
+    cliUpdate.value = cliUpdateError(reason)
+  } finally {
+    cliUpdateAction.value = null
+  }
+}
+
+async function downloadCliUpdate(): Promise<void> {
+  const api = window.kimiAgent
+  if (api?.downloadKimiCliUpdate === undefined || cliUpdateAction.value !== null) return
+  cliUpdateAction.value = 'download'
+  try {
+    cliUpdate.value = await api.downloadKimiCliUpdate()
+  } catch (reason) {
+    cliUpdate.value = cliUpdateError(reason)
+  } finally {
+    cliUpdateAction.value = null
+  }
+}
 
 async function loadSettings(): Promise<void> {
   const api = window.kimiAgent
@@ -362,6 +403,7 @@ watch(
     if (props.open) {
       void loadCapabilityTab()
       void loadArchivedSessions()
+      if (activeTab.value === 'general' && cliUpdate.value === null) void checkCliUpdate()
     }
   }
 )
@@ -389,6 +431,18 @@ onBeforeUnmount(() => {
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
+}
+
+function cliUpdateError(reason: unknown): KimiCliUpdateState {
+  return {
+    phase: 'error',
+    currentVersion: cliUpdate.value?.currentVersion ?? null,
+    latestVersion: cliUpdate.value?.latestVersion ?? null,
+    executable: cliUpdate.value?.executable ?? null,
+    checkedAt: new Date().toISOString(),
+    error: errorMessage(reason),
+    requiresRestart: false
+  }
 }
 </script>
 
@@ -427,7 +481,51 @@ function errorMessage(reason: unknown): string {
           </nav>
 
           <div class="settings-content">
-            <div v-if="!runtimeRunning" class="settings-empty">
+            <section v-if="activeTab === 'general'" class="settings-section">
+              <div class="settings-title"><div><h2>通用</h2><p>Kimi 配置和仅本机的产品偏好会明确分开保存。</p></div></div>
+              <article class="cli-update-card" :class="{ 'is-error': cliUpdate?.phase === 'error' }">
+                <div>
+                  <strong>Kimi Code CLI 更新</strong>
+                  <small>{{ cliUpdateDescription }}</small>
+                </div>
+                <div class="cli-update-actions">
+                  <button class="secondary-button" type="button" :disabled="cliUpdateAction !== null" @click="checkCliUpdate">
+                    <PhArrowClockwise :class="{ spin: cliUpdateAction === 'check' }" :size="14" />检查更新
+                  </button>
+                  <button v-if="cliUpdate?.phase === 'available'" class="primary-button" type="button" :disabled="cliUpdateAction !== null" @click="downloadCliUpdate">
+                    <PhDownloadSimple :class="{ spin: cliUpdateAction === 'download' }" :size="14" />下载更新
+                  </button>
+                </div>
+              </article>
+              <p class="cli-update-note">仅检测系统安装的 Kimi Code CLI；更新由 Kimi 官方 <code>kimi update</code> 流程完成。</p>
+              <label class="preference-row"><span><strong>桌面宠物</strong><small>在桌面显示当前会话状态；默认关闭</small></span>
+                <input type="checkbox" :checked="usage.preferences.petEnabled === true" :disabled="actionPending !== null" @change="updateUsagePreference({ petEnabled: ($event.target as HTMLInputElement).checked })" />
+              </label>
+              <label class="preference-row"><span><strong>界面语言</strong><small>影响系统通知、日期/数字格式与界面语言标记</small></span>
+                <select :value="usage.preferences.locale ?? 'zh-CN'" :disabled="actionPending !== null" @change="updateUsagePreference({ locale: ($event.target as HTMLSelectElement).value as 'zh-CN' | 'en-US' })">
+                  <option value="zh-CN">简体中文</option><option value="en-US">English</option>
+                </select>
+              </label>
+              <template v-if="snapshot">
+                <label class="preference-row"><span><strong>默认 Permission</strong><small>新 Session 的权限模式</small></span>
+                  <select :value="snapshot.preferences.defaultPermissionMode ?? 'manual'" :disabled="actionPending !== null" @change="updatePreference({ defaultPermissionMode: ($event.target as HTMLSelectElement).value as 'manual' | 'auto' | 'yolo' })">
+                    <option value="manual">Manual</option><option value="auto">Auto</option><option value="yolo">Yolo</option>
+                  </select>
+                </label>
+                <label class="preference-row"><span><strong>默认 Plan</strong><small>新 Session 自动规划</small></span>
+                  <input type="checkbox" :checked="snapshot.preferences.defaultPlanMode === true" :disabled="actionPending !== null" @change="updatePreference({ defaultPlanMode: ($event.target as HTMLInputElement).checked })" />
+                </label>
+                <label class="preference-row"><span><strong>合并可用 Skills</strong><small>遵循 Kimi 的 Skill 发现规则</small></span>
+                  <input type="checkbox" :checked="snapshot.preferences.mergeAllAvailableSkills === true" :disabled="actionPending !== null" @change="updatePreference({ mergeAllAvailableSkills: ($event.target as HTMLInputElement).checked })" />
+                </label>
+                <label class="preference-row"><span><strong>Telemetry</strong><small>只控制 Kimi 官方遥测，不增加客户端追踪</small></span>
+                  <input type="checkbox" :checked="snapshot.preferences.telemetry === true" :disabled="actionPending !== null" @change="updatePreference({ telemetry: ($event.target as HTMLInputElement).checked })" />
+                </label>
+              </template>
+              <p v-else class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
+            </section>
+
+            <div v-else-if="!runtimeRunning" class="settings-empty">
               <strong>需要先连接 Kimi Runtime</strong>
               <span>设置直接来自 Kimi，不会读取或维护第二份配置。</span>
             </div>
@@ -606,31 +704,6 @@ function errorMessage(reason: unknown): string {
                 </div>
               </section>
 
-              <section v-else class="settings-section">
-                <div class="settings-title"><div><h2>通用</h2><p>Kimi 配置和仅本机的产品偏好会明确分开保存。</p></div></div>
-                <label class="preference-row"><span><strong>桌面宠物</strong><small>在桌面显示当前会话状态；默认关闭</small></span>
-                  <input type="checkbox" :checked="usage.preferences.petEnabled === true" :disabled="actionPending !== null" @change="updateUsagePreference({ petEnabled: ($event.target as HTMLInputElement).checked })" />
-                </label>
-                <label class="preference-row"><span><strong>界面语言</strong><small>影响系统通知、日期/数字格式与界面语言标记</small></span>
-                  <select :value="usage.preferences.locale ?? 'zh-CN'" :disabled="actionPending !== null" @change="updateUsagePreference({ locale: ($event.target as HTMLSelectElement).value as 'zh-CN' | 'en-US' })">
-                    <option value="zh-CN">简体中文</option><option value="en-US">English</option>
-                  </select>
-                </label>
-                <label class="preference-row"><span><strong>默认 Permission</strong><small>新 Session 的权限模式</small></span>
-                  <select :value="snapshot.preferences.defaultPermissionMode ?? 'manual'" :disabled="actionPending !== null" @change="updatePreference({ defaultPermissionMode: ($event.target as HTMLSelectElement).value as 'manual' | 'auto' | 'yolo' })">
-                    <option value="manual">Manual</option><option value="auto">Auto</option><option value="yolo">Yolo</option>
-                  </select>
-                </label>
-                <label class="preference-row"><span><strong>默认 Plan</strong><small>新 Session 自动规划</small></span>
-                  <input type="checkbox" :checked="snapshot.preferences.defaultPlanMode === true" :disabled="actionPending !== null" @change="updatePreference({ defaultPlanMode: ($event.target as HTMLInputElement).checked })" />
-                </label>
-                <label class="preference-row"><span><strong>合并可用 Skills</strong><small>遵循 Kimi 的 Skill 发现规则</small></span>
-                  <input type="checkbox" :checked="snapshot.preferences.mergeAllAvailableSkills === true" :disabled="actionPending !== null" @change="updatePreference({ mergeAllAvailableSkills: ($event.target as HTMLInputElement).checked })" />
-                </label>
-                <label class="preference-row"><span><strong>Telemetry</strong><small>只控制 Kimi 官方遥测，不增加客户端追踪</small></span>
-                  <input type="checkbox" :checked="snapshot.preferences.telemetry === true" :disabled="actionPending !== null" @change="updatePreference({ telemetry: ($event.target as HTMLInputElement).checked })" />
-                </label>
-              </section>
             </template>
 
             <div v-if="error" class="settings-message is-error" role="alert">{{ error }}</div>

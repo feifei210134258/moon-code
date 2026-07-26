@@ -5078,6 +5078,53 @@ select:focus-visible {
   border-bottom: 1px solid var(--border);
 }
 
+.cli-update-card {
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 13px;
+  border: 1px solid rgba(48, 133, 250, 0.16);
+  border-radius: 11px;
+  background: rgba(48, 133, 250, 0.045);
+}
+
+.cli-update-card.is-error {
+  border-color: rgba(226, 85, 85, 0.2);
+  background: rgba(255, 244, 244, 0.7);
+}
+
+.cli-update-card > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.cli-update-card strong { font-size: 12px; }
+.cli-update-card small {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.cli-update-card.is-error small { color: #a84646; }
+
+.cli-update-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.cli-update-note {
+  margin: -3px 0 4px;
+  color: var(--faint);
+  font-size: 9.5px;
+  line-height: 1.5;
+}
+
+.cli-update-note code { font-family: var(--mono); }
+
 .settings-inline-empty {
   min-height: 74px;
   display: flex;
