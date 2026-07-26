@@ -3197,17 +3197,17 @@ select:focus-visible {
   gap: 2px;
   width: 52%;
   min-width: 150px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 3px;
+  border: 0;
+  border-radius: 7px;
   background: var(--surface-quiet);
 }
 
 .composer-segments button {
   min-height: 29px;
   padding: 0 4px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  border: 0;
+  border-radius: 5px;
   color: var(--muted);
   background: transparent;
   cursor: pointer;
@@ -3218,13 +3218,13 @@ select:focus-visible {
 
 .composer-segments button:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .composer-segments button.is-selected {
-  color: var(--blue);
-  border-color: rgba(48, 133, 250, 0.16);
-  background: var(--blue-soft);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
   font-weight: 650;
 }
 
