@@ -90,7 +90,19 @@ function createMainWindow(): BrowserWindow {
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false)
   })
-  window.once('ready-to-show', () => window.show())
+  window.once('ready-to-show', () => {
+    window.show()
+    if (process.platform === 'darwin') {
+      app.show()
+      app.focus({ steal: true })
+    }
+    window.focus()
+
+    // Pet windows are non-activating companions. Creating them before the
+    // primary window has completed its first activation can push the app into
+    // the background on macOS, making the first launch look like an exit.
+    petWindows?.setEnabled(usage.state.preferences.petEnabled === true)
+  })
   window.on('closed', () => {
     browser.destroyGuest()
     if (mainWindow === window) mainWindow = null
@@ -169,7 +181,6 @@ if (process.argv.includes('--smoke-node-pty')) {
       onOpenSession: openMainWindowForPet
     })
     petWindows.start()
-    petWindows.setEnabled(usage.state.preferences.petEnabled === true)
     mainWindow = createMainWindow()
     // Moon Code uses the Kimi Code CLI installed by the user. Start it as
     // soon as the application opens so the renderer can use its sessions

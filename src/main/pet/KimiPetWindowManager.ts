@@ -196,6 +196,7 @@ export class KimiPetWindowManager {
       fullscreenable: false,
       alwaysOnTop: true,
       skipTaskbar: true,
+      focusable: false,
       hasShadow: false,
       backgroundColor: '#00000000',
       webPreferences: {
@@ -210,7 +211,15 @@ export class KimiPetWindowManager {
     this.#windows.set(state.sessionId, record)
 
     window.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal')
-    if (process.platform === 'darwin') window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    if (process.platform === 'darwin') {
+      window.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true,
+        // Electron otherwise toggles the entire process between foreground
+        // and UI-element activation policies. That hides the Dock icon and
+        // primary window when the first pet appears.
+        skipTransformProcessType: true
+      })
+    }
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event, url) => {
       if (!isTrustedRendererUrl(url, this.#trustedRendererUrl)) event.preventDefault()

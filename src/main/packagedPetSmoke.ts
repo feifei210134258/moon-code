@@ -66,8 +66,8 @@ export async function runPackagedPetSmoke(timeoutMs = 15_000): Promise<void> {
     if (!visibleText.includes('Pet smoke task') || !visibleText.includes('等待授权')) {
       throw new Error(`Pet Renderer did not project the assigned state: ${visibleText}`)
     }
-    if (!petWindow.isAlwaysOnTop() || petWindow.isResizable()) {
-      throw new Error('Pet BrowserWindow lost its always-on-top or fixed-size contract')
+    if (!petWindow.isAlwaysOnTop() || petWindow.isResizable() || petWindow.isFocusable()) {
+      throw new Error('Pet BrowserWindow lost its always-on-top, non-focusable, or fixed-size contract')
     }
     const bounds = petWindow.getBounds()
     if (bounds.width !== 112 || bounds.height !== 140) {
