@@ -44,18 +44,14 @@ describe('FilePreviewDialog', () => {
   it('routes all file actions from the preview header', async () => {
     const wrapper = mountPreview()
     const actions = wrapper.findAll('.file-preview-toolbar button')
+    expect(actions).toHaveLength(3)
     await actions[0]!.trigger('click')
     await actions[1]!.trigger('click')
     await actions[2]!.trigger('click')
-    await actions[3]!.trigger('click')
-    await actions[4]!.trigger('click')
 
     expect(wrapper.emitted('download')).toEqual([['docs/design-qa.md']])
     expect(wrapper.emitted('openExternal')).toEqual([['docs/design-qa.md']])
-    expect(wrapper.emitted('openFileIn')).toEqual([
-      ['cursor', 'docs/design-qa.md'],
-      ['vscode', 'docs/design-qa.md']
-    ])
+    expect(wrapper.emitted('openFileIn')).toBeUndefined()
     expect(wrapper.emitted('reveal')).toEqual([['docs/design-qa.md']])
   })
 

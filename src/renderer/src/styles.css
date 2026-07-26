@@ -3053,10 +3053,10 @@ select:focus-visible {
   position: fixed;
   z-index: var(--z-dropdown);
   overflow: auto;
-  padding: 0;
+  padding: 0 7px 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #ffffff;
+  border-radius: 14px;
+  background: var(--surface);
   box-shadow: 0 4px 8px rgba(15, 23, 42, 0.12);
 }
 
@@ -3095,7 +3095,8 @@ select:focus-visible {
 
 .composer-popover-section {
   display: grid;
-  padding: 6px;
+  gap: 4px;
+  padding: 7px 0 5px;
 }
 
 .composer-popover-section > label,
@@ -3120,6 +3121,29 @@ select:focus-visible {
   color: var(--muted);
 }
 
+.composer-model-row > span,
+.composer-control-heading {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.composer-model-row > span strong,
+.composer-control-heading strong,
+.composer-section-label strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.composer-model-row > span small,
+.composer-control-heading small,
+.composer-section-label small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
 .composer-popover select {
   width: 126px;
   border: 1px solid var(--border);
@@ -3141,72 +3165,64 @@ select:focus-visible {
   font-weight: 580;
 }
 
-.composer-advanced-toggle {
-  width: calc(100% - 12px);
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0 6px 6px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  color: var(--text);
-  background: var(--surface-quiet);
-  cursor: pointer;
-  text-align: left;
-}
-
-.composer-advanced-toggle:hover {
-  background: #e8eef5;
-}
-
-.composer-advanced-toggle > span {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.composer-advanced-toggle small {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 10.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.composer-advanced-toggle svg {
-  flex: none;
-  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.composer-advanced-toggle svg.is-expanded {
-  transform: rotate(180deg);
-}
-
 .composer-advanced-controls {
   display: grid;
-  gap: 2px;
-  padding: 0 6px 6px;
+  gap: 5px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
 }
 
-.composer-permission-row {
-  min-height: 52px !important;
+.composer-section-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 4px 2px;
 }
 
-.composer-permission-row > span {
-  min-width: 0;
+.composer-control-block {
   display: grid;
-  gap: 2px;
-  padding-right: 8px;
+  gap: 7px;
+  padding: 8px 4px;
 }
 
-.composer-permission-row small,
-.composer-toggle-row small {
+.composer-segments {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-quiet);
+}
+
+.composer-segments button {
+  min-height: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
   color: var(--muted);
+  background: transparent;
+  cursor: pointer;
   font-size: 10.5px;
-  line-height: 1.35;
+  font-weight: 590;
+}
+
+.composer-segments button:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.composer-segments button.is-selected {
+  color: var(--blue);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.composer-segments button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .composer-permission-warning {
@@ -3245,12 +3261,75 @@ select:focus-visible {
 }
 
 .composer-toggle-row > span {
+  min-width: 0;
   display: grid;
   gap: 1px;
 }
 
-.composer-toggle-row input {
-  accent-color: var(--blue);
+.composer-toggle-row {
+  width: 100%;
+  min-height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.composer-toggle-row:hover:not(:disabled) {
+  background: var(--surface-quiet);
+}
+
+.composer-toggle-row.is-selected {
+  border-color: rgba(48, 133, 250, 0.18);
+  background: var(--blue-soft);
+}
+
+.composer-toggle-row small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.composer-toggle-row > i {
+  width: 30px;
+  height: 18px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 999px;
+  background: #d3dce7;
+  transition: background 140ms ease;
+}
+
+.composer-toggle-row > i > b {
+  width: 14px;
+  height: 14px;
+  display: block;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+  transition: transform 140ms ease;
+}
+
+.composer-toggle-row.is-selected > i {
+  background: var(--blue);
+}
+
+.composer-toggle-row.is-selected > i > b {
+  transform: translateX(12px);
+}
+
+.composer-toggle-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .command-popover {

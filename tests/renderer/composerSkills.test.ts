@@ -108,7 +108,7 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.emitted('toggleTerminal')).toEqual([[]])
   })
 
-  it('keeps model controls primary and progressively discloses execution controls', async () => {
+  it('keeps model controls primary with visible thinking and execution controls', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('.model-summary').trigger('click')
     const popover = wrapper.get('.composer-popover')
@@ -116,21 +116,18 @@ describe('ComposerBar Skills menu', () => {
     expect(popover.text()).toContain('模型')
     expect(popover.text()).toContain('思考强度')
     expect(popover.text()).toContain('高级执行')
-    expect(popover.text()).not.toContain('执行审批')
-
-    await popover.get('.composer-advanced-toggle').trigger('click')
     expect(popover.text()).toContain('执行审批')
     expect(popover.text()).toContain('规划模式')
     expect(popover.text()).toContain('目标模式')
     expect(popover.text()).toContain('协作模式')
-    const toggles = wrapper.findAll('.composer-toggle-row input')
-    await toggles[0]!.setValue(true)
-    await toggles[2]!.setValue(true)
+    const toggles = wrapper.findAll('.composer-toggle-row')
+    await toggles[0]!.trigger('click')
+    await toggles[2]!.trigger('click')
     expect(wrapper.emitted('updateControls')).toEqual([
       [{ ...controls, planMode: true }],
       [{ ...controls, swarmMode: true }]
     ])
-    await toggles[1]!.setValue(true)
+    await toggles[1]!.trigger('click')
     expect(wrapper.emitted('updateGoalMode')).toEqual([[true]])
   })
 
@@ -161,9 +158,7 @@ describe('ComposerBar Skills menu', () => {
   it('requires an explicit confirmation before enabling fully automatic approval', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('.model-summary').trigger('click')
-    await wrapper.get('.composer-advanced-toggle').trigger('click')
-    const permission = wrapper.get('.composer-permission-row select')
-    await permission.setValue('yolo')
+    await wrapper.get('.composer-permission-row .composer-segments button:last-child').trigger('click')
 
     expect(wrapper.emitted('updateControls')).toBeUndefined()
     expect(wrapper.get('.composer-permission-warning').text()).toContain('跳过逐次审批')

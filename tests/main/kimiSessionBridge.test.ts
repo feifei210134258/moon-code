@@ -282,6 +282,30 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.close()
   })
 
+  it('keeps text-like Markdown previewable when an older server mislabels it as binary', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    runtime.readFile.mockResolvedValueOnce({
+      path: 'docs/notes.md',
+      content: Buffer.from('# Notes\n\nReadable').toString('base64'),
+      encoding: 'base64' as const,
+      size: 17,
+      truncated: false,
+      etag: 'etag-notes',
+      mime: 'text/markdown',
+      is_binary: true
+    })
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+
+    await expect(bridge.readFile('session-1', 'docs/notes.md')).resolves.toEqual(expect.objectContaining({
+      path: 'docs/notes.md',
+      content: '# Notes\n\nReadable',
+      encoding: 'utf-8',
+      isBinary: false
+    }))
+    await bridge.close()
+  })
+
   it('projects Kimi Session file search and external file actions without direct Renderer access', async () => {
     const runtime = new FakeRuntime(new FakeSocket())
     const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)

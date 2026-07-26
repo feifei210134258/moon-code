@@ -372,16 +372,17 @@ export class KimiSessionBridge extends EventEmitter {
   async readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview> {
     this.#assertActiveSession(sessionId)
     const result = await this.#runtime.createRestClient().readFile(sessionId, path)
+    const textFallback = decodeTextFallback(result.path, result.encoding, result.content, result.is_binary)
     return {
       path: result.path,
-      content: result.is_binary ? '' : result.content,
-      encoding: result.encoding,
+      content: textFallback.content,
+      encoding: textFallback.encoding,
       size: result.size,
       truncated: result.truncated,
       mime: result.mime,
       languageId: result.language_id ?? null,
       lineCount: result.line_count ?? null,
-      isBinary: result.is_binary
+      isBinary: textFallback.isBinary
     }
   }
 
@@ -664,6 +665,38 @@ function projectFileEntry(entry: {
     gitStatus: entry.git_status ?? null,
     childCount: entry.child_count ?? null
   }
+}
+
+/**
+ * Kimi Server normally classifies Markdown as UTF-8 text, but older runtimes
+ * occasionally mark a text-like file as binary. Preserve the server's binary
+ * decision for genuinely binary files while making the preview deterministic
+ * for well-known text extensions.
+ */
+function decodeTextFallback(
+  path: string,
+  encoding: 'utf-8' | 'base64',
+  content: string,
+  isBinary: boolean
+): { content: string; encoding: 'utf-8' | 'base64'; isBinary: boolean } {
+  if (!isBinary || !isTextLikePath(path)) return { content: isBinary ? '' : content, encoding, isBinary }
+  if (encoding === 'utf-8') return { content, encoding, isBinary: false }
+
+  const normalized = content.replace(/\s+/g, '')
+  if (normalized.length === 0 || normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) {
+    return { content: '', encoding, isBinary }
+  }
+  const bytes = Buffer.from(normalized, 'base64')
+  if (bytes.length === 0 || bytes.includes(0)) return { content: '', encoding, isBinary }
+  const decoded = bytes.toString('utf8')
+  if (decoded.includes('\uFFFD') || !Buffer.from(decoded, 'utf8').equals(bytes)) {
+    return { content: '', encoding, isBinary }
+  }
+  return { content: decoded, encoding: 'utf-8', isBinary: false }
+}
+
+function isTextLikePath(path: string): boolean {
+  return /\.(?:md|mdx|markdown|txt|text|log|json|jsonc|ya?ml|toml|ini|cfg|conf|xml|html?|css|s[ac]ss|less|m?[jt]sx?|c[jt]sx?|vue|svelte|astro|py|go|rs|java|kt|kts|swift|c|cc|cpp|cxx|h|hpp|cs|php|rb|lua|r|sh|bash|zsh|fish|ps1|sql|graphql|gql|csv|tsv|lock)$/i.test(path)
 }
 
 function formatVisualAnnotationPrompt(submission: BrowserAnnotationSubmission): string {
