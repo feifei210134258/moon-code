@@ -3124,6 +3124,7 @@ select:focus-visible {
 .composer-model-row > span,
 .composer-control-heading {
   min-width: 0;
+  flex: 1 1 auto;
   display: grid;
   gap: 2px;
 }
@@ -3181,16 +3182,21 @@ select:focus-visible {
 }
 
 .composer-control-block {
-  display: grid;
-  gap: 7px;
-  padding: 8px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 4px;
 }
 
 .composer-segments {
   display: grid;
+  flex: 0 0 auto;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 3px;
+  width: 52%;
+  min-width: 150px;
   padding: 3px;
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -3266,9 +3272,16 @@ select:focus-visible {
   gap: 1px;
 }
 
+.composer-toggle-row strong {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .composer-toggle-row {
   width: 100%;
-  min-height: 43px;
+  min-height: 37px;
   display: flex;
   align-items: center;
   justify-content: space-between;
