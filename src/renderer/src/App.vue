@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
+import { PhSidebarSimple } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TopBar from './components/TopBar.vue'
 import ProjectSidebar from './components/ProjectSidebar.vue'
 import ConversationPane from './components/ConversationPane.vue'
 import ExtensionsPanel from './components/ExtensionsPanel.vue'
+import FilePreviewDialog from './components/FilePreviewDialog.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import RuntimeConnectDialog from './components/RuntimeConnectDialog.vue'
 import { useRuntimeBridge } from './composables/useRuntimeBridge'
@@ -38,6 +40,7 @@ const {
   activeSessionId,
   activeExtension,
   rightPanelOpen,
+  leftPanelWidth,
   rightPanelWidth,
   terminalOpen,
   turns,
@@ -502,24 +505,53 @@ watch(
 
 let stopResize: (() => void) | undefined
 
-function startResize(event: PointerEvent): void {
+function startColumnResize(
+  event: PointerEvent,
+  startWidth: number,
+  direction: 1 | -1,
+  update: (width: number) => void
+): void {
+  event.preventDefault()
+  stopResize?.()
   const startX = event.clientX
-  const startWidth = rightPanelWidth.value
   const onMove = (moveEvent: PointerEvent): void => {
-    store.setRightPanelWidth(startWidth + startX - moveEvent.clientX)
+    update(startWidth + ((moveEvent.clientX - startX) * direction))
   }
   const onUp = (): void => {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
+    document.body.classList.remove('is-panel-resizing')
     stopResize = undefined
   }
+  document.body.classList.add('is-panel-resizing')
   stopResize = onUp
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
 }
 
+function startSidebarResize(event: PointerEvent): void {
+  startColumnResize(event, leftPanelWidth.value, 1, (width) => store.setLeftPanelWidth(width))
+}
+
+function startRightPanelResize(event: PointerEvent): void {
+  startColumnResize(event, rightPanelWidth.value, -1, (width) => store.setRightPanelWidth(width))
+}
+
+function resizeSidebarWithKeyboard(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  store.setLeftPanelWidth(leftPanelWidth.value + (event.key === 'ArrowRight' ? 12 : -12))
+}
+
+function resizeRightPanelWithKeyboard(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  store.setRightPanelWidth(rightPanelWidth.value + (event.key === 'ArrowLeft' ? 12 : -12))
+}
+
 onBeforeUnmount(() => {
   stopResize?.()
+  document.body.classList.remove('is-panel-resizing')
   stopPetOpenListener?.()
   void browserBridge.setVisible(false)
   window.removeEventListener('keydown', onWindowKeydown)
@@ -553,7 +585,7 @@ onBeforeUnmount(() => {
       @undo="undoSession"
     />
 
-    <main class="workbench">
+    <main class="workbench" :style="{ '--sidebar-width': `${leftPanelWidth}px` }">
       <ProjectSidebar
         :projects="projects"
         :active-workspace-id="activeWorkspaceId"
@@ -578,6 +610,19 @@ onBeforeUnmount(() => {
         @load-session-children="loadSessionChildren"
         @start-side-chat="startSideChat"
         @open-settings="openSettings"
+      />
+
+      <div
+        class="column-splitter sidebar-splitter"
+        role="separator"
+        aria-label="调整项目栏宽度"
+        aria-orientation="vertical"
+        :aria-valuemin="220"
+        :aria-valuemax="420"
+        :aria-valuenow="leftPanelWidth"
+        tabindex="0"
+        @keydown="resizeSidebarWithKeyboard"
+        @pointerdown="startSidebarResize"
       />
 
       <ConversationPane
@@ -650,11 +695,16 @@ onBeforeUnmount(() => {
 
       <template v-if="rightPanelOpen">
         <div
-          class="panel-splitter"
+          class="column-splitter panel-splitter"
           role="separator"
           aria-label="调整扩展栏宽度"
           aria-orientation="vertical"
-          @pointerdown="startResize"
+          :aria-valuemin="320"
+          :aria-valuemax="1040"
+          :aria-valuenow="rightPanelWidth"
+          tabindex="0"
+          @keydown="resizeRightPanelWithKeyboard"
+          @pointerdown="startRightPanelResize"
         />
         <ExtensionsPanel
           :width="rightPanelWidth"
@@ -664,8 +714,6 @@ onBeforeUnmount(() => {
           :file-list-pending="runtimeBridge.fileListPending.value"
           :file-list-error="runtimeBridge.fileListError.value"
           :file-preview="runtimeBridge.filePreview.value"
-          :file-preview-pending="runtimeBridge.filePreviewPending.value"
-          :file-preview-error="runtimeBridge.filePreviewError.value"
           :git-status="runtimeBridge.gitStatus.value"
           :git-status-pending="runtimeBridge.gitStatusPending.value"
           :git-status-error="runtimeBridge.gitStatusError.value"
@@ -675,9 +723,6 @@ onBeforeUnmount(() => {
           :file-grep="runtimeBridge.fileGrep.value"
           :file-grep-pending="runtimeBridge.fileGrepPending.value"
           :file-grep-error="runtimeBridge.fileGrepError.value"
-          :file-action-pending="runtimeBridge.fileActionPending.value"
-          :file-action-error="runtimeBridge.fileActionError.value"
-          :file-action-notice="runtimeBridge.fileActionNotice.value"
           :browser-state="browserBridge.state.value"
           :browser-pending="browserBridge.pending.value"
           :browser-error="browserBridge.error.value"
@@ -698,10 +743,6 @@ onBeforeUnmount(() => {
           @open-directory="runtimeBridge.loadDirectory"
           @search-files="runtimeBridge.searchFiles"
           @grep-files="runtimeBridge.grepFiles"
-          @download-file="runtimeBridge.downloadWorkspaceFile"
-          @open-external-file="runtimeBridge.openWorkspaceFile"
-          @open-file-in="runtimeBridge.openWorkspaceFileIn"
-          @reveal-file="runtimeBridge.revealWorkspaceFile"
           @refresh="runtimeBridge.refreshWorkspaceContext(activeSessionId)"
           @browser-bounds="browserBridge.setBounds"
           @browser-viewport="browserBridge.setViewport"
@@ -721,9 +762,22 @@ onBeforeUnmount(() => {
         aria-label="展开扩展栏"
         @click="store.rightPanelOpen = true"
       >
-        扩展
+        <PhSidebarSimple :size="16" /><span>扩展</span>
       </button>
     </main>
+    <FilePreviewDialog
+      :preview="runtimeBridge.filePreview.value"
+      :pending="runtimeBridge.filePreviewPending.value"
+      :error="runtimeBridge.filePreviewError.value"
+      :action-pending="runtimeBridge.fileActionPending.value"
+      :action-error="runtimeBridge.fileActionError.value"
+      :action-notice="runtimeBridge.fileActionNotice.value"
+      @close="runtimeBridge.closeFilePreview"
+      @download="runtimeBridge.downloadWorkspaceFile"
+      @open-external="runtimeBridge.openWorkspaceFile"
+      @open-file-in="runtimeBridge.openWorkspaceFileIn"
+      @reveal="runtimeBridge.revealWorkspaceFile"
+    />
     <SettingsPanel
       :open="settingsOpen"
       :runtime-running="runtimeBridge.runtime.value.status === 'running'"

@@ -28,8 +28,6 @@ const baseProps = {
     path: 'README.md', content: '# Kimi Agent', encoding: 'utf-8' as const, size: 12,
     truncated: false, mime: 'text/markdown', languageId: 'markdown', lineCount: 1, isBinary: false
   },
-  filePreviewPending: false,
-  filePreviewError: null,
   gitStatus: {
     branch: 'main', ahead: 0, behind: 0, entries: { 'src/app.ts': 'modified' as const },
     additions: 2, deletions: 1, pullRequest: null
@@ -102,7 +100,7 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.find('.todo-panel li.is-in_progress').exists()).toBe(true)
   })
 
-  it('routes directories and files through typed entry events and renders bounded preview text', async () => {
+  it('routes directories and files through typed entry events without burying a preview below the list', async () => {
     const wrapper = mount(ExtensionsPanel, { props: { ...baseProps, activeTab: 'files' } })
     const rows = wrapper.findAll('.file-row')
     expect(rows).toHaveLength(2)
@@ -111,7 +109,8 @@ describe('ExtensionsPanel', () => {
 
     expect(wrapper.emitted('openEntry')?.[0]?.[0]).toEqual(expect.objectContaining({ path: 'src', kind: 'directory' }))
     expect(wrapper.emitted('openEntry')?.[1]?.[0]).toEqual(expect.objectContaining({ path: 'README.md', kind: 'file' }))
-    expect(wrapper.get('.file-preview-code').text()).toContain('# Kimi Agent')
+    expect(wrapper.find('.file-preview-panel').exists()).toBe(false)
+    expect(wrapper.findAll('.file-row')[1]!.classes()).toContain('is-active')
   })
 
   it('keeps the parent directory label visible and colors HTML file icons blue', () => {
@@ -132,25 +131,6 @@ describe('ExtensionsPanel', () => {
 
     expect(wrapper.get('.file-parent-row').text()).toContain('返回上一级')
     expect(wrapper.get('.file-row .is-html-file').classes()).toContain('is-html-file')
-  })
-
-  it('shows binary previews as a safe degradation instead of injecting base64', () => {
-    const wrapper = mount(ExtensionsPanel, {
-      props: {
-        ...baseProps,
-        activeTab: 'files',
-        filePreview: {
-          ...baseProps.filePreview,
-          path: 'image.png',
-          content: '',
-          mime: 'image/png',
-          isBinary: true
-        }
-      }
-    })
-
-    expect(wrapper.find('.file-preview-code').exists()).toBe(false)
-    expect(wrapper.text()).toContain('二进制文件不会作为文本载入 Renderer')
   })
 
   it('submits native file queries and routes search directories without trying to read them as files', async () => {
@@ -192,22 +172,6 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.emitted('openFile')).toEqual([['src/index.html']])
     expect(wrapper.get('[aria-label="提交文件名搜索"]').text()).toBe('')
     expect(wrapper.get('[aria-label="提交文件内容搜索"]').text()).toBe('')
-  })
-
-  it('exposes download, external open, IDE open and reveal from a file preview menu', async () => {
-    const wrapper = mount(ExtensionsPanel, { props: { ...baseProps, activeTab: 'files' } })
-    await wrapper.get('.file-preview-actions summary').trigger('click')
-    const actions = wrapper.findAll('.file-preview-actions button')
-    await actions[0]!.trigger('click')
-    await actions[1]!.trigger('click')
-    await actions[2]!.trigger('click')
-    await actions[3]!.trigger('click')
-    await actions[4]!.trigger('click')
-
-    expect(wrapper.emitted('downloadFile')).toEqual([['README.md']])
-    expect(wrapper.emitted('openExternalFile')).toEqual([['README.md']])
-    expect(wrapper.emitted('openFileIn')).toEqual([['cursor', 'README.md'], ['vscode', 'README.md']])
-    expect(wrapper.emitted('revealFile')).toEqual([['README.md']])
   })
 
   it('keeps the browser focused on screenshot and annotation controls', async () => {

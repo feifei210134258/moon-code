@@ -199,6 +199,14 @@ describe('workbench transcript hydration', () => {
     expect(store.rightPanelWidth).toBe(1_040)
   })
 
+  it('keeps a dragged project sidebar within a useful desktop width', () => {
+    const store = useWorkbenchStore()
+    store.setLeftPanelWidth(100)
+    expect(store.leftPanelWidth).toBe(220)
+    store.setLeftPanelWidth(520)
+    expect(store.leftPanelWidth).toBe(420)
+  })
+
   it('maps busy and completed Kimi sessions to explicit navigation states', () => {
     const store = useWorkbenchStore()
     store.hydrateProjects([{

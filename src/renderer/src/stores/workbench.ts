@@ -75,6 +75,7 @@ export const useWorkbenchStore = defineStore('workbench', {
     activeSessionId: 'explore-client',
     activeExtension: 'changes' as ExtensionTab,
     rightPanelOpen: true,
+    leftPanelWidth: 280,
     rightPanelWidth: 382,
     terminalOpen: false,
     turns: structuredClone(initialTurns),
@@ -118,6 +119,9 @@ export const useWorkbenchStore = defineStore('workbench', {
     },
     setRightPanelWidth(width: number) {
       this.rightPanelWidth = Math.min(1040, Math.max(320, width))
+    },
+    setLeftPanelWidth(width: number) {
+      this.leftPanelWidth = Math.min(420, Math.max(220, width))
     },
     toggleTerminal(force?: boolean) {
       this.terminalOpen = force ?? !this.terminalOpen

@@ -833,7 +833,10 @@ export function useRuntimeBridge() {
     if (window.kimiAgent === undefined || sessionId === null) return
     const generation = ++previewGeneration
     filePreviewPending.value = true
+    filePreview.value = null
     filePreviewError.value = null
+    fileActionError.value = null
+    fileActionNotice.value = null
     try {
       const preview = await window.kimiAgent.readFile(sessionId, path)
       if (generation !== previewGeneration || sessionId !== requestedSessionId) return
@@ -846,6 +849,17 @@ export function useRuntimeBridge() {
     } finally {
       if (generation === previewGeneration) filePreviewPending.value = false
     }
+  }
+
+  const closeFilePreview = (): void => {
+    previewGeneration += 1
+    fileActionGeneration += 1
+    filePreview.value = null
+    filePreviewPending.value = false
+    filePreviewError.value = null
+    fileActionPending.value = null
+    fileActionError.value = null
+    fileActionNotice.value = null
   }
 
   const searchMentionFiles = async (query: string): Promise<WorkspaceFileSearchItem[]> => {
@@ -1384,6 +1398,7 @@ export function useRuntimeBridge() {
     dismissQuestion,
     loadDirectory,
     openFile,
+    closeFilePreview,
     searchMentionFiles,
     searchFiles,
     grepFiles,

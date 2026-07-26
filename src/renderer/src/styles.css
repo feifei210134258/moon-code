@@ -534,7 +534,7 @@ select:focus-visible {
 .workbench {
   position: relative;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) auto auto;
+  grid-template-columns: var(--sidebar-width, 280px) 5px minmax(0, 1fr) auto auto;
   height: calc(100% - 56px);
   min-height: 0;
 }
@@ -548,7 +548,6 @@ select:focus-visible {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border);
   padding: 18px 12px 14px;
   overflow: hidden;
 }
@@ -3370,16 +3369,16 @@ select:focus-visible {
   white-space: pre-wrap;
 }
 
-.panel-splitter {
+.column-splitter {
   position: relative;
   z-index: 10;
   width: 5px;
-  margin-left: -2px;
   cursor: col-resize;
+  touch-action: none;
   background: transparent;
 }
 
-.panel-splitter::after {
+.column-splitter::after {
   content: '';
   position: absolute;
   inset: 0 auto 0 2px;
@@ -3388,8 +3387,17 @@ select:focus-visible {
   transition: background 140ms ease;
 }
 
-.panel-splitter:hover::after {
+.column-splitter:hover::after,
+.column-splitter:focus-visible::after {
   background: rgba(48, 133, 250, 0.45);
+}
+
+.column-splitter:focus-visible { outline: none; }
+.panel-splitter { margin-left: -2px; }
+
+body.is-panel-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .extensions-panel {
@@ -4023,105 +4031,200 @@ select:focus-visible {
   color: var(--blue);
 }
 
-.file-preview-panel {
-  min-height: 180px;
-  display: grid;
-  grid-template-rows: 38px minmax(0, 1fr) auto;
-  margin-top: 10px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #ffffff;
-}
-
-.file-preview-panel > header {
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--border);
-  font-size: 10.5px;
-}
-
-.file-preview-panel > header > strong { min-width: 0; flex: 1; }
-.file-preview-actions { position: relative; margin-left: auto; }
-.file-preview-actions summary {
-  width: 26px;
-  height: 26px;
+.file-preview-backdrop {
+  position: fixed;
+  z-index: 240;
+  inset: 0;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  color: var(--muted);
-  cursor: pointer;
-  list-style: none;
+  padding: 28px;
+  background: rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(3px);
 }
-.file-preview-actions summary::-webkit-details-marker { display: none; }
-.file-preview-actions summary:hover { background: rgba(15, 23, 42, 0.055); }
-.file-preview-actions > div {
-  position: absolute;
-  z-index: 8;
-  top: 29px;
-  right: 0;
-  width: 142px;
-  display: grid;
-  gap: 2px;
-  padding: 5px;
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
+
+.file-preview-dialog {
+  width: min(1040px, 100%);
+  height: min(780px, 100%);
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 13px;
   background: #ffffff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.24);
 }
-.file-preview-actions button {
-  min-height: 27px;
+
+.file-preview-dialog > header {
+  min-width: 0;
+  min-height: 54px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 6px;
-  color: #455368;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font-size: 9.5px;
+  gap: 12px;
+  padding: 0 10px 0 15px;
+  border-bottom: 1px solid var(--border);
 }
-.file-preview-actions button:hover { background: rgba(15, 23, 42, 0.055); }
-.file-preview-actions button:disabled { opacity: 0.45; cursor: default; }
-.file-action-message { margin: 5px 8px 0; color: #497560; font-size: 9.5px; }
-.file-action-message.is-error { color: var(--red); }
 
-.file-preview-panel > header strong {
+.file-preview-identity {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #56657a;
+}
+
+.file-preview-identity > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.file-preview-identity strong,
+.file-preview-identity small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.file-preview-code {
+.file-preview-identity strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.file-preview-identity small {
+  color: var(--muted);
+  font-size: 9.5px;
+}
+
+.file-preview-toolbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.file-preview-toolbar::-webkit-scrollbar { display: none; }
+
+.file-preview-toolbar button,
+.file-preview-close {
+  min-height: 30px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  color: #526276;
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.file-preview-close {
+  width: 30px;
+  padding: 0;
+}
+
+.file-preview-toolbar button:hover,
+.file-preview-close:hover,
+.file-preview-toolbar button:focus-visible,
+.file-preview-close:focus-visible {
+  color: var(--ink);
+  background: rgba(15, 23, 42, 0.055);
+}
+
+.file-preview-toolbar button:focus-visible,
+.file-preview-close:focus-visible {
+  outline: 2px solid rgba(48, 133, 250, 0.25);
+  outline-offset: 1px;
+}
+
+.file-preview-toolbar button:disabled {
+  cursor: default;
+  opacity: 0.46;
+}
+
+.file-preview-message {
+  flex: none;
+  margin: 0;
+  padding: 7px 15px;
+  color: #497560;
+  background: rgba(67, 160, 71, 0.065);
+  font-size: 10px;
+}
+
+.file-preview-message.is-error {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.file-preview-body {
+  min-width: 0;
   min-height: 0;
-  max-height: 420px;
+  flex: 1;
+  display: grid;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.file-preview-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.file-preview-state.is-error { color: var(--red); }
+
+.workspace-file-preview-code {
+  min-width: 0;
+  min-height: 0;
   margin: 0;
   overflow: auto;
-  padding: 8px 0;
+  padding: 12px 0 20px;
   color: #354052;
   background: #ffffff;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 9.5px;
-  line-height: 1.55;
+  font-size: 11px;
+  line-height: 1.6;
 }
 
-.file-preview-code code {
+.workspace-file-preview-code code {
   display: block;
   min-width: max-content;
-  padding-right: 10px;
+  padding-right: 20px;
   white-space: pre;
 }
 
-.file-preview-code code > span {
+.workspace-file-preview-code code > span {
   display: inline-block;
-  width: 42px;
-  margin-right: 8px;
+  width: 48px;
+  margin-right: 12px;
   color: #9aa3af;
   text-align: right;
+  user-select: none;
+}
+
+.file-preview-dialog > footer {
+  flex: none;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  background: #f8f9fa;
+  font-size: 9.5px;
 }
 
 .attachment-preview-backdrop {
@@ -4844,14 +4947,28 @@ select:focus-visible {
   top: 10px;
   z-index: 15;
   height: 32px;
-  padding: 0 11px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   color: var(--muted);
   cursor: pointer;
   font-size: 11px;
-  backdrop-filter: blur(16px);
+  font-weight: 540;
+}
+
+.panel-restore:hover,
+.panel-restore:focus-visible {
+  color: var(--ink);
+  background: rgba(15, 23, 42, 0.045);
+}
+
+.panel-restore:focus-visible {
+  outline: 2px solid rgba(48, 133, 250, 0.28);
+  outline-offset: 1px;
 }
 
 .settings-backdrop {
@@ -5593,7 +5710,7 @@ select:focus-visible {
 
 @media (max-width: 1180px) {
   .workbench {
-    grid-template-columns: 244px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width, 244px) 5px minmax(0, 1fr);
   }
 
   .panel-splitter {
@@ -5623,6 +5740,10 @@ select:focus-visible {
 
 @media (max-width: 920px) {
   .project-sidebar {
+    display: none;
+  }
+
+  .sidebar-splitter {
     display: none;
   }
 
