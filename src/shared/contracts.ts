@@ -1,6 +1,8 @@
 export const ipcChannels = {
   appBootstrap: 'app:bootstrap',
   runtimeDiscover: 'runtime:discover',
+  kimiCliUpdateCheck: 'kimi-cli:update:check',
+  kimiCliUpdateDownload: 'kimi-cli:update:download',
   runtimeStart: 'runtime:start',
   runtimeConnectExternal: 'runtime:connect-external',
   runtimeStop: 'runtime:stop',
@@ -140,6 +142,25 @@ export interface RuntimeDiscovery {
   supportedRange: string
   managed: RuntimeCandidate
   system: RuntimeCandidate
+}
+
+export type KimiCliUpdatePhase =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'up-to-date'
+  | 'downloading'
+  | 'installed'
+  | 'error'
+
+export interface KimiCliUpdateState {
+  phase: KimiCliUpdatePhase
+  currentVersion: string | null
+  latestVersion: string | null
+  executable: string | null
+  checkedAt: string | null
+  error: string | null
+  requiresRestart: boolean
 }
 
 export interface AppBootstrapState {
@@ -1002,6 +1023,8 @@ export interface KimiPetWindowApi {
 export interface KimiAgentDesktopApi {
   getBootstrapState(): Promise<AppBootstrapState>
   discoverRuntime(): Promise<RuntimeDiscovery>
+  checkKimiCliUpdate(): Promise<KimiCliUpdateState>
+  downloadKimiCliUpdate(): Promise<KimiCliUpdateState>
   startRuntime(mode?: 'managed' | 'system'): Promise<RuntimePublicState>
   connectExternalRuntime(input: RuntimeExternalConnectionInput): Promise<RuntimePublicState>
   stopRuntime(): Promise<RuntimePublicState>

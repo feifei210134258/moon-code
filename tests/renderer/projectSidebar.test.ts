@@ -52,6 +52,8 @@ describe('ProjectSidebar', () => {
     expect(wrapper.get('.session-status.is-running').attributes('title')).toBe('进行中')
     expect(wrapper.get('.session-status.is-completed').find('i').exists()).toBe(true)
     expect(wrapper.get('.session-status.is-completed').attributes('title')).toBe('已结束')
+    expect(wrapper.findAll('.session-status')).toHaveLength(2)
+    expect(wrapper.findAll('.session-row')[2]?.find('.session-status').exists()).toBe(false)
     wrapper.unmount()
   })
 

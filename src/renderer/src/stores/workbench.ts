@@ -8,6 +8,8 @@ import type {
 import type { ChatTurn, ExtensionTab, ProjectItem } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
 
+const VIEWED_SESSION_UPDATES_KEY = 'moon-code:viewed-session-updates'
+
 const initialProjects: ProjectItem[] = [
   {
     id: 'kimi-agent',
@@ -73,12 +75,15 @@ export const useWorkbenchStore = defineStore('workbench', {
     activeSessionId: 'explore-client',
     activeExtension: 'changes' as ExtensionTab,
     rightPanelOpen: true,
+    leftPanelWidth: 280,
     rightPanelWidth: 382,
     terminalOpen: false,
     turns: structuredClone(initialTurns),
     transcriptPhase: 'idle' as SessionViewState['phase'],
     transcriptError: null as string | null,
-    transcriptHasMore: false
+    transcriptHasMore: false,
+    viewedSessionUpdates: loadViewedSessionUpdates(),
+    sessionUpdates: {} as Record<string, string | null>
   }),
   actions: {
     toggleProject(projectId: string) {
@@ -98,6 +103,15 @@ export const useWorkbenchStore = defineStore('workbench', {
       this.activeSessionId = sessionId
       const workspace = this.projects.find((project) => project.sessions.some((session) => session.id === sessionId))
       if (workspace !== undefined) this.activeWorkspaceId = workspace.id
+      const session = workspace?.sessions.find((item) => item.id === sessionId)
+      if (session?.tone === 'completed' || session?.tone === 'unread') session.tone = 'neutral'
+      if (Object.prototype.hasOwnProperty.call(this.sessionUpdates, sessionId)) {
+        this.viewedSessionUpdates = {
+          ...this.viewedSessionUpdates,
+          [sessionId]: this.sessionUpdates[sessionId] ?? null
+        }
+        persistViewedSessionUpdates(this.viewedSessionUpdates)
+      }
     },
     setExtension(tab: ExtensionTab) {
       this.activeExtension = tab
@@ -106,11 +120,17 @@ export const useWorkbenchStore = defineStore('workbench', {
     setRightPanelWidth(width: number) {
       this.rightPanelWidth = Math.min(1040, Math.max(320, width))
     },
+    setLeftPanelWidth(width: number) {
+      this.leftPanelWidth = Math.min(420, Math.max(220, width))
+    },
     toggleTerminal(force?: boolean) {
       this.terminalOpen = force ?? !this.terminalOpen
     },
     hydrateProjects(tree: WorkspaceNavigationItem[]) {
       const expandedById = new Map(this.projects.map((project) => [project.id, project.expanded]))
+      this.sessionUpdates = Object.fromEntries(tree.flatMap((workspace) =>
+        workspace.sessions.map((session) => [session.id, session.updatedAt])
+      ))
       const projects: ProjectItem[] = tree.map((workspace, index) => ({
         id: workspace.id,
         name: workspace.name,
@@ -122,13 +142,7 @@ export const useWorkbenchStore = defineStore('workbench', {
             title: session.title || session.lastPrompt || '未命名任务',
             ...(relativeTime === undefined ? {} : { relativeTime }),
             ...(session.parentSessionId == null ? {} : { parentSessionId: session.parentSessionId }),
-            tone: session.pendingInteraction !== 'none'
-              ? 'attention'
-              : session.busy
-                ? 'running'
-                : session.lastTurnReason === 'completed'
-                  ? 'completed'
-                  : 'unread'
+            tone: navigationTone(session, this.viewedSessionUpdates)
           }
         })
       }))
@@ -161,14 +175,9 @@ export const useWorkbenchStore = defineStore('workbench', {
           title: child.title || child.lastPrompt || '未命名子任务',
           parentSessionId,
           ...(relativeTime === undefined ? {} : { relativeTime }),
-          tone: child.pendingInteraction !== 'none'
-            ? 'attention'
-            : child.busy
-              ? 'running'
-              : child.lastTurnReason === 'completed'
-                ? 'completed'
-                : 'neutral'
+          tone: navigationTone(child, this.viewedSessionUpdates)
         })
+        this.sessionUpdates[child.id] = child.updatedAt
         seen.add(child.id)
       }
     },
@@ -187,6 +196,40 @@ export const useWorkbenchStore = defineStore('workbench', {
     }
   }
 })
+
+function navigationTone(
+  session: WorkspaceNavigationItem['sessions'][number],
+  viewedSessionUpdates: Record<string, string | null>
+): 'neutral' | 'running' | 'completed' | 'attention' {
+  if (session.pendingInteraction !== 'none') return 'attention'
+  if (session.busy) return 'running'
+  if (session.lastTurnReason !== 'completed') return 'neutral'
+  const wasViewed = Object.prototype.hasOwnProperty.call(viewedSessionUpdates, session.id) &&
+    viewedSessionUpdates[session.id] === session.updatedAt
+  return wasViewed ? 'neutral' : 'completed'
+}
+
+function loadViewedSessionUpdates(): Record<string, string | null> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const value = JSON.parse(window.localStorage.getItem(VIEWED_SESSION_UPDATES_KEY) ?? '{}') as unknown
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string | null] => (
+      typeof entry[1] === 'string' || entry[1] === null
+    )))
+  } catch {
+    return {}
+  }
+}
+
+function persistViewedSessionUpdates(updates: Record<string, string | null>): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(VIEWED_SESSION_UPDATES_KEY, JSON.stringify(updates))
+  } catch {
+    // Status acknowledgement remains valid for this renderer lifetime if storage is unavailable.
+  }
+}
 
 /* 同一轮里 Kimi CLI 会拆出多条 assistant 消息；展示层聚合成一个 Kimi 回合，
  * 直到下一个用户消息（或 cron/compaction 来源标记）才开启新回合。 */

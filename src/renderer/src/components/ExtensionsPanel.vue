@@ -3,7 +3,6 @@ import {
   PhArrowClockwise,
   PhArrowUp,
   PhCaretRight,
-  PhDownloadSimple,
   PhFile,
   PhFileCss,
   PhFileHtml,
@@ -17,7 +16,7 @@ import {
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -46,8 +45,6 @@ const props = withDefaults(defineProps<{
   fileListPending: boolean
   fileListError: string | null
   filePreview: WorkspaceFilePreview | null
-  filePreviewPending: boolean
-  filePreviewError: string | null
   gitStatus: WorkspaceGitStatus | null
   gitStatusPending: boolean
   gitStatusError: string | null
@@ -57,9 +54,6 @@ const props = withDefaults(defineProps<{
   fileGrep?: WorkspaceGrepResult | null
   fileGrepPending?: boolean
   fileGrepError?: string | null
-  fileActionPending?: string | null
-  fileActionError?: string | null
-  fileActionNotice?: string | null
   browserState: BrowserViewState
   browserPending: boolean
   browserError: string | null
@@ -86,9 +80,6 @@ const props = withDefaults(defineProps<{
   fileGrep: null,
   fileGrepPending: false,
   fileGrepError: null,
-  fileActionPending: null,
-  fileActionError: null,
-  fileActionNotice: null,
   todos: () => [],
   tasks: () => [],
   tasksPending: false,
@@ -104,10 +95,6 @@ const emit = defineEmits<{
   openDirectory: [path: string]
   searchFiles: [query: string]
   grepFiles: [pattern: string]
-  downloadFile: [path: string]
-  openExternalFile: [path: string]
-  openFileIn: [appId: 'cursor' | 'vscode', path: string]
-  revealFile: [path: string]
   refresh: []
   browserBounds: [bounds: BrowserBounds]
   browserViewport: [viewport: BrowserViewport]
@@ -129,23 +116,11 @@ const parentPath = computed(() => {
   parts.pop()
   return parts.length === 0 ? '.' : parts.join('/')
 })
-const previewLines = computed(() => (props.filePreview?.content ?? '').split('\n').slice(0, 400))
-const previewClipped = computed(() => (props.filePreview?.lineCount ?? previewLines.value.length) > previewLines.value.length)
 const activeTodo = computed(() => props.todos.at(-1) ?? null)
 const todoItems = computed(() => activeTodo.value?.items ?? [])
 const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
 const fileSearchQuery = ref('')
 const grepPattern = ref('')
-const filePreviewActions = ref<HTMLDetailsElement | null>(null)
-
-function onWindowKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || filePreviewActions.value?.open !== true) return
-  event.preventDefault()
-  filePreviewActions.value.open = false
-}
-
-onMounted(() => window.addEventListener('keydown', onWindowKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeydown))
 
 function submitFileSearch(): void {
   const query = fileSearchQuery.value.trim()
@@ -365,29 +340,6 @@ function statusLabel(status: string): string {
       <div v-if="fileList?.truncated" class="extension-state">目录内容已按 Kimi Server 限制截断。</div>
       <div v-if="fileList && fileList.items.length === 0" class="extension-state">这个目录是空的。</div>
 
-      <section v-if="filePreviewPending || filePreviewError || filePreview" class="file-preview-panel">
-        <header>
-          <strong>{{ filePreview?.path ?? '文件预览' }}</strong>
-          <details v-if="filePreview" ref="filePreviewActions" class="file-preview-actions">
-            <summary aria-label="文件操作">⋯</summary>
-            <div>
-              <button type="button" :disabled="fileActionPending !== null" @click="emit('downloadFile', filePreview.path)"><PhDownloadSimple :size="14" />下载</button>
-              <button type="button" :disabled="fileActionPending !== null" @click="emit('openExternalFile', filePreview.path)">系统打开</button>
-              <button type="button" :disabled="fileActionPending !== null" @click="emit('openFileIn', 'cursor', filePreview.path)">Cursor 打开</button>
-              <button type="button" :disabled="fileActionPending !== null" @click="emit('openFileIn', 'vscode', filePreview.path)">VS Code 打开</button>
-              <button type="button" :disabled="fileActionPending !== null" @click="emit('revealFile', filePreview.path)">在 Finder 中显示</button>
-            </div>
-          </details>
-        </header>
-        <div v-if="filePreviewPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取文件…</div>
-        <div v-else-if="filePreviewError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ filePreviewError }}</div>
-        <div v-else-if="filePreview?.isBinary" class="extension-state">二进制文件不会作为文本载入 Renderer。</div>
-        <pre v-else-if="filePreview" class="file-preview-code"><code v-for="(line, index) in previewLines" :key="index"><span>{{ index + 1 }}</span>{{ line }}
-</code></pre>
-        <div v-if="filePreview?.truncated || previewClipped" class="diff-context">文件较大，当前仅显示前 {{ previewLines.length }} 行</div>
-      </section>
-      <p v-if="fileActionError" class="file-action-message is-error" role="alert">{{ fileActionError }}</p>
-      <p v-else-if="fileActionNotice" class="file-action-message">{{ fileActionNotice }}</p>
     </div>
 
     <BrowserPanel

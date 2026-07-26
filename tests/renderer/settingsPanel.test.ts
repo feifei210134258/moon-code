@@ -291,6 +291,66 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
+  it('checks and downloads a Kimi Code CLI update from General settings', async () => {
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      checkKimiCliUpdate: vi.fn(async () => ({
+        phase: 'available' as const,
+        currentVersion: '0.29.0', latestVersion: '0.29.1',
+        executable: '/Users/test/.kimi-code/bin/kimi', checkedAt: '2026-07-26T01:00:00.000Z',
+        error: null, requiresRestart: false
+      })),
+      downloadKimiCliUpdate: vi.fn(async () => ({
+        phase: 'installed' as const,
+        currentVersion: '0.29.1', latestVersion: '0.29.1',
+        executable: '/Users/test/.kimi-code/bin/kimi', checkedAt: '2026-07-26T01:01:00.000Z',
+        error: null, requiresRestart: true
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    await flushPromises()
+    expect(api.checkKimiCliUpdate).toHaveBeenCalledOnce()
+    expect(wrapper.get('.cli-update-card').text()).toContain('发现 0.29.1，当前版本为 0.29.0')
+
+    await wrapper.get('.cli-update-card .primary-button').trigger('click')
+    await flushPromises()
+    expect(api.downloadKimiCliUpdate).toHaveBeenCalledOnce()
+    expect(wrapper.get('.cli-update-card').text()).toContain('重启 Moon Code 后生效')
+    wrapper.unmount()
+  })
+
+  it('keeps CLI update checks available when Kimi Runtime is stopped', async () => {
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      checkKimiCliUpdate: vi.fn(async () => ({
+        phase: 'up-to-date' as const,
+        currentVersion: '0.29.1', latestVersion: '0.29.1',
+        executable: '/Users/test/.kimi-code/bin/kimi', checkedAt: '2026-07-26T01:00:00.000Z',
+        error: null, requiresRestart: false
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: false, activeSessionId: '', activeWorkspaceId: '', usage },
+      global: { stubs: { Teleport: true } }
+    })
+
+    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    await flushPromises()
+    expect(api.getKimiSettings).not.toHaveBeenCalled()
+    expect(api.checkKimiCliUpdate).toHaveBeenCalledOnce()
+    expect(wrapper.get('.cli-update-card').text()).toContain('已是最新版本')
+    expect(wrapper.text()).toContain('Kimi Runtime 未连接时')
+    wrapper.unmount()
+  })
+
   it('lists and restores Kimi archived sessions', async () => {
     const api = {
       getKimiSettings: vi.fn(async () => snapshot),

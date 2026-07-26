@@ -30,6 +30,7 @@ import {
   type KimiSkillActivationResult,
   type KimiTool,
   type KimiUsageState,
+  type KimiCliUpdateState,
   type InteractionResolveResult,
   type PromptAbortResult,
   type PromptSteerResult,
@@ -65,6 +66,7 @@ import type { KimiCapabilitiesBridge } from './kimi/KimiCapabilitiesBridge.js'
 import type { KimiBrowserManager } from './browser/KimiBrowserManager.js'
 import type { KimiUsageService } from './kimi/KimiUsageService.js'
 import type { KimiPetService } from './pet/KimiPetService.js'
+import type { KimiCliUpdateService } from './runtime/KimiCliUpdateService.js'
 import { discoverLocalDevServers } from './browser/LocalDevServerDiscovery.js'
 import {
   validateCapabilityId,
@@ -133,6 +135,7 @@ export function registerIpc(
   browser: KimiBrowserManager,
   usage: KimiUsageService,
   pets: KimiPetService,
+  cliUpdates: KimiCliUpdateService,
   getMainWindow: () => BrowserWindow | null,
   trustedRendererUrl: string
 ): void {
@@ -160,6 +163,14 @@ export function registerIpc(
   ipcMain.handle(ipcChannels.runtimeDiscover, (event) => {
     assertTrustedSender(event)
     return discoverRuntimes()
+  })
+  ipcMain.handle(ipcChannels.kimiCliUpdateCheck, async (event): Promise<KimiCliUpdateState> => {
+    assertTrustedSender(event)
+    return await cliUpdates.check()
+  })
+  ipcMain.handle(ipcChannels.kimiCliUpdateDownload, async (event): Promise<KimiCliUpdateState> => {
+    assertTrustedSender(event)
+    return await cliUpdates.install()
   })
   ipcMain.handle(ipcChannels.runtimeStart, (event, mode?: unknown) => {
     assertTrustedSender(event)
