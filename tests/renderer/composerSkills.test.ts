@@ -117,10 +117,13 @@ describe('ComposerBar Skills menu', () => {
     expect(popover.text()).toContain('思考强度')
     expect(popover.text()).toContain('高级执行')
     expect(popover.text()).toContain('执行审批')
+    expect(popover.get('[aria-label="思考强度"]').attributes('role')).toBe('radiogroup')
+    expect(popover.get('[aria-label="执行审批"]').attributes('role')).toBe('radiogroup')
     expect(popover.text()).toContain('规划模式')
     expect(popover.text()).toContain('目标模式')
     expect(popover.text()).toContain('协作模式')
     const toggles = wrapper.findAll('.composer-toggle-row')
+    expect(toggles[0]!.attributes('role')).toBe('switch')
     await toggles[0]!.trigger('click')
     await toggles[2]!.trigger('click')
     expect(wrapper.emitted('updateControls')).toEqual([

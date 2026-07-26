@@ -677,13 +677,14 @@ onBeforeUnmount(() => {
         </label>
         <div class="composer-control-block">
           <div class="composer-control-heading"><strong>思考强度</strong><small>更高强度适合复杂任务</small></div>
-          <div class="composer-segments" aria-label="思考强度">
+          <div class="composer-segments" role="radiogroup" aria-label="思考强度">
             <button
               v-for="effort in visibleThinkingOptions"
               :key="effort"
               type="button"
+              role="radio"
               :class="{ 'is-selected': controls?.thinking === effort }"
-              :aria-pressed="controls?.thinking === effort"
+              :aria-checked="controls?.thinking === effort"
               :disabled="disabled || controls === null"
               @click="updateThinking(effort)"
             >{{ thinkingLabel(effort) }}</button>
@@ -694,10 +695,10 @@ onBeforeUnmount(() => {
         <div class="composer-section-label"><strong>高级执行</strong><small>无需展开，直接调整</small></div>
         <div class="composer-control-block composer-permission-row">
           <div class="composer-control-heading"><strong>执行审批</strong><small>{{ permissionDescription }}</small></div>
-          <div class="composer-segments" aria-label="执行审批">
-            <button type="button" :class="{ 'is-selected': controls?.permissionMode === 'manual' }" :aria-pressed="controls?.permissionMode === 'manual'" :disabled="disabled || controls === null" @click="updatePermission('manual')">手动</button>
-            <button type="button" :class="{ 'is-selected': controls?.permissionMode === 'auto' }" :aria-pressed="controls?.permissionMode === 'auto'" :disabled="disabled || controls === null" @click="updatePermission('auto')">自动</button>
-            <button type="button" :class="{ 'is-selected': controls?.permissionMode === 'yolo' }" :aria-pressed="controls?.permissionMode === 'yolo'" :disabled="disabled || controls === null" @click="updatePermission('yolo')">完全自动</button>
+          <div class="composer-segments" role="radiogroup" aria-label="执行审批">
+            <button type="button" role="radio" :class="{ 'is-selected': controls?.permissionMode === 'manual' }" :aria-checked="controls?.permissionMode === 'manual'" :disabled="disabled || controls === null" @click="updatePermission('manual')">手动</button>
+            <button type="button" role="radio" :class="{ 'is-selected': controls?.permissionMode === 'auto' }" :aria-checked="controls?.permissionMode === 'auto'" :disabled="disabled || controls === null" @click="updatePermission('auto')">自动</button>
+            <button type="button" role="radio" :class="{ 'is-selected': controls?.permissionMode === 'yolo' }" :aria-checked="controls?.permissionMode === 'yolo'" :disabled="disabled || controls === null" @click="updatePermission('yolo')">完全自动</button>
           </div>
         </div>
         <div v-if="pendingPermissionMode === 'yolo'" class="composer-permission-warning" role="alert">
@@ -708,15 +709,15 @@ onBeforeUnmount(() => {
             <button class="is-danger" type="button" @click="confirmPermissionMode">启用完全自动</button>
           </div>
         </div>
-        <button class="composer-toggle-row" type="button" :class="{ 'is-selected': controls?.planMode }" :aria-pressed="controls?.planMode" :disabled="disabled || controls === null" @click="setBoolean('planMode', !controls?.planMode)">
+        <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': controls?.planMode }" :aria-checked="controls?.planMode" :disabled="disabled || controls === null" @click="setBoolean('planMode', !controls?.planMode)">
           <span><strong>规划模式</strong><small>先形成计划，再开始执行</small></span>
           <i aria-hidden="true"><b /></i>
         </button>
-        <button class="composer-toggle-row" type="button" :class="{ 'is-selected': goalMode }" :aria-pressed="goalMode" :disabled="disabled" @click="emit('updateGoalMode', !goalMode)">
+        <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': goalMode }" :aria-checked="goalMode" :disabled="disabled" @click="emit('updateGoalMode', !goalMode)">
           <span><strong>目标模式</strong><small>将下一条消息设为持续目标</small></span>
           <i aria-hidden="true"><b /></i>
         </button>
-        <button class="composer-toggle-row" type="button" :class="{ 'is-selected': controls?.swarmMode }" :aria-pressed="controls?.swarmMode" :disabled="disabled || controls === null" @click="setBoolean('swarmMode', !controls?.swarmMode)">
+        <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': controls?.swarmMode }" :aria-checked="controls?.swarmMode" :disabled="disabled || controls === null" @click="setBoolean('swarmMode', !controls?.swarmMode)">
           <span><strong>协作模式</strong><small>让多个 Agent 在当前任务中协作</small></span>
           <i aria-hidden="true"><b /></i>
         </button>
