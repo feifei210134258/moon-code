@@ -11,20 +11,26 @@
   --surface: #ffffff;
   --glass: rgba(246, 249, 252, 0.9);
   --surface-quiet: rgba(240, 245, 251, 0.9);
+  --surface-panel: #eaf1f7;
   --border: rgba(15, 23, 42, 0.09);
   --border-strong: rgba(15, 23, 42, 0.16);
   --text: #20252d;
   --muted: #5d6673;
-  --faint: #8b94a1;
+  --faint: #697386;
   --blue: #3085fa;
   --blue-soft: rgba(48, 133, 250, 0.08);
   --green: #43a047;
   --green-soft: rgba(67, 160, 71, 0.1);
   --red: #e25555;
   --red-soft: rgba(226, 85, 85, 0.1);
-  --amber: #d58b25;
+  --amber: #a56712;
   --focus-ring: 0 0 0 3px rgba(48, 133, 250, 0.16);
   --input-focus-border: rgba(48, 133, 250, 0.45);
+  --z-dropdown: 220;
+  --z-modal-backdrop: 300;
+  --z-modal: 310;
+  --z-toast: 400;
+  --z-tooltip: 500;
   /* Legacy aliases kept for older selectors; prefer --text/--muted/--faint. */
   --ink: var(--text);
   --ink-soft: #3d4756;
@@ -209,7 +215,7 @@ select:focus-visible {
 
 .context-meter.is-info { border-color: rgba(48, 133, 250, 0.2); }
 .context-meter.is-warning {
-  border-color: rgba(213, 139, 37, 0.3);
+  border-color: rgba(165, 103, 18, 0.3);
   background: rgba(255, 249, 238, 0.72);
 }
 .context-meter.is-critical {
@@ -228,7 +234,7 @@ select:focus-visible {
 }
 
 .usage-pill.is-warning {
-  border-color: rgba(213, 139, 37, 0.3);
+  border-color: rgba(165, 103, 18, 0.3);
   background: rgba(255, 249, 238, 0.72);
 }
 
@@ -260,6 +266,10 @@ select:focus-visible {
   background: var(--blue);
 }
 
+.usage-track.is-unavailable {
+  background: rgba(15, 23, 42, 0.055);
+}
+
 .usage-popover {
   -webkit-app-region: no-drag;
   position: absolute;
@@ -270,10 +280,10 @@ select:focus-visible {
   max-height: min(650px, calc(100vh - 76px));
   overflow: auto;
   padding: 14px;
-  border: 1px solid var(--border-strong);
+  border: 0;
   border-radius: 14px;
   background: #ffffff;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(28px) saturate(1.08);
   user-select: text;
 }
@@ -286,10 +296,10 @@ select:focus-visible {
   right: 112px;
   width: min(360px, calc(100vw - 28px));
   padding: 14px;
-  border: 1px solid var(--border-strong);
+  border: 0;
   border-radius: 14px;
   background: #ffffff;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(28px) saturate(1.08);
   user-select: text;
 }
@@ -403,6 +413,18 @@ select:focus-visible {
 
 .usage-context-row span:last-child {
   margin-left: auto;
+}
+
+.usage-empty-state {
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.usage-empty-state strong {
+  color: var(--text);
+  font-size: 12px;
 }
 
 /* 压缩作为上下文长条的紧邻 icon 操作，无需先打开弹窗。 */
@@ -657,10 +679,10 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   margin: 0 8px 9px;
-  color: #767e8c;
+  color: var(--muted);
   font-size: 11px;
   font-weight: 590;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
 }
 
 .shortcut-list {
@@ -700,7 +722,7 @@ select:focus-visible {
 
 .section-label {
   margin: 0 8px 10px;
-  color: #98a1ae;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 560;
   letter-spacing: 0.08em;
@@ -731,7 +753,7 @@ select:focus-visible {
 
 .project-row {
   display: grid;
-  grid-template-columns: 19px minmax(0, 1fr);
+  grid-template-columns: 12px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   min-height: 38px;
@@ -840,10 +862,10 @@ select:focus-visible {
   display: grid;
   width: 146px;
   padding: 5px;
-  border: 1px solid var(--border-strong);
+  border: 0;
   border-radius: 11px;
   background: #ffffff;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.13);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(20px);
 }
 
@@ -1351,10 +1373,10 @@ select:focus-visible {
   gap: 6px;
 }
 
-.goal-strip-copy strong { font-size: 10px; }
+.goal-strip-copy strong { font-size: 11px; }
 .goal-strip-copy em {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10.5px;
   font-style: normal;
 }
 
@@ -1371,7 +1393,7 @@ select:focus-visible {
   display: flex;
   gap: 7px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 10.5px;
   white-space: nowrap;
 }
 
@@ -1763,7 +1785,7 @@ select:focus-visible {
   color: #855b17;
   padding: 2px 7px;
   border-radius: 999px;
-  background: rgba(213, 139, 37, 0.11);
+  background: rgba(165, 103, 18, 0.11);
 }
 
 .turn-text {
@@ -2334,6 +2356,31 @@ select:focus-visible {
   box-shadow: 0 0 0 3px rgba(48, 133, 250, 0.13);
 }
 
+.composer-wrap.is-disabled {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-color: var(--border);
+  background: var(--surface-quiet);
+}
+
+.composer-wrap.is-disabled .composer-input-area textarea {
+  min-height: 32px;
+  padding: 6px 4px;
+}
+
+.composer-wrap.is-disabled .composer-actions {
+  margin-top: 0;
+}
+
+.composer-wrap.is-disabled .composer-primary-tools > button:not(.terminal-entry),
+.composer-wrap.is-disabled .composer-settings {
+  display: none;
+}
+
 .composer-attachments {
   display: flex;
   gap: 7px;
@@ -2442,7 +2489,7 @@ select:focus-visible {
   padding: 2px 5px;
   border-radius: 5px;
   color: #8b601e;
-  background: rgba(213, 139, 37, 0.1);
+  background: rgba(165, 103, 18, 0.1);
 }
 
 .prompt-queue-row.is-server-queued em {
@@ -2478,12 +2525,12 @@ select:focus-visible {
   border: 1px solid var(--border-strong);
   border-radius: 13px;
   background: #ffffff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  box-shadow: none;
   backdrop-filter: blur(22px) saturate(1.03);
 }
 
 .approval-card {
-  border-color: rgba(213, 139, 37, 0.3);
+  border-color: rgba(165, 103, 18, 0.3);
 }
 
 .question-card {
@@ -2520,7 +2567,7 @@ select:focus-visible {
 
 .interaction-icon.is-warning {
   color: #a96a13;
-  background: rgba(213, 139, 37, 0.11);
+  background: rgba(165, 103, 18, 0.11);
 }
 
 .interaction-icon.is-question {
@@ -2553,7 +2600,7 @@ select:focus-visible {
   padding: 3px 7px;
   border-radius: 999px;
   color: #8b601e;
-  background: rgba(213, 139, 37, 0.1);
+  background: rgba(165, 103, 18, 0.1);
   font-size: 10px;
 }
 
@@ -2865,7 +2912,7 @@ select:focus-visible {
 }
 
 .composer-wrap textarea::placeholder {
-  color: #98a1ae;
+  color: var(--faint);
 }
 
 .composer-wrap textarea:disabled {
@@ -2907,7 +2954,7 @@ select:focus-visible {
   border-radius: 7px;
   color: #3c6cb8;
   background: var(--blue-soft);
-  font-size: 9.5px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -2931,7 +2978,7 @@ select:focus-visible {
 }
 
 .composer-primary-tools button,
-.settings-trigger {
+.model-summary {
   width: 31px;
   height: 31px;
   border-radius: 8px;
@@ -2939,7 +2986,6 @@ select:focus-visible {
 }
 
 .composer-primary-tools button:hover,
-.settings-trigger:hover,
 .model-summary:hover {
   background: rgba(15, 23, 42, 0.05);
 }
@@ -2949,6 +2995,7 @@ select:focus-visible {
 }
 
 .model-summary {
+  width: auto;
   gap: 5px;
   height: 31px;
   padding: 0 8px;
@@ -2971,7 +3018,7 @@ select:focus-visible {
   border-radius: 5px;
   color: var(--blue);
   background: var(--blue-soft);
-  font-size: 9px;
+  font-size: 10.5px;
   line-height: 1.5;
 }
 
@@ -3003,20 +3050,56 @@ select:focus-visible {
 }
 
 .composer-popover {
-  position: absolute;
-  right: 54px;
-  bottom: calc(100% + 8px);
-  z-index: 20;
-  width: 224px;
-  padding: 7px;
-  border: 1px solid var(--border-strong);
+  position: fixed;
+  z-index: var(--z-dropdown);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid var(--border);
   border-radius: 12px;
   background: #ffffff;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(26px);
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.12);
 }
 
-.composer-popover > label {
+.composer-popover-header,
+.command-popover > header,
+.mention-popover > header {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-quiet);
+}
+
+.composer-popover-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.composer-popover-header strong,
+.command-popover > header strong,
+.mention-popover > header strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.composer-popover-header small,
+.command-popover > header span,
+.mention-popover > header span {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.composer-popover-section {
+  display: grid;
+  padding: 6px;
+}
+
+.composer-popover-section > label,
+.composer-advanced-controls > label {
   width: 100%;
   display: flex;
   justify-content: space-between;
@@ -3027,11 +3110,13 @@ select:focus-visible {
   font-size: 11px;
 }
 
-.composer-popover > label:hover {
+.composer-popover-section > label:hover,
+.composer-advanced-controls > label:hover {
   background: rgba(15, 23, 42, 0.05);
 }
 
-.composer-popover > label > span {
+.composer-popover-section > label > span,
+.composer-advanced-controls > label > span {
   color: var(--muted);
 }
 
@@ -3056,14 +3141,112 @@ select:focus-visible {
   font-weight: 580;
 }
 
+.composer-advanced-toggle {
+  width: calc(100% - 12px);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 6px 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-quiet);
+  cursor: pointer;
+  text-align: left;
+}
+
+.composer-advanced-toggle:hover {
+  background: #e8eef5;
+}
+
+.composer-advanced-toggle > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.composer-advanced-toggle small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-advanced-toggle svg {
+  flex: none;
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.composer-advanced-toggle svg.is-expanded {
+  transform: rotate(180deg);
+}
+
+.composer-advanced-controls {
+  display: grid;
+  gap: 2px;
+  padding: 0 6px 6px;
+}
+
+.composer-permission-row {
+  min-height: 52px !important;
+}
+
+.composer-permission-row > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding-right: 8px;
+}
+
+.composer-permission-row small,
+.composer-toggle-row small {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.composer-permission-warning {
+  display: grid;
+  gap: 5px;
+  margin: 3px 4px 6px;
+  padding: 9px 10px;
+  border: 1px solid rgba(165, 103, 18, 0.24);
+  border-radius: 9px;
+  color: #70480d;
+  background: rgba(255, 247, 231, 0.96);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.composer-permission-warning > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.composer-permission-warning button {
+  min-height: 29px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  color: #63420f;
+  background: rgba(165, 103, 18, 0.09);
+  cursor: pointer;
+  font-size: 10.5px;
+}
+
+.composer-permission-warning button.is-danger {
+  color: #ffffff;
+  background: #8f5810;
+}
+
 .composer-toggle-row > span {
   display: grid;
   gap: 1px;
-}
-
-.composer-toggle-row small {
-  color: var(--muted);
-  font-size: 9px;
 }
 
 .composer-toggle-row input {
@@ -3071,35 +3254,19 @@ select:focus-visible {
 }
 
 .command-popover {
-  position: absolute;
-  left: 10px;
-  bottom: calc(100% + 8px);
-  z-index: 22;
-  width: min(390px, calc(100% - 20px));
-  max-height: 310px;
+  position: fixed;
+  z-index: var(--z-dropdown);
   overflow: auto;
-  padding: 7px;
-  border: 1px solid var(--border-strong);
+  padding: 0 6px 6px;
+  border: 1px solid var(--border);
   border-radius: 13px;
   background: #ffffff;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(26px);
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.12);
 }
 
 .command-popover > header {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 9px;
-  color: var(--muted);
-  font-size: 9.5px;
-}
-
-.command-popover > header strong {
-  color: var(--text);
-  font-size: 11px;
+  margin: 0 -6px 6px;
+  border-radius: 12px 12px 0 0;
 }
 
 .command-popover > button {
@@ -3121,6 +3288,10 @@ select:focus-visible {
   background: rgba(48, 133, 250, 0.055);
 }
 
+.command-popover > button.active {
+  background: var(--blue-soft);
+}
+
 .command-popover > button > span {
   min-width: 0;
   display: grid;
@@ -3135,7 +3306,8 @@ select:focus-visible {
 .command-popover > button small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 9.5px;
+  font-size: 11px;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3147,7 +3319,7 @@ select:focus-visible {
   border-radius: 999px;
   color: var(--muted);
   background: #f7f8fa;
-  font-size: 8.5px;
+  font-size: 10px;
   font-style: normal;
   white-space: nowrap;
 }
@@ -3155,47 +3327,54 @@ select:focus-visible {
 .command-empty {
   padding: 20px 10px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 11px;
+  line-height: 1.45;
   text-align: center;
 }
 
-.mention-popover {
-  position: absolute;
-  left: 10px;
-  bottom: calc(100% + 8px);
-  z-index: 31;
-  width: min(420px, calc(100% - 20px));
-  max-height: 310px;
-  overflow: auto;
-  padding: 7px;
-  border: 1px solid var(--border-strong);
-  border-radius: 13px;
-  background: #ffffff;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(26px);
+.command-empty.is-error {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: #8f3f3f;
 }
 
-.mention-popover > header {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 9px;
-  color: var(--muted);
-  font-size: 9.5px;
-}
-
-.mention-popover > header strong {
-  color: var(--text);
+.command-empty.is-error button {
+  min-height: 29px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  color: #ffffff;
+  background: var(--blue);
+  cursor: pointer;
   font-size: 11px;
 }
 
-.mention-popover .command-empty {
+.mention-popover {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  overflow: auto;
+  padding: 0 6px 6px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: #ffffff;
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.12);
+}
+
+.mention-popover > header {
+  margin: 0 -6px 6px;
+  border-radius: 12px 12px 0 0;
+}
+
+.mention-popover .command-empty:not(.is-error) {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+
+.mention-popover .command-empty.is-error {
+  display: grid;
 }
 
 .mention-item {
@@ -3230,13 +3409,13 @@ select:focus-visible {
 }
 
 .mention-item strong { color: var(--text); font-size: 11px; }
-.mention-item small { color: var(--muted); font-size: 9.5px; }
+.mention-item small { color: var(--muted); font-size: 10.5px; }
 .mention-item em {
   padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--muted);
-  font-size: 8.5px;
+  font-size: 10px;
   font-style: normal;
 }
 .agent-roster {
@@ -3317,7 +3496,7 @@ select:focus-visible {
 
 .agent-state.is-suspended,
 .mcp-status.is-connecting {
-  background: #d58b25;
+  background: var(--amber);
 }
 
 .agent-state.is-failed,
@@ -3458,18 +3637,27 @@ body.is-panel-resizing {
   scrollbar-color: rgba(96, 116, 138, 0.2) transparent;
 }
 
-/* 右栏：标题外置 + 容器由内容挣得。
-   标题在面板底色上建立节奏；空态只留标题和一行灰字，不画框；
-   框只给需要边界的滚动内容（长文件列表），线性阅读列表（计划/任务）不加框。 */
+/* 右栏三类事项保持为独立卡片，但使用冷灰蓝面板色而非白底。
+   卡片只靠底色和细边界分组，不叠加阴影；内部列表保持线性，避免嵌套卡片。 */
 .changes-view {
   display: grid;
   align-content: start;
-  gap: 36px;
+  gap: 10px;
+}
+
+.changed-files-panel,
+.todo-panel,
+.plan-panel {
+  min-width: 0;
+  padding: 11px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-panel);
 }
 
 .changes-view .extension-state {
   min-height: 0;
-  padding: 4px 2px;
+  padding: 8px 0 2px;
   justify-content: flex-start;
   text-align: left;
 }
@@ -3491,8 +3679,7 @@ body.is-panel-resizing {
   max-height: min(30vh, 260px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid rgba(15, 23, 42, 0.07);
-  border-radius: 11px;
+  margin-top: 5px;
   scrollbar-width: thin;
   scrollbar-color: rgba(96, 116, 138, 0.24) transparent;
 }
@@ -3501,10 +3688,10 @@ body.is-panel-resizing {
 .todo-panel h2,
 .plan-panel h2 {
   margin: 0;
-  color: #767e8c;
-  font-size: 11px;
-  font-weight: 590;
-  letter-spacing: 0.08em;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
 }
 
 .changed-files-panel h2 {
@@ -3512,15 +3699,14 @@ body.is-panel-resizing {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 22px;
-  margin-bottom: 7px;
-  padding: 0 2px;
+  min-height: 24px;
+  margin-bottom: 2px;
 }
 
 .git-summary {
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: normal;
   text-overflow: ellipsis;
@@ -3532,9 +3718,9 @@ body.is-panel-resizing {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) auto;
   gap: 5px;
-  min-height: 31px;
+  min-height: 34px;
   align-items: center;
-  padding: 0 11px;
+  padding: 0 1px;
   border: 0;
   background: transparent;
   text-align: left;
@@ -3542,7 +3728,7 @@ body.is-panel-resizing {
 }
 
 .changed-file-row + .changed-file-row {
-  border-top: 1px solid rgba(15, 23, 42, 0.05);
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
 }
 
 .file-row.is-active {
@@ -3650,11 +3836,11 @@ body.is-panel-resizing {
 
 .todo-panel header,
 .plan-panel header {
-  min-height: 24px;
+  min-height: 26px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2px;
+  padding: 0;
 }
 
 .todo-panel header > span,
@@ -3671,7 +3857,7 @@ body.is-panel-resizing {
 .plan-panel ol {
   display: grid;
   gap: 7px;
-  padding: 6px 2px 0;
+  padding: 7px 0 0;
   margin: 0;
   list-style: none;
 }
@@ -3693,7 +3879,7 @@ body.is-panel-resizing {
 .todo-panel li {
   grid-template-columns: 8px minmax(0, 1fr) auto;
   gap: 8px;
-  padding: 3px 2px;
+  padding: 4px 0;
   font-size: 11.5px;
   line-height: 1.45;
 }
@@ -3736,9 +3922,9 @@ body.is-panel-resizing {
 .todo-panel li.is-done > span:nth-child(2) { color: var(--muted); text-decoration: line-through; }
 
 .plan-empty {
-  margin: 2px 0 4px;
+  margin: 5px 0 0;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.55;
 }
 
@@ -3747,7 +3933,7 @@ body.is-panel-resizing {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
   gap: 8px;
-  padding: 8px 2px;
+  padding: 9px 0;
   border-top: 1px solid var(--border);
 }
 
@@ -3769,7 +3955,7 @@ body.is-panel-resizing {
 
 .background-task-row strong {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 580;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3778,7 +3964,7 @@ body.is-panel-resizing {
 .background-task-row em {
   flex: none;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 10.5px;
   font-style: normal;
   text-transform: capitalize;
 }
@@ -3789,7 +3975,7 @@ body.is-panel-resizing {
   margin: 4px 0 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 10.5px;
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3803,7 +3989,7 @@ body.is-panel-resizing {
   gap: 7px;
   padding: 12px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.45;
   text-align: center;
 }
@@ -5034,9 +5220,9 @@ body.is-panel-resizing {
   min-height: 540px;
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: 18px;
+  border-radius: 14px;
   background: #ffffff;
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.2), 0 2px 8px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.14);
 }
 
 .settings-header {
@@ -5667,7 +5853,7 @@ body.is-panel-resizing {
   margin-top: 8px;
   padding: 10px 12px;
   border-radius: 9px;
-  background: rgba(213, 139, 37, 0.07);
+  background: rgba(165, 103, 18, 0.07);
 }
 
 .settings-message {

@@ -101,19 +101,25 @@ describe('ComposerBar Skills menu', () => {
       props: { skills: [], models, controls: null, disabled: true, terminalEnabled: true }
     })
     const terminalButton = wrapper.get('[aria-label="打开终端"]')
+    expect(wrapper.get('.composer-wrap').classes()).toContain('is-disabled')
+    expect(terminalButton.classes()).toContain('terminal-entry')
     expect(terminalButton.attributes('disabled')).toBeUndefined()
     await terminalButton.trigger('click')
     expect(wrapper.emitted('toggleTerminal')).toEqual([[]])
   })
 
-  it('uses the real model catalog and exposes independent Plan and Swarm controls', async () => {
+  it('keeps model controls primary and progressively discloses execution controls', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('.model-summary').trigger('click')
     const popover = wrapper.get('.composer-popover')
     expect(popover.text()).toContain('Kimi for Coding')
     expect(popover.text()).toContain('模型')
     expect(popover.text()).toContain('思考强度')
-    expect(popover.text()).toContain('权限模式')
+    expect(popover.text()).toContain('高级执行')
+    expect(popover.text()).not.toContain('执行审批')
+
+    await popover.get('.composer-advanced-toggle').trigger('click')
+    expect(popover.text()).toContain('执行审批')
     expect(popover.text()).toContain('规划模式')
     expect(popover.text()).toContain('目标模式')
     expect(popover.text()).toContain('协作模式')
@@ -138,7 +144,7 @@ describe('ComposerBar Skills menu', () => {
     const chips = settings.get('.composer-mode-chips')
     expect(chips.text()).toContain('规划')
     expect(chips.text()).toContain('目标')
-    expect(chips.text()).toContain('Swarm')
+    expect(chips.text()).toContain('协作')
     expect(settings.element.firstElementChild).toBe(chips.element)
     expect(chips.element.nextElementSibling?.classList).toContain('model-summary')
 
@@ -150,6 +156,46 @@ describe('ComposerBar Skills menu', () => {
       [{ ...activeControls, swarmMode: false }]
     ])
     expect(wrapper.emitted('updateGoalMode')).toEqual([[false]])
+  })
+
+  it('requires an explicit confirmation before enabling fully automatic approval', async () => {
+    const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
+    await wrapper.get('.model-summary').trigger('click')
+    await wrapper.get('.composer-advanced-toggle').trigger('click')
+    const permission = wrapper.get('.composer-permission-row select')
+    await permission.setValue('yolo')
+
+    expect(wrapper.emitted('updateControls')).toBeUndefined()
+    expect(wrapper.get('.composer-permission-warning').text()).toContain('跳过逐次审批')
+    await wrapper.get('.composer-permission-warning .is-danger').trigger('click')
+    expect(wrapper.emitted('updateControls')).toEqual([[{ ...controls, permissionMode: 'yolo' }]])
+  })
+
+  it('supports listbox selection for slash commands and closes popovers outside the composer', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models,
+        controls,
+        skills: [
+          { name: 'review', description: 'Review', source: 'project', type: null, userInvocableOnly: false },
+          { name: 'release', description: 'Release', source: 'builtin', type: null, userInvocableOnly: false }
+        ]
+      }
+    })
+
+    await wrapper.get('textarea').setValue('/')
+    expect(wrapper.get('textarea').attributes('aria-controls')).toBe('composer-command-listbox')
+    expect(wrapper.get('textarea').attributes('aria-activedescendant')).toBe('composer-command-option-0')
+    await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' })
+    expect(wrapper.get('textarea').attributes('aria-activedescendant')).toBe('composer-command-option-1')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('/release ')
+
+    await wrapper.get('.model-summary').trigger('click')
+    expect(wrapper.find('.composer-popover').exists()).toBe(true)
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.composer-popover').exists()).toBe(false)
   })
 
   it('uploads through Kimi, shows removable chips, and submits attachment descriptors', async () => {
@@ -185,9 +231,28 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' })
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     await wrapper.vm.$nextTick()
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('docs/adr')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('docs/adr ')
 
+    await wrapper.get('textarea').setValue('docs/adr 检查')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['docs/adr', [], controls, false]])
+    expect(wrapper.emitted('submit')).toEqual([['docs/adr 检查', [], controls, false]])
+  })
+
+  it('distinguishes mention-search failure from no results and supports retry', async () => {
+    vi.useFakeTimers()
+    const mentionSearch = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce([{ path: 'src/App.vue', name: 'App.vue', kind: 'file' as const, score: 1, matchPositions: [] }])
+    const wrapper = mount(ComposerBar, { props: { skills: [], models, controls, mentionSearch } })
+
+    await wrapper.get('[aria-label="引用文件"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(200)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.command-empty.is-error').text()).toContain('无法读取项目文件')
+
+    await wrapper.get('.command-empty.is-error button').trigger('click')
+    await vi.advanceTimersByTimeAsync(200)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.mention-item')).toHaveLength(1)
   })
 })

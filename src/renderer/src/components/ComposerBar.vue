@@ -7,7 +7,6 @@ import {
   PhImage,
   PhPaperclip,
   PhPaperPlaneTilt,
-  PhSlidersHorizontal,
   PhStopCircle,
   PhTerminalWindow,
   PhSpinnerGap,
@@ -55,9 +54,23 @@ const optionsOpen = ref(false)
 const commandOpen = ref(false)
 const mentionOpen = ref(false)
 const mentionLoading = ref(false)
+const mentionError = ref<string | null>(null)
 const mentionItems = ref<WorkspaceFileSearchItem[]>([])
 const mentionActiveIndex = ref(0)
+const commandActiveIndex = ref(0)
+const advancedOpen = ref(false)
+const pendingPermissionMode = ref<KimiPromptControls['permissionMode'] | null>(null)
+const composerRoot = ref<HTMLElement | null>(null)
+const modelTrigger = ref<HTMLButtonElement | null>(null)
+const commandTrigger = ref<HTMLButtonElement | null>(null)
+const mentionTrigger = ref<HTMLButtonElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
+type PopoverKind = 'options' | 'command' | 'mention'
+const popoverStyles = ref<Record<PopoverKind, Record<string, string>>>({
+  options: {},
+  command: {},
+  mention: {}
+})
 let mentionTimer: ReturnType<typeof setTimeout> | null = null
 let mentionGeneration = 0
 const selectedModel = computed(() => props.models.find((model) => model.id === props.controls?.model) ?? null)
@@ -79,6 +92,28 @@ const filteredSkills = computed(() => {
     return name.includes(query) || description.includes(query)
   })
 })
+const activeListboxId = computed(() => (
+  mentionOpen.value ? 'composer-mention-listbox' : commandOpen.value ? 'composer-command-listbox' : undefined
+))
+const activeOptionId = computed(() => {
+  if (mentionOpen.value && mentionItems.value.length > 0) return `composer-mention-option-${mentionActiveIndex.value}`
+  if (commandOpen.value && filteredSkills.value.length > 0) return `composer-command-option-${commandActiveIndex.value}`
+  return undefined
+})
+const advancedSummary = computed(() => {
+  const enabled = [
+    props.controls?.permissionMode === 'auto' ? '自动确认' : props.controls?.permissionMode === 'yolo' ? '完全自动' : null,
+    props.controls?.planMode ? '规划' : null,
+    props.goalMode ? '目标' : null,
+    props.controls?.swarmMode ? '协作' : null
+  ].filter((value): value is string => value !== null)
+  return enabled.length > 0 ? enabled.join(' · ') : '手动确认'
+})
+const permissionDescription = computed(() => ({
+  manual: '每次敏感操作都由你确认。',
+  auto: 'Kimi 可自动批准当前会话中的常规操作。',
+  yolo: 'Kimi 可在当前会话中跳过逐次审批。'
+}[props.controls?.permissionMode ?? 'manual']))
 
 function submit(): void {
   if (
@@ -126,7 +161,22 @@ function updateThinking(event: Event): void {
 function updatePermission(event: Event): void {
   if (props.controls === null) return
   const permissionMode = (event.target as HTMLSelectElement).value as KimiPromptControls['permissionMode']
+  if (permissionMode === 'yolo' && props.controls.permissionMode !== 'yolo') {
+    pendingPermissionMode.value = permissionMode
+    return
+  }
+  pendingPermissionMode.value = null
   emit('updateControls', { ...props.controls, permissionMode })
+}
+
+function confirmPermissionMode(): void {
+  if (props.controls === null || pendingPermissionMode.value === null) return
+  emit('updateControls', { ...props.controls, permissionMode: pendingPermissionMode.value })
+  pendingPermissionMode.value = null
+}
+
+function cancelPermissionMode(): void {
+  pendingPermissionMode.value = null
 }
 
 function updateBoolean(key: 'planMode' | 'swarmMode', event: Event): void {
@@ -142,16 +192,34 @@ function disableBooleanMode(key: 'planMode' | 'swarmMode'): void {
 function toggleCommands(): void {
   commandOpen.value = !commandOpen.value
   if (commandOpen.value) {
+    commandActiveIndex.value = 0
     optionsOpen.value = false
     closeMention()
+    void nextTick(() => positionPopover('command'))
   }
+}
+
+function toggleSessionControls(): void {
+  optionsOpen.value = !optionsOpen.value
+  commandOpen.value = false
+  closeMention()
+  pendingPermissionMode.value = null
+  if (optionsOpen.value) void nextTick(() => positionPopover('options'))
+}
+
+function toggleAdvancedControls(): void {
+  advancedOpen.value = !advancedOpen.value
+  pendingPermissionMode.value = null
+  void nextTick(() => positionPopover('options'))
 }
 
 function onComposerInput(): void {
   if (slashQuery.value !== null && props.disabled !== true) {
     commandOpen.value = true
+    commandActiveIndex.value = 0
     optionsOpen.value = false
     closeMention()
+    void nextTick(() => positionPopover('command'))
     return
   }
   commandOpen.value = false
@@ -257,6 +325,7 @@ function closeMention(): void {
   mentionTimer = null
   mentionOpen.value = false
   mentionLoading.value = false
+  mentionError.value = null
   mentionItems.value = []
   mentionActiveIndex.value = 0
 }
@@ -272,6 +341,7 @@ function queueMentionSearch(): void {
   if (mentionTimer !== null) clearTimeout(mentionTimer)
   mentionOpen.value = true
   mentionLoading.value = true
+  mentionError.value = null
   mentionActiveIndex.value = 0
   commandOpen.value = false
   optionsOpen.value = false
@@ -282,11 +352,22 @@ function queueMentionSearch(): void {
       mentionItems.value = items.slice(0, 20)
       mentionActiveIndex.value = 0
     }).catch(() => {
-      if (generation === mentionGeneration) mentionItems.value = []
+      if (generation === mentionGeneration) {
+        mentionItems.value = []
+        mentionError.value = '无法读取项目文件，请重试。'
+      }
     }).finally(() => {
-      if (generation === mentionGeneration) mentionLoading.value = false
+      if (generation === mentionGeneration) {
+        mentionLoading.value = false
+        void nextTick(() => positionPopover('mention'))
+      }
     })
   }, 200)
+  void nextTick(() => positionPopover('mention'))
+}
+
+function retryMentionSearch(): void {
+  queueMentionSearch()
 }
 
 function insertMentionTrigger(): void {
@@ -307,10 +388,12 @@ function insertMentionTrigger(): void {
 function selectMention(item: WorkspaceFileSearchItem): void {
   const token = currentMentionToken()
   if (token === null) return
-  value.value = `${value.value.slice(0, token.start)}${item.path}${value.value.slice(token.end)}`
+  const suffix = value.value.slice(token.end)
+  const separator = /^\s/.test(suffix) ? '' : ' '
+  value.value = `${value.value.slice(0, token.start)}${item.path}${separator}${suffix}`
   closeMention()
   void nextTick(() => {
-    const caret = token.start + item.path.length
+    const caret = token.start + item.path.length + separator.length
     input.value?.setSelectionRange(caret, caret)
     input.value?.focus()
   })
@@ -340,6 +423,55 @@ function skillSourceLabel(source: KimiSkill['source']): string {
   }[source]
 }
 
+function positionPopover(kind: PopoverKind): void {
+  const trigger = kind === 'options' ? modelTrigger.value : kind === 'command' ? commandTrigger.value : mentionTrigger.value
+  if (trigger === null) return
+  const rect = trigger.getBoundingClientRect()
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const preferredWidth = kind === 'options' ? 300 : kind === 'command' ? 420 : 460
+  const width = Math.max(240, Math.min(preferredWidth, viewportWidth - 16))
+  const alignedLeft = kind === 'options' ? rect.right - width : rect.left
+  const left = Math.max(8, Math.min(alignedLeft, viewportWidth - width - 8))
+  const spaceAbove = Math.max(0, rect.top - 8)
+  const spaceBelow = Math.max(0, viewportHeight - rect.bottom - 8)
+  const placeAbove = spaceAbove >= Math.min(260, spaceBelow) || spaceAbove >= spaceBelow
+  const availableHeight = Math.max(140, (placeAbove ? spaceAbove : spaceBelow) - 8)
+  popoverStyles.value[kind] = {
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(width)}px`,
+    maxHeight: `${Math.round(availableHeight)}px`,
+    ...(placeAbove
+      ? { top: 'auto', bottom: `${Math.round(viewportHeight - rect.top + 8)}px` }
+      : { top: `${Math.round(rect.bottom + 8)}px`, bottom: 'auto' })
+  }
+}
+
+function positionOpenPopovers(): void {
+  if (optionsOpen.value) positionPopover('options')
+  if (commandOpen.value) positionPopover('command')
+  if (mentionOpen.value) positionPopover('mention')
+}
+
+function closeComposerPopovers(): void {
+  optionsOpen.value = false
+  commandOpen.value = false
+  pendingPermissionMode.value = null
+  closeMention()
+}
+
+function onDocumentPointerdown(event: PointerEvent): void {
+  const target = event.target
+  if (!(target instanceof Node) || composerRoot.value?.contains(target)) return
+  if (optionsOpen.value || commandOpen.value || mentionOpen.value) closeComposerPopovers()
+}
+
+function onDocumentFocusin(event: FocusEvent): void {
+  const target = event.target
+  if (!(target instanceof Node) || composerRoot.value?.contains(target)) return
+  if (optionsOpen.value || commandOpen.value || mentionOpen.value) closeComposerPopovers()
+}
+
 defineExpose({ loadDraft })
 
 function onKeydown(event: KeyboardEvent): void {
@@ -366,6 +498,38 @@ function onKeydown(event: KeyboardEvent): void {
       return
     }
   }
+  if (commandOpen.value) {
+    const count = filteredSkills.value.length
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      commandOpen.value = false
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      if (count > 0) {
+        commandActiveIndex.value = event.key === 'ArrowDown'
+          ? (commandActiveIndex.value + 1) % count
+          : (commandActiveIndex.value - 1 + count) % count
+      }
+      return
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      if (count > 0) commandActiveIndex.value = event.key === 'Home' ? 0 : count - 1
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      const skill = filteredSkills.value[commandActiveIndex.value]
+      if (event.key === 'Enter') event.preventDefault()
+      if (skill !== undefined && !props.skillsPending) {
+        event.preventDefault()
+        chooseSkill(skill)
+        return
+      }
+      if (event.key === 'Enter') return
+    }
+  }
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault()
     submit()
@@ -373,24 +537,32 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.defaultPrevented) return
   if (event.key !== 'Escape' || (!optionsOpen.value && !commandOpen.value && !mentionOpen.value)) return
   event.preventDefault()
-  optionsOpen.value = false
-  commandOpen.value = false
-  closeMention()
+  closeComposerPopovers()
+  void nextTick(() => input.value?.focus())
 }
 
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeydown)
+  window.addEventListener('resize', positionOpenPopovers)
+  document.addEventListener('scroll', positionOpenPopovers, true)
+  document.addEventListener('pointerdown', onDocumentPointerdown, true)
+  document.addEventListener('focusin', onDocumentFocusin, true)
 })
 onBeforeUnmount(() => {
   closeMention()
   window.removeEventListener('keydown', onWindowKeydown)
+  window.removeEventListener('resize', positionOpenPopovers)
+  document.removeEventListener('scroll', positionOpenPopovers, true)
+  document.removeEventListener('pointerdown', onDocumentPointerdown, true)
+  document.removeEventListener('focusin', onDocumentFocusin, true)
 })
 </script>
 
 <template>
-  <div class="composer-wrap">
+  <div ref="composerRoot" class="composer-wrap" :class="{ 'is-disabled': disabled }">
     <div v-if="attachments.length > 0 || attachmentPending" class="composer-attachments" aria-label="待发送附件">
       <div v-for="file in attachments" :key="file.fileId" class="composer-attachment-chip">
         <PhImage v-if="file.mediaType.startsWith('image/')" :size="15" />
@@ -410,6 +582,10 @@ onBeforeUnmount(() => {
         :disabled="disabled"
         aria-label="输入任务"
         aria-autocomplete="list"
+        :aria-expanded="commandOpen || mentionOpen"
+        :aria-controls="activeListboxId"
+        :aria-activedescendant="activeOptionId"
+        :aria-haspopup="commandOpen || mentionOpen ? 'listbox' : undefined"
         @keydown="onKeydown"
         @input="onComposerInput"
         @paste="onPaste"
@@ -419,21 +595,27 @@ onBeforeUnmount(() => {
       <div class="composer-primary-tools">
         <button type="button" aria-label="添加附件" :disabled="disabled || attachmentPending" @click="pickAttachments"><PhPaperclip :size="19" /></button>
         <button
+          ref="mentionTrigger"
           type="button"
           aria-label="引用文件"
           :aria-expanded="mentionOpen"
+          aria-haspopup="listbox"
+          aria-controls="composer-mention-listbox"
           :disabled="disabled || mentionSearch === undefined"
           @click="insertMentionTrigger"
         ><PhAt :size="19" /></button>
         <button
+          ref="commandTrigger"
           type="button"
           aria-label="使用命令"
           class="slash-button"
           :aria-expanded="commandOpen"
+          aria-haspopup="listbox"
+          aria-controls="composer-command-listbox"
           :disabled="disabled"
           @click="toggleCommands"
         >/</button>
-        <button type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="terminalEnabled !== true" @click="emit('toggleTerminal')">
+        <button class="terminal-entry" type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="terminalEnabled !== true" @click="emit('toggleTerminal')">
           <PhTerminalWindow :size="19" />
         </button>
       </div>
@@ -446,23 +628,23 @@ onBeforeUnmount(() => {
             <span>目标</span><PhX :size="11" />
           </button>
           <button v-if="controls?.swarmMode" type="button" aria-label="关闭 Swarm 模式" @click="disableBooleanMode('swarmMode')">
-            <span>Swarm</span><PhX :size="11" />
+            <span>协作</span><PhX :size="11" />
           </button>
         </div>
-        <button class="model-summary" type="button" :disabled="disabled" @click="optionsOpen = !optionsOpen; commandOpen = false; closeMention()">
+        <button
+          ref="modelTrigger"
+          class="model-summary"
+          type="button"
+          :disabled="disabled"
+          :aria-expanded="optionsOpen"
+          aria-haspopup="dialog"
+          aria-controls="composer-session-controls"
+          aria-label="会话模型与执行设置"
+          @click="toggleSessionControls"
+        >
           <span>{{ selectedModel?.displayName ?? controls?.model ?? (controlsPending ? '读取模型…' : '未配置模型') }}</span>
           <span v-if="controls?.thinking" class="model-effort-chip">{{ thinkingLabel(controls.thinking) }}</span>
           <PhCaretDown :size="12" />
-        </button>
-        <button
-          class="settings-trigger"
-          type="button"
-          :aria-expanded="optionsOpen"
-          :disabled="disabled"
-          aria-label="会话设置"
-          @click="optionsOpen = !optionsOpen; closeMention()"
-        >
-          <PhSlidersHorizontal :size="18" />
         </button>
         <span v-if="running" class="queue-hint">发送将加入队列</span>
         <button
@@ -486,52 +668,96 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
-    <div v-if="optionsOpen" class="composer-popover" aria-label="Kimi 会话控制">
-      <label>
-        <span>模型</span>
-        <select :value="controls?.model" :disabled="disabled || controls === null" @change="updateModel">
-          <option v-for="model in models" :key="model.id" :value="model.id">{{ model.displayName }}</option>
-        </select>
-      </label>
-      <label>
-        <span>思考强度</span>
-        <select :value="controls?.thinking" :disabled="disabled || controls === null" @change="updateThinking">
-          <option v-for="effort in thinkingOptions" :key="effort" :value="effort">{{ thinkingLabel(effort) }}</option>
-        </select>
-      </label>
-      <label>
-        <span>权限模式</span>
-        <select :value="controls?.permissionMode" :disabled="disabled || controls === null" @change="updatePermission">
-          <option value="manual">手动确认</option>
-          <option value="auto">自动确认</option>
-          <option value="yolo">完全自动</option>
-        </select>
-      </label>
-      <label class="composer-toggle-row">
-        <span><strong>规划模式</strong><small>独立规划后再执行</small></span>
-        <input type="checkbox" :checked="controls?.planMode" :disabled="disabled || controls === null" @change="updateBoolean('planMode', $event)">
-      </label>
-      <label class="composer-toggle-row is-goal">
-        <span><strong>目标模式</strong><small>将下一条消息设为持续目标</small></span>
-        <input type="checkbox" :checked="goalMode" :disabled="disabled" @change="emit('updateGoalMode', ($event.target as HTMLInputElement).checked)">
-      </label>
-      <label class="composer-toggle-row">
-        <span><strong>协作模式</strong><small>多 Agent 协作</small></span>
-        <input type="checkbox" :checked="controls?.swarmMode" :disabled="disabled || controls === null" @change="updateBoolean('swarmMode', $event)">
-      </label>
+    <div
+      v-if="optionsOpen"
+      id="composer-session-controls"
+      class="composer-popover"
+      role="dialog"
+      aria-label="会话模型与执行设置"
+      :style="popoverStyles.options"
+    >
+      <header class="composer-popover-header">
+        <div><strong>会话设置</strong><small>当前 Session</small></div>
+      </header>
+      <div class="composer-popover-section">
+        <label>
+          <span>模型</span>
+          <select :value="controls?.model" :disabled="disabled || controls === null" @change="updateModel">
+            <option v-for="model in models" :key="model.id" :value="model.id">{{ model.displayName }}</option>
+          </select>
+        </label>
+        <label>
+          <span>思考强度</span>
+          <select :value="controls?.thinking" :disabled="disabled || controls === null" @change="updateThinking">
+            <option v-for="effort in thinkingOptions" :key="effort" :value="effort">{{ thinkingLabel(effort) }}</option>
+          </select>
+        </label>
+      </div>
+      <button
+        class="composer-advanced-toggle"
+        type="button"
+        :aria-expanded="advancedOpen"
+        aria-controls="composer-advanced-controls"
+        @click="toggleAdvancedControls"
+      >
+        <span><strong>高级执行</strong><small>{{ advancedSummary }}</small></span>
+        <PhCaretDown :size="13" :class="{ 'is-expanded': advancedOpen }" />
+      </button>
+      <div v-if="advancedOpen" id="composer-advanced-controls" class="composer-advanced-controls">
+        <label class="composer-permission-row">
+          <span><strong>执行审批</strong><small>{{ permissionDescription }}</small></span>
+          <select :value="controls?.permissionMode" :disabled="disabled || controls === null" @change="updatePermission">
+            <option value="manual">手动确认</option>
+            <option value="auto">自动确认</option>
+            <option value="yolo">完全自动</option>
+          </select>
+        </label>
+        <div v-if="pendingPermissionMode === 'yolo'" class="composer-permission-warning" role="alert">
+          <strong>完全自动会跳过逐次审批</strong>
+          <span>该设置应用于当前 Session 的后续操作。</span>
+          <div>
+            <button type="button" @click="cancelPermissionMode">保持当前设置</button>
+            <button class="is-danger" type="button" @click="confirmPermissionMode">启用完全自动</button>
+          </div>
+        </div>
+        <label class="composer-toggle-row">
+          <span><strong>规划模式</strong><small>先形成计划，再开始执行</small></span>
+          <input type="checkbox" :checked="controls?.planMode" :disabled="disabled || controls === null" @change="updateBoolean('planMode', $event)">
+        </label>
+        <label class="composer-toggle-row is-goal">
+          <span><strong>目标模式</strong><small>将下一条消息设为持续目标</small></span>
+          <input type="checkbox" :checked="goalMode" :disabled="disabled" @change="emit('updateGoalMode', ($event.target as HTMLInputElement).checked)">
+        </label>
+        <label class="composer-toggle-row">
+          <span><strong>协作模式</strong><small>让多个 Agent 在当前任务中协作</small></span>
+          <input type="checkbox" :checked="controls?.swarmMode" :disabled="disabled || controls === null" @change="updateBoolean('swarmMode', $event)">
+        </label>
+      </div>
     </div>
 
-    <div v-if="commandOpen" class="command-popover" role="listbox" aria-label="Kimi 技能">
-      <header><strong>技能</strong><span>输入参数后按回车激活</span></header>
+    <div
+      v-if="commandOpen"
+      id="composer-command-listbox"
+      class="command-popover"
+      role="listbox"
+      aria-label="Kimi 技能"
+      :style="popoverStyles.command"
+    >
+      <header><strong>技能</strong><span>选择后可继续输入参数</span></header>
       <div v-if="skillsPending" class="command-empty">正在读取 Kimi 技能…</div>
       <div v-else-if="skills.length === 0" class="command-empty">当前会话没有可用技能</div>
       <div v-else-if="filteredSkills.length === 0" class="command-empty">没有匹配的技能</div>
       <template v-else>
         <button
-          v-for="skill in filteredSkills"
+          v-for="(skill, index) in filteredSkills"
           :key="skill.name"
+          :id="`composer-command-option-${index}`"
           type="button"
           role="option"
+          :class="{ active: index === commandActiveIndex }"
+          :aria-selected="index === commandActiveIndex"
+          tabindex="-1"
+          @mouseenter="commandActiveIndex = index"
           @click="chooseSkill(skill)"
         >
           <span><strong>/{{ skill.name }}</strong><small>{{ skill.description || '无描述' }}</small></span>
@@ -540,14 +766,26 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <div v-if="mentionOpen" class="mention-popover" role="listbox" aria-label="项目文件引用">
+    <div
+      v-if="mentionOpen"
+      id="composer-mention-listbox"
+      class="mention-popover"
+      role="listbox"
+      aria-label="项目文件引用"
+      :style="popoverStyles.mention"
+    >
       <header><strong>项目文件</strong><span>选择后插入路径</span></header>
       <div v-if="mentionLoading" class="command-empty"><PhSpinnerGap class="spin" :size="15" />正在搜索 Kimi 工作区…</div>
+      <div v-else-if="mentionError" class="command-empty is-error" role="alert">
+        <span>{{ mentionError }}</span>
+        <button type="button" @click="retryMentionSearch">重试</button>
+      </div>
       <div v-else-if="mentionItems.length === 0" class="command-empty">没有匹配的文件</div>
       <template v-else>
         <div
           v-for="(item, index) in mentionItems"
           :key="item.path"
+          :id="`composer-mention-option-${index}`"
           class="mention-item"
           :class="{ active: index === mentionActiveIndex }"
           role="option"

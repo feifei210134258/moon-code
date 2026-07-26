@@ -112,4 +112,31 @@ describe('TopBar usage', () => {
     await wrapper.setProps({ promptRunning: true })
     expect((wrapper.get('[aria-label="压缩当前会话上下文"]').element as HTMLButtonElement).disabled).toBe(true)
   })
+
+  it('does not fake progress and explains unavailable Context and plan data', async () => {
+    const unavailableUsage: KimiUsageState = {
+      ...usage,
+      phase: 'unavailable',
+      summary: null,
+      limits: [],
+      extraUsage: null,
+      updatedAt: null,
+      error: '尚未登录 Kimi'
+    }
+    const wrapper = mount(TopBar, {
+      props: {
+        runtimeLabel: 'Kimi 未连接', runtimeStatus: 'stopped', runtimePending: false,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: unavailableUsage, sessionUsage: null,
+        contextOpen: true, usageOpen: false, extensionsOpen: true
+      }
+    })
+
+    expect(wrapper.find('.context-meter .usage-track > span').exists()).toBe(false)
+    expect(wrapper.get('.context-popover').text()).toContain('暂无上下文数据')
+    expect(wrapper.get('.context-popover').text()).not.toContain('0 / 0')
+
+    await wrapper.setProps({ contextOpen: false, usageOpen: true })
+    expect(wrapper.get('.usage-popover').text()).toContain('暂无套餐数据')
+    expect(wrapper.get('.usage-popover').text()).toContain('尚未登录 Kimi')
+  })
 })

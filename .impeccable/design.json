@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-26T09:59:49+08:00",
+  "title": "Design System: Moon Code",
+  "extensions": {
+    "colorMeta": {
+      "window-bg": {
+        "role": "neutral",
+        "displayName": "Window Field",
+        "canonical": "oklch(97% 0.012 240)",
+        "tonalRamp": ["#182231", "#27384D", "#3E536B", "#60758D", "#8699AD", "#AEBCCA", "#D6E0EA", "#F6F9FC"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": ["#1B2430", "#313F50", "#4E5C6D", "#718092", "#9BA9B8", "#C2CCD6", "#E1E7ED", "#FFFFFF"]
+      },
+      "surface-panel": {
+        "role": "neutral",
+        "displayName": "Panel Surface",
+        "canonical": "oklch(95% 0.015 245)",
+        "tonalRamp": ["#182431", "#2B3A49", "#435466", "#65798C", "#8B9EAF", "#B2C1CE", "#D3DEE7", "#EAF1F7"]
+      },
+      "blue": {
+        "role": "primary",
+        "displayName": "Moon Blue",
+        "canonical": "oklch(61% 0.19 254)",
+        "tonalRamp": ["#071A3A", "#0A3170", "#0E4DAD", "#176BD7", "#3085FA", "#6BA8FF", "#A6C9FF", "#EAF3FF"]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(25% 0.025 255)",
+        "tonalRamp": ["#111820", "#20252D", "#3D4756", "#5D6673", "#7B8794", "#A1ABB6", "#CBD2D9", "#F1F3F5"]
+      },
+      "green": {
+        "role": "tertiary",
+        "displayName": "Operational Green",
+        "canonical": "oklch(58% 0.15 145)",
+        "tonalRamp": ["#0D2A19", "#174B2A", "#1E6B37", "#2E8745", "#43A047", "#6CBB6B", "#A2D69B", "#E9F7E6"]
+      },
+      "amber": {
+        "role": "tertiary",
+        "displayName": "Caution Amber",
+        "canonical": "oklch(53% 0.13 70)",
+        "tonalRamp": ["#35230A", "#57380B", "#7A4D0D", "#905B10", "#A56712", "#C58B3B", "#E1B979", "#F9E7C8"]
+      },
+      "red": {
+        "role": "tertiary",
+        "displayName": "Failure Red",
+        "canonical": "oklch(60% 0.16 25)",
+        "tonalRamp": ["#3A1213", "#6A2225", "#982F33", "#BC4044", "#E25555", "#EA8585", "#F4B8B8", "#FDEEEE"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Brand / High-confidence heading", "purpose": "Use sparingly for the Moon Code lockup and rare prominent headings." },
+      "body": { "displayName": "Transcript body", "purpose": "Readable developer conversation copy; preserve the 13.5px / 1.68 baseline." },
+      "mono": { "displayName": "Code / Terminal", "purpose": "Paths, diffs, code blocks, and terminal output only." }
+    },
+    "shadows": [
+      { "name": "popover", "value": "0 4px 8px rgba(15, 23, 42, 0.12)", "purpose": "Transient menus, usage/context popovers, and command suggestions." },
+      { "name": "panel-lift", "value": "0 4px 12px rgba(15, 23, 42, 0.08)", "purpose": "Rare lift for interaction docks or transient side panels." },
+      { "name": "focus-ring", "value": "0 0 0 3px rgba(48, 133, 250, 0.16)", "purpose": "Focus communication; never decorative elevation." }
+    ],
+    "motion": [
+      { "name": "state-standard", "value": "120ms ease-out", "purpose": "Hover, focus, and compact control state changes." },
+      { "name": "state-extended", "value": "150ms ease-out", "purpose": "Progress and TOC rail measurement changes." },
+      { "name": "reduced-motion", "value": "0.01ms / no choreography", "purpose": "Respect prefers-reduced-motion for all transitions and animation." }
+    ],
+    "breakpoints": [
+      { "name": "wide", "value": "1180px" },
+      { "name": "compact", "value": "920px" },
+      { "name": "minimum", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "High-confidence action such as send, approve, or create task.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">新建任务</button>",
+      "css": ".ds-btn-primary{min-height:31px;padding:0 11px;border:1px solid transparent;border-radius:9px;background:var(--blue);color:#fff;font:590 11px/1.35 Inter,ui-sans-serif,sans-serif;cursor:pointer;transition:background-color 120ms ease-out,opacity 120ms ease-out}.ds-btn-primary:hover{background:#2477E8}.ds-btn-primary:focus-visible{outline:0;box-shadow:var(--focus-ring)}.ds-btn-primary:disabled{opacity:.42;cursor:default}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Low-risk supporting action that should remain familiar and quiet.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">取消</button>",
+      "css": ".ds-btn-secondary{min-height:31px;padding:0 11px;border:1px solid var(--border-strong);border-radius:9px;background:#fff;color:var(--text);font:590 11px/1.35 Inter,ui-sans-serif,sans-serif;cursor:pointer;transition:background-color 120ms ease-out}.ds-btn-secondary:hover{background:rgba(15,23,42,.05)}.ds-btn-secondary:focus-visible{outline:0;box-shadow:var(--focus-ring)}.ds-btn-secondary:disabled{opacity:.42;cursor:default}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Compact project/session search shell whose wrapper owns focus.",
+      "html": "<label class=\"ds-input-shell\"><span aria-hidden=\"true\">⌕</span><input class=\"ds-input\" placeholder=\"搜索任务\" /></label>",
+      "css": ".ds-input-shell{height:32px;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:7px;padding:0 9px;border:1px solid transparent;border-radius:8px;background:rgba(15,23,42,.045);color:var(--faint)}.ds-input-shell:focus-within{border-color:var(--input-focus-border);background:#fff;box-shadow:var(--focus-ring)}.ds-input{min-width:0;border:0;outline:0;background:transparent;color:var(--text);font:400 13px/1.45 Inter,ui-sans-serif,sans-serif}.ds-input::placeholder{color:var(--muted)}"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "navigation-item",
+      "description": "Project and session rows keep the workbench hierarchy visible; project rows retain the familiar folder icon.",
+      "html": "<button class=\"ds-nav-item is-active\" type=\"button\"><svg aria-hidden=\"true\" width=\"17\" height=\"17\"><use href=\"#ph-folder-simple\" /></svg><span>当前项目</span></button>",
+      "css": ".ds-nav-item{width:100%;height:38px;display:flex;align-items:center;gap:8px;padding:0 10px;border:0;border-radius:9px;background:transparent;color:var(--text);font:650 14px/1.45 Inter,ui-sans-serif,sans-serif;text-align:left;cursor:pointer}.ds-nav-item:hover{background:rgba(15,23,42,.045)}.ds-nav-item.is-active{background:#e7eef7}.ds-nav-item:focus-visible{outline:0;box-shadow:var(--focus-ring)}"
+    },
+    {
+      "name": "Composer",
+      "kind": "custom",
+      "refersTo": "composer",
+      "description": "The primary prompt surface for text, attachments, commands, file mentions, and send/stop state.",
+      "html": "<div class=\"ds-composer\"><textarea placeholder=\"输入提示…\"></textarea><button class=\"ds-send\" type=\"button\" aria-label=\"发送\">↑</button></div>",
+      "css": ".ds-composer{position:relative;display:grid;grid-template-columns:minmax(0,1fr) 35px;gap:10px;min-height:120px;padding:13px 14px 10px;border:1px solid var(--border-strong);border-radius:12px;background:#fff;transition:border-color 140ms ease-out,box-shadow 140ms ease-out}.ds-composer:focus-within{border-color:var(--input-focus-border);box-shadow:var(--focus-ring)}.ds-composer textarea{min-height:72px;resize:none;border:0;outline:0;background:transparent;color:var(--text);font:400 13.5px/1.68 Inter,ui-sans-serif,sans-serif}.ds-composer textarea::placeholder{color:var(--muted)}.ds-send{align-self:end;width:35px;height:35px;border:0;border-radius:10px;background:var(--blue);color:#fff;font:650 16px/1 Inter,sans-serif;cursor:pointer}.ds-send:hover{background:#2477E8}.ds-send:focus-visible{outline:0;box-shadow:var(--focus-ring)}"
+    },
+    {
+      "name": "Composer Popover",
+      "kind": "popover",
+      "refersTo": "composer-popover",
+      "description": "Viewport-aware session, command, and file-mention menus with quiet headers, progressive disclosure, and explicit asynchronous states.",
+      "html": "<section class=\"ds-composer-popover\" role=\"dialog\" aria-label=\"会话模型与执行设置\"><header><strong>会话设置</strong><small>当前 Session</small></header><label><span>模型</span><select><option>Kimi</option></select></label><button type=\"button\" aria-expanded=\"false\">高级执行</button></section>",
+      "css": ".ds-composer-popover{position:fixed;z-index:var(--z-dropdown);overflow:auto;border:1px solid var(--border);border-radius:12px;background:#fff;box-shadow:0 4px 8px rgba(15,23,42,.12);color:var(--text);font-family:Inter,ui-sans-serif,sans-serif}.ds-composer-popover header{min-height:42px;display:flex;align-items:center;gap:8px;padding:7px 11px;border-bottom:1px solid var(--border);background:var(--surface-quiet)}.ds-composer-popover header small{color:var(--muted);font-size:10.5px}.ds-composer-popover label,.ds-composer-popover>button{min-height:38px;display:flex;align-items:center;justify-content:space-between;margin:6px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:var(--text);font-size:11px}.ds-composer-popover>button{width:calc(100% - 12px);min-height:44px;background:var(--surface-quiet);cursor:pointer}.ds-composer-popover :focus-visible{outline:0;box-shadow:var(--focus-ring)}"
+    },
+    {
+      "name": "Interaction Card",
+      "kind": "card",
+      "refersTo": "interaction-card",
+      "description": "Approval and question states require a clear semantic header and explicit action row.",
+      "html": "<article class=\"ds-interaction-card\"><header><strong>需要确认</strong><span>等待你的操作</span></header><p>是否允许继续执行？</p><footer><button class=\"ds-btn-secondary\" type=\"button\">拒绝</button><button class=\"ds-btn-primary\" type=\"button\">允许</button></footer></article>",
+      "css": ".ds-interaction-card{overflow:hidden;border:1px solid var(--border-strong);border-radius:13px;background:#fff;color:var(--text)}.ds-interaction-card header{min-height:46px;display:flex;align-items:center;gap:10px;padding:0 13px;border-bottom:1px solid var(--border);background:#f8f9fa}.ds-interaction-card header span{margin-left:auto;color:var(--muted);font:400 11px/1.35 Inter,ui-sans-serif,sans-serif}.ds-interaction-card p{margin:0;padding:12px 13px;font:400 13px/1.55 Inter,ui-sans-serif,sans-serif}.ds-interaction-card footer{display:flex;justify-content:flex-end;gap:7px;padding:8px 11px;border-top:1px solid var(--border)}"
+    },
+    {
+      "name": "Right Sidebar Category Card",
+      "kind": "card",
+      "refersTo": "right-sidebar-card",
+      "description": "Non-white operational grouping for Changes, Plan, and Background Tasks.",
+      "html": "<section class=\"ds-sidebar-card\"><header><strong>后台任务</strong><span>1</span></header><article><i aria-hidden=\"true\"></i><div><strong>运行完整回归测试</strong><small>pnpm test</small></div></article></section>",
+      "css": ".ds-sidebar-card{padding:11px 12px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface-panel,#eaf1f7);color:var(--text);font-family:Inter,ui-sans-serif,sans-serif}.ds-sidebar-card>header{min-height:26px;display:flex;align-items:center;justify-content:space-between}.ds-sidebar-card>header strong{font-size:12px;font-weight:650}.ds-sidebar-card>header span{padding:1px 8px;border-radius:999px;background:rgba(15,23,42,.05);color:var(--muted);font-size:10px}.ds-sidebar-card article{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;padding:9px 0}.ds-sidebar-card article i{width:7px;height:7px;margin-top:5px;border-radius:50%;background:var(--blue)}.ds-sidebar-card article div{display:grid;gap:4px}.ds-sidebar-card article strong{font-size:11.5px}.ds-sidebar-card article small{color:var(--muted);font:400 10.5px/1.45 SFMono-Regular,Consolas,monospace}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Control Room",
+    "overview": "Moon Code is a focused developer workbench: calm enough for long sessions, dense enough to keep project state close, and explicit enough that an Agent action never feels mysterious. The current homepage establishes a cool, near-white canvas with translucent workspace layers, one blue action accent, and compact status surfaces. The system should feel like a well-calibrated instrument panel rather than a marketing page.\n\nThe visual language serves 高效、清晰、可靠. Preserve the existing desktop-tool familiarity while tightening anything that competes with the task.",
+    "keyCharacteristics": ["Cool light workbench surfaces with a restrained blue primary.", "Compact, familiar controls with 7–12px corner radii.", "State-rich but low-saturation semantic colors.", "Layered panels and dividers establish hierarchy.", "Motion is short, state-driven, and reduced when requested."],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Moon Blue is for action, selection, focus, links, and information state.", "section": "colors" },
+      { "name": "The State-Truth Rule", "body": "If a value is unavailable, show an unavailable state and no proportional fill.", "section": "colors" },
+      { "name": "The Readable Floor Rule", "body": "Persistent interface copy is at least 11px and must meet a 4.5:1 contrast target where it carries meaning.", "section": "typography" },
+      { "name": "The Layered-Not-Glossy Rule", "body": "Use a neutral surface change or hairline before reaching for blur or shadow.", "section": "elevation" },
+      { "name": "The Object-Before-State Rule", "body": "Project rows always retain the folder icon; never replace it with a disclosure caret solely to communicate expanded or collapsed state.", "section": "navigation" }
+    ],
+    "dos": ["Do use Moon Blue only for action, selection, focus, links, and information state.", "Do preserve the cool light workbench field and white transcript/composer surfaces as the homepage baseline.", "Do keep persistent UI text at 11px or larger and verify 4.5:1 contrast for meaningful copy.", "Do retain the folder icon on every project row, whether expanded or collapsed."],
+    "donts": ["Don't make the product feel over-gamified or like a marketing landing page.", "Don't stack information without hierarchy; empty panels should not look like broken dashboards.", "Don't pair a 1px border with a 16px+ diffuse shadow on the same card or popover.", "Don't render a full progress track when usage/context data is unavailable.", "Don't replace a project folder icon with a disclosure caret solely to show expansion state."]
+  }
+}
