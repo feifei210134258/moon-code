@@ -151,7 +151,9 @@ function resetHintLabel(hint: string): string {
         <button class="usage-pill context-pill" type="button" aria-label="查看上下文窗口" aria-controls="context-popover" :aria-expanded="contextOpen" @click="$emit('toggleContext')">
           <span>上下文</span>
           <strong>{{ percent(contextRatio) }}</strong>
-          <span class="usage-track"><span :style="{ width: percent(contextRatio) }" /></span>
+          <span class="usage-track" :class="{ 'is-unavailable': contextRatio === null }">
+            <span v-if="contextRatio !== null" :style="{ width: `${contextRatio * 100}%` }" />
+          </span>
         </button>
         <span class="context-compact-control">
           <button
@@ -185,7 +187,7 @@ function resetHintLabel(hint: string): string {
             <span>当前会话的上下文占用</span>
           </div>
         </header>
-        <div class="usage-section">
+        <div v-if="sessionUsage !== null" class="usage-section">
           <div class="usage-token-grid">
             <span>输入 <strong>{{ compactNumber(sessionUsage?.inputTokens ?? 0) }}</strong></span>
             <span>输出 <strong>{{ compactNumber(sessionUsage?.outputTokens ?? 0) }}</strong></span>
@@ -199,6 +201,10 @@ function resetHintLabel(hint: string): string {
             <strong>{{ percent(contextRatio) }}</strong>
             <span>{{ compactNumber(sessionUsage?.contextTokens ?? 0) }} / {{ compactNumber(sessionUsage?.contextLimit ?? 0) }}</span>
           </div>
+        </div>
+        <div v-else class="usage-section usage-empty-state">
+          <strong>暂无上下文数据</strong>
+          <span>连接 Kimi 并选择一个会话后，这里会显示真实占用。</span>
         </div>
         <div class="usage-section context-session-actions">
           <span class="usage-section-label">会话操作</span>
@@ -236,7 +242,9 @@ function resetHintLabel(hint: string): string {
               <strong>{{ percent(window.ratio) }}</strong>
               <span>{{ window.resetHint === null ? '暂无重置时间' : resetHintLabel(window.resetHint) }}</span>
             </div>
-            <span class="usage-track usage-detail-track"><span :style="{ width: percent(window.ratio) }" /></span>
+            <span class="usage-track usage-detail-track" :class="{ 'is-unavailable': window.ratio === null }">
+              <span v-if="window.ratio !== null" :style="{ width: `${window.ratio * 100}%` }" />
+            </span>
           </div>
         </div>
 
@@ -250,6 +258,11 @@ function resetHintLabel(hint: string): string {
               <span v-else>未启用月度上限</span>
             </div>
           </div>
+        </div>
+
+        <div v-if="usageWindows.length === 0 && !usage.extraUsage" class="usage-section usage-empty-state">
+          <strong>暂无套餐数据</strong>
+          <span>{{ usage.error || '刷新后仍无数据时，请检查 Kimi 登录与网络连接。' }}</span>
         </div>
 
         <footer class="usage-popover-footer" :class="{ 'is-stale': usage.phase === 'stale' || usage.phase === 'unavailable' }">

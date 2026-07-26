@@ -62,6 +62,9 @@ describe('ExtensionsPanel', () => {
 
     expect(wrapper.find('.diff-panel').exists()).toBe(false)
     expect(wrapper.get('.todo-panel').text()).toContain('计划')
+    expect(wrapper.findAll('.changes-view > section')).toHaveLength(3)
+    expect(wrapper.find('.changed-files-panel').exists()).toBe(true)
+    expect(wrapper.find('.plan-panel').exists()).toBe(true)
   })
 
   it('replaces the Plan placeholder with authoritative cancellable Kimi Tasks', async () => {
