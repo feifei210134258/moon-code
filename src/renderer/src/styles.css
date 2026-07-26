@@ -3053,7 +3053,7 @@ select:focus-visible {
   position: fixed;
   z-index: var(--z-dropdown);
   overflow: auto;
-  padding: 0 7px 8px;
+  padding: 0 0 8px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
@@ -3096,7 +3096,7 @@ select:focus-visible {
 .composer-popover-section {
   display: grid;
   gap: 4px;
-  padding: 7px 0 5px;
+  padding: 7px 7px 5px;
 }
 
 .composer-popover-section > label,
@@ -3169,7 +3169,7 @@ select:focus-visible {
 .composer-advanced-controls {
   display: grid;
   gap: 5px;
-  padding: 8px 0 0;
+  padding: 8px 7px 0;
   border-top: 1px solid var(--border);
 }
 
@@ -3194,36 +3194,54 @@ select:focus-visible {
   flex: 0 0 auto;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  gap: 3px;
+  gap: 0;
   width: 52%;
   min-width: 150px;
-  padding: 3px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-quiet);
+  padding: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .composer-segments button {
-  min-height: 28px;
-  padding: 0 7px;
+  position: relative;
+  min-height: 29px;
+  padding: 0 4px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 590;
+  white-space: nowrap;
 }
 
 .composer-segments button:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-quiet);
 }
 
 .composer-segments button.is-selected {
   color: var(--blue);
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  background: transparent;
+  font-weight: 650;
+}
+
+.composer-segments button.is-selected::after {
+  position: absolute;
+  right: 9px;
+  bottom: -1px;
+  left: 9px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--blue);
+  content: '';
+}
+
+.composer-permission-row .composer-segments {
+  width: 58%;
+  min-width: 174px;
 }
 
 .composer-segments button:disabled {
