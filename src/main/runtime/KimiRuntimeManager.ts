@@ -24,11 +24,13 @@ interface RuntimeManagerOptions {
   discoverRuntimes?: () => Promise<RuntimeDiscovery>
   readSharedToken?: () => Promise<string | null>
   sharedOrigin?: string
+  clientVersion?: string
 }
 
 type RuntimeChild = ChildProcessByStdio<null, Readable, Readable>
 
 const DEFAULT_SHARED_KIMI_WEB_ORIGIN = 'http://127.0.0.1:58627'
+const DESKTOP_CLIENT_ID = 'kimi-agent-desktop-main'
 
 async function readSharedKimiWebToken(): Promise<string | null> {
   try {
@@ -45,6 +47,7 @@ export class KimiRuntimeManager extends EventEmitter {
   readonly #discoverRuntimes: () => Promise<RuntimeDiscovery>
   readonly #readSharedToken: () => Promise<string | null>
   readonly #sharedOrigin: string
+  readonly #clientVersion: string
   #process: RuntimeChild | null = null
   #connection: RuntimeConnection | null = null
   #state: RuntimePublicState = {
@@ -63,6 +66,7 @@ export class KimiRuntimeManager extends EventEmitter {
     this.#discoverRuntimes = options.discoverRuntimes ?? discoverRuntimes
     this.#readSharedToken = options.readSharedToken ?? readSharedKimiWebToken
     this.#sharedOrigin = (options.sharedOrigin ?? DEFAULT_SHARED_KIMI_WEB_ORIGIN).replace(/\/$/, '')
+    this.#clientVersion = options.clientVersion ?? '0.0.0-dev'
   }
 
   get state(): RuntimePublicState {
@@ -76,7 +80,16 @@ export class KimiRuntimeManager extends EventEmitter {
   createRestClient(): KimiRestClient {
     const connection = this.#connection
     if (connection === null) throw new Error('Kimi runtime is not connected')
-    return new KimiRestClient({ origin: connection.origin, token: connection.token })
+    return new KimiRestClient({
+      origin: connection.origin,
+      token: connection.token,
+      identity: {
+        clientId: DESKTOP_CLIENT_ID,
+        clientName: 'moon-code-desktop',
+        clientVersion: this.#clientVersion,
+        clientUiMode: 'desktop'
+      }
+    })
   }
 
   createWsClient(options: { clientId?: string } = {}): KimiWsClient {
@@ -85,7 +98,7 @@ export class KimiRuntimeManager extends EventEmitter {
     return new KimiWsClient({
       origin: connection.origin,
       token: connection.token,
-      ...(options.clientId === undefined ? {} : { clientId: options.clientId })
+      clientId: options.clientId ?? DESKTOP_CLIENT_ID
     })
   }
 

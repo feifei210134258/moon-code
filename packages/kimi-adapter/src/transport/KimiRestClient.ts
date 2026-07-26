@@ -131,20 +131,30 @@ export class KimiApiError extends Error {
   }
 }
 
+export interface KimiClientIdentity {
+  clientId: string
+  clientName: string
+  clientVersion: string
+  clientUiMode: string
+}
+
 interface KimiRestClientOptions {
   origin: string
   token: string
+  identity?: KimiClientIdentity
   fetchImpl?: typeof fetch
 }
 
 export class KimiRestClient {
   readonly #origin: string
   readonly #token: string
+  readonly #identity: KimiClientIdentity | null
   readonly #fetch: typeof fetch
 
   constructor(options: KimiRestClientOptions) {
     this.#origin = options.origin.replace(/\/$/, '')
     this.#token = options.token
+    this.#identity = options.identity ?? null
     this.#fetch = options.fetchImpl ?? fetch
   }
 
@@ -157,6 +167,7 @@ export class KimiRestClient {
     const headers = new Headers(init.headers)
     headers.set('authorization', `Bearer ${this.#token}`)
     headers.set('accept', 'application/json')
+    this.#addClientIdentity(headers)
     if (init.body !== undefined && !headers.has('content-type')) {
       headers.set('content-type', 'application/json')
     }
@@ -197,7 +208,7 @@ export class KimiRestClient {
     form.set('name', input.name)
     const response = await this.#fetch(`${this.#origin}/api/v1/files`, {
       method: 'POST',
-      headers: new Headers({ authorization: `Bearer ${this.#token}`, accept: 'application/json' }),
+      headers: this.#identifiedHeaders({ authorization: `Bearer ${this.#token}`, accept: 'application/json' }),
       body: form
     })
     const payload = await response.json() as Partial<KimiEnvelope<unknown>>
@@ -215,7 +226,7 @@ export class KimiRestClient {
 
   async downloadFile(fileId: string): Promise<Uint8Array> {
     const response = await this.#fetch(`${this.#origin}/api/v1/files/${encodeURIComponent(fileId)}`, {
-      headers: new Headers({
+      headers: this.#identifiedHeaders({
         authorization: `Bearer ${this.#token}`,
         accept: 'application/octet-stream'
       })
@@ -505,6 +516,7 @@ export class KimiRestClient {
       accept: 'application/zip',
       'content-type': 'application/json'
     })
+    this.#addClientIdentity(headers)
     const response = await this.#fetch(
       `${this.#origin}/api/v1/sessions/${encodeURIComponent(sessionId)}/export`,
       { method: 'POST', headers, body: JSON.stringify(webLog === undefined ? {} : { web_log: webLog }) }
@@ -871,7 +883,7 @@ export class KimiRestClient {
     const encodedPath = path.split('/').map((segment) => encodeURIComponent(segment)).join('/')
     const response = await this.#fetch(
       `${this.#origin}/api/v1/sessions/${encodeURIComponent(sessionId)}/fs/${encodedPath}`,
-      { headers: new Headers({ authorization: `Bearer ${this.#token}`, accept: 'application/octet-stream' }) }
+      { headers: this.#identifiedHeaders({ authorization: `Bearer ${this.#token}`, accept: 'application/octet-stream' }) }
     )
     if (!response.ok) throw await this.#binaryError(response, 'Kimi workspace file download failed')
     return new Uint8Array(await response.arrayBuffer())
@@ -934,6 +946,21 @@ export class KimiRestClient {
 
   async shutdown(): Promise<void> {
     await this.request<unknown>('/api/v1/shutdown', { method: 'POST' })
+  }
+
+  #identifiedHeaders(init: Record<string, string>): Headers {
+    const headers = new Headers(init)
+    this.#addClientIdentity(headers)
+    return headers
+  }
+
+  #addClientIdentity(headers: Headers): void {
+    const identity = this.#identity
+    if (identity === null) return
+    headers.set('X-Kimi-Client-Id', identity.clientId)
+    headers.set('X-Kimi-Client-Name', identity.clientName)
+    headers.set('X-Kimi-Client-Version', identity.clientVersion)
+    headers.set('X-Kimi-Client-Ui-Mode', identity.clientUiMode)
   }
 
   async #binaryError(response: Response, messagePrefix: string): Promise<KimiApiError> {
