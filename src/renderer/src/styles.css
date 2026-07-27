@@ -198,6 +198,42 @@ select:focus-visible {
   font-size: 12px;
 }
 
+.plan-usage {
+  inline-size: 270px;
+  overflow: hidden;
+}
+
+.plan-usage-content {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 48px 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.plan-usage-label,
+.plan-usage-content .muted {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-usage-content strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-swap-enter-active,
+.usage-swap-leave-active {
+  transition: opacity 180ms ease-out;
+}
+
+.usage-swap-enter-from,
+.usage-swap-leave-to {
+  opacity: 0;
+}
+
 .context-meter {
   min-height: 31px;
   overflow: visible;
@@ -6193,6 +6229,14 @@ body.is-panel-resizing {
   .plan-usage .muted,
   .topbar-context .topbar-divider:nth-of-type(2) {
     display: none;
+  }
+
+  .plan-usage {
+    inline-size: 112px;
+  }
+
+  .plan-usage-content {
+    grid-template-columns: 48px 36px;
   }
 }
 

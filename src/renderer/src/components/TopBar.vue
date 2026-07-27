@@ -29,9 +29,9 @@ const props = defineProps<{
   conversationActionPending?: 'compact' | 'undo' | null
 }>()
 
-// Keep the short 5h window as the steady-state readout; surface 7d briefly for context.
-const PRIMARY_USAGE_DISPLAY_MS = 5_000
-const WEEKLY_USAGE_DISPLAY_MS = 2_000
+// Keep 5h primary without making 7d feel like a flash. Warning windows stay pinned.
+const PRIMARY_USAGE_DISPLAY_MS = 8_000
+const WEEKLY_USAGE_DISPLAY_MS = 5_000
 
 const emit = defineEmits<{
   toggleRuntime: []
@@ -71,7 +71,19 @@ const primaryUsageWindow = computed<KimiPlanUsageWindow | null>(() =>
 const weeklyUsageWindow = computed<KimiPlanUsageWindow | null>(() =>
   usageWindows.value.find(isWeeklyWindow) ?? null
 )
-const usageDisplayMode = ref<'primary' | 'weekly'>('primary')
+const alertUsageWindow = computed<KimiPlanUsageWindow | null>(() => {
+  const warningThreshold = props.usage.preferences.warningThreshold
+  return [primaryUsageWindow.value, weeklyUsageWindow.value]
+    .filter((window): window is KimiPlanUsageWindow => (
+      window?.ratio !== null && window?.ratio !== undefined && window.ratio >= warningThreshold
+    ))
+    .sort((left, right) => (right.ratio ?? 0) - (left.ratio ?? 0))[0] ?? null
+})
+const usageDisplayMode = ref<'primary' | 'weekly'>(
+  alertUsageWindow.value !== null && alertUsageWindow.value.key === weeklyUsageWindow.value?.key
+    ? 'weekly'
+    : 'primary'
+)
 const displayUsageWindow = computed<KimiPlanUsageWindow | null>(() =>
   usageDisplayMode.value === 'weekly'
     ? weeklyUsageWindow.value
@@ -80,6 +92,16 @@ const displayUsageWindow = computed<KimiPlanUsageWindow | null>(() =>
 const displayUsageLabel = computed(() =>
   usageDisplayMode.value === 'weekly' && weeklyUsageWindow.value !== null ? '7d用量' : '5h用量'
 )
+const displayUsageNotice = computed(() => {
+  if (props.usage.phase === 'stale') return '· 已过期'
+  const window = displayUsageWindow.value
+  if (window !== null && window.key === alertUsageWindow.value?.key) {
+    return window.ratio !== null && window.ratio >= props.usage.preferences.criticalThreshold
+      ? '· 即将用尽'
+      : '· 接近上限'
+  }
+  return window?.resetHint ? `· ${window.resetHint}` : null
+})
 let usageDisplayTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearUsageDisplayTimer(): void {
@@ -89,7 +111,15 @@ function clearUsageDisplayTimer(): void {
 
 function scheduleUsageDisplay(): void {
   clearUsageDisplayTimer()
-  if (primaryUsageWindow.value === null || weeklyUsageWindow.value === null) return
+  const alertWindow = alertUsageWindow.value
+  if (alertWindow !== null) {
+    usageDisplayMode.value = alertWindow.key === weeklyUsageWindow.value?.key ? 'weekly' : 'primary'
+    return
+  }
+  if (primaryUsageWindow.value === null || weeklyUsageWindow.value === null) {
+    usageDisplayMode.value = 'primary'
+    return
+  }
   usageDisplayTimer = setTimeout(() => {
     usageDisplayMode.value = usageDisplayMode.value === 'primary' ? 'weekly' : 'primary'
     scheduleUsageDisplay()
@@ -98,8 +128,7 @@ function scheduleUsageDisplay(): void {
 
 onMounted(scheduleUsageDisplay)
 onBeforeUnmount(clearUsageDisplayTimer)
-watch([primaryUsageWindow, weeklyUsageWindow], ([, weeklyWindow]) => {
-  if (weeklyWindow === null) usageDisplayMode.value = 'primary'
+watch([primaryUsageWindow, weeklyUsageWindow, alertUsageWindow], () => {
   scheduleUsageDisplay()
 })
 
@@ -218,10 +247,13 @@ function resetHintLabel(hint: string): string {
         </span>
       </div>
       <button class="usage-pill plan-usage" :class="usageTone(displayUsageWindow?.ratio ?? null)" type="button" :aria-label="`查看 Kimi ${displayUsageLabel}`" aria-controls="usage-popover" :aria-expanded="usageOpen" @click="$emit('toggleUsage')">
-        <span>{{ displayUsageLabel }}</span>
-        <strong>{{ percent(displayUsageWindow?.ratio ?? null) }}</strong>
-        <span v-if="usage.phase === 'stale'" class="muted">· 已过期</span>
-        <span v-else-if="displayUsageWindow?.resetHint" class="muted">· {{ displayUsageWindow.resetHint }}</span>
+        <Transition name="usage-swap" mode="out-in">
+          <span :key="`${usageDisplayMode}:${displayUsageWindow?.key ?? 'empty'}`" class="plan-usage-content">
+            <span class="plan-usage-label">{{ displayUsageLabel }}</span>
+            <strong>{{ percent(displayUsageWindow?.ratio ?? null) }}</strong>
+            <span v-if="displayUsageNotice" class="muted">{{ displayUsageNotice }}</span>
+          </span>
+        </Transition>
       </button>
       <button class="icon-button" type="button" :aria-label="extensionsOpen ? '收起扩展栏' : '展开扩展栏'" @click="$emit('toggleExtensions')">
         <PhSidebarSimple :size="19" />

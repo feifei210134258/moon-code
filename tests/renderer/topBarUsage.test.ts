@@ -91,7 +91,7 @@ describe('TopBar usage', () => {
     expect(popover).not.toContain('resets in')
   })
 
-  it('keeps 5h usage primary while briefly showing the weekly window', async () => {
+  it('cycles 5h and 7d at readable intervals without stopping after one pass', async () => {
     vi.useFakeTimers()
     const wrapper = mount(TopBar, {
       props: {
@@ -104,13 +104,49 @@ describe('TopBar usage', () => {
     expect(wrapper.get('.plan-usage').text()).toContain('5h用量')
     expect(wrapper.get('.plan-usage').text()).toContain('41%')
 
-    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.advanceTimersByTimeAsync(8_000)
     expect(wrapper.get('.plan-usage').text()).toContain('7d用量')
     expect(wrapper.get('.plan-usage').text()).toContain('67%')
 
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(5_000)
     expect(wrapper.get('.plan-usage').text()).toContain('5h用量')
     expect(wrapper.get('.plan-usage').text()).toContain('41%')
+
+    await vi.advanceTimersByTimeAsync(8_000)
+    expect(wrapper.get('.plan-usage').text()).toContain('7d用量')
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('pins a near-limit window as a static warning instead of cycling it away', async () => {
+    vi.useFakeTimers()
+    const warningUsage: KimiUsageState = {
+      ...usage,
+      limits: [
+        usage.limits[0]!,
+        { ...usage.limits[1]!, ratio: 0.87, used: 87 }
+      ]
+    }
+    const wrapper = mount(TopBar, {
+      props: {
+        runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: warningUsage, sessionUsage,
+        contextOpen: false, usageOpen: false, extensionsOpen: true
+      }
+    })
+
+    expect(wrapper.get('.plan-usage').text()).toContain('7d用量')
+    expect(wrapper.get('.plan-usage').text()).toContain('接近上限')
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(wrapper.get('.plan-usage').text()).toContain('7d用量')
+
+    await wrapper.setProps({
+      usage: {
+        ...warningUsage,
+        limits: [warningUsage.limits[0]!, { ...warningUsage.limits[1]!, ratio: 0.96, used: 96 }]
+      }
+    })
+    expect(wrapper.get('.plan-usage').text()).toContain('即将用尽')
     wrapper.unmount()
     vi.useRealTimers()
   })
