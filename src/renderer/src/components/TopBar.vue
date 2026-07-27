@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
+  PhCaretLeft,
+  PhCaretRight,
   PhCaretDown,
   PhFolderSimple,
   PhGitBranch,
@@ -255,8 +257,18 @@ function resetHintLabel(hint: string): string {
           </span>
         </Transition>
       </button>
-      <button class="icon-button" type="button" :aria-label="extensionsOpen ? '收起扩展栏' : '展开扩展栏'" @click="$emit('toggleExtensions')">
-        <PhSidebarSimple :size="19" />
+      <button
+        class="icon-button extensions-toggle"
+        type="button"
+        :class="{ 'is-open': extensionsOpen }"
+        :aria-label="extensionsOpen ? '收起扩展栏' : '展开扩展栏'"
+        :aria-pressed="extensionsOpen"
+        :title="extensionsOpen ? '收起扩展栏' : '展开扩展栏'"
+        @click="$emit('toggleExtensions')"
+      >
+        <PhSidebarSimple :size="19" :weight="extensionsOpen ? 'fill' : 'regular'" />
+        <PhCaretRight v-if="extensionsOpen" class="extensions-toggle-direction is-collapse" :size="9" weight="bold" />
+        <PhCaretLeft v-else class="extensions-toggle-direction is-expand" :size="9" weight="bold" />
       </button>
       <section v-if="contextOpen" id="context-popover" class="context-popover" aria-label="当前会话上下文用量">
         <header class="usage-popover-header">

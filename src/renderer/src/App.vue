@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { PhSidebarSimple } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import TopBar from './components/TopBar.vue'
 import ProjectSidebar from './components/ProjectSidebar.vue'
@@ -783,18 +782,8 @@ onBeforeUnmount(() => {
           @browser-submit-annotation="submitBrowserAnnotation"
           @browser-overlay="browserBridge.setOverlay"
           @cancel-task="cancelTask"
-          @collapse="store.rightPanelOpen = false"
         />
       </template>
-      <button
-        v-else
-        class="panel-restore control-button"
-        type="button"
-        aria-label="展开扩展栏"
-        @click="store.rightPanelOpen = true"
-      >
-        <PhSidebarSimple :size="16" /><span>扩展</span>
-      </button>
     </main>
     <FilePreviewDialog
       :preview="runtimeBridge.filePreview.value"

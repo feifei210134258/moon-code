@@ -11,7 +11,6 @@ import {
   PhFileTs,
   PhFolderOpen,
   PhMagnifyingGlass,
-  PhSidebarSimple,
   PhSpinnerGap,
   PhTextT,
   PhTrash,
@@ -97,7 +96,6 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   selectTab: [tab: ExtensionTab]
-  collapse: []
   openEntry: [entry: WorkspaceFileEntry]
   openFile: [path: string]
   openDirectory: [path: string]
@@ -229,9 +227,6 @@ onBeforeUnmount(() => {
       <span class="extensions-header-actions">
         <button class="icon-button" type="button" aria-label="刷新文件和更改" @click="emit('refresh')">
           <PhArrowClockwise :size="17" />
-        </button>
-        <button class="icon-button" type="button" aria-label="收起扩展栏" @click="emit('collapse')">
-          <PhSidebarSimple :size="18" />
         </button>
       </span>
     </header>

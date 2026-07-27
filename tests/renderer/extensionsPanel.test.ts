@@ -45,6 +45,17 @@ const baseProps = {
 }
 
 describe('ExtensionsPanel', () => {
+  it('keeps only refresh in the panel header because the top bar owns expand and collapse', async () => {
+    const wrapper = mount(ExtensionsPanel, { props: baseProps })
+    const actions = wrapper.findAll('.extensions-header-actions button')
+
+    expect(actions).toHaveLength(1)
+    expect(actions[0]!.attributes('aria-label')).toBe('刷新文件和更改')
+    expect(wrapper.find('[aria-label="收起扩展栏"]').exists()).toBe(false)
+    await actions[0]!.trigger('click')
+    expect(wrapper.emitted('refresh')).toEqual([[]])
+  })
+
   it('renders authoritative Git status as a non-interactive scrollable file list', () => {
     const wrapper = mount(ExtensionsPanel, { props: baseProps })
 

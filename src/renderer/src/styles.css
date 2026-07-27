@@ -199,7 +199,7 @@ select:focus-visible {
 }
 
 .plan-usage {
-  inline-size: 270px;
+  inline-size: 250px;
   overflow: hidden;
 }
 
@@ -582,6 +582,25 @@ select:focus-visible {
 .icon-button {
   width: 32px;
   padding: 0;
+}
+
+.extensions-toggle {
+  position: relative;
+}
+
+.extensions-toggle.is-open {
+  color: #3f5f84;
+  background: rgba(48, 133, 250, 0.08);
+}
+
+.extensions-toggle-direction {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding: 1px;
+  border-radius: 4px;
+  color: #ffffff;
+  background: #4f6f95;
 }
 
 .account-button {
@@ -5412,36 +5431,6 @@ body.is-panel-resizing {
   object-fit: contain;
   border-radius: 6px;
   background: #fff;
-}
-
-.panel-restore {
-  position: absolute;
-  right: 9px;
-  top: 10px;
-  z-index: 15;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 7px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 540;
-}
-
-.panel-restore:hover,
-.panel-restore:focus-visible {
-  color: var(--ink);
-  background: rgba(15, 23, 42, 0.045);
-}
-
-.panel-restore:focus-visible {
-  outline: 2px solid rgba(48, 133, 250, 0.28);
-  outline-offset: 1px;
 }
 
 .settings-backdrop {
