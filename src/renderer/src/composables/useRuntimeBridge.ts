@@ -193,6 +193,7 @@ export function useRuntimeBridge() {
         !state.mainTurnActive
       ) {
         awaitingPromptCycleAt.delete(state.sessionId)
+        void refreshWorkspaceContext(state.sessionId)
         void flushLocalPromptQueue(state.sessionId)
       }
     })
@@ -473,7 +474,7 @@ export function useRuntimeBridge() {
   const submitPrompt = async (sessionId: string, input: KimiPromptInput): Promise<void> => {
     if (window.kimiAgent === undefined) return
     const cloneableInput = toCloneablePromptInput(input)
-    if (shouldQueueLocally(sessionId)) {
+    if (input.deliveryMode !== 'steer' && shouldQueueLocally(sessionId)) {
       enqueueLocalPrompt(sessionId, cloneableInput)
       if (!isSessionExecuting(sessionId)) void flushLocalPromptQueue(sessionId)
       return
@@ -916,23 +917,27 @@ export function useRuntimeBridge() {
   const runFileAction = async (
     key: string,
     action: (sessionId: string) => Promise<boolean | void>
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const sessionId = requestedSessionId
-    if (window.kimiAgent === undefined || sessionId === null || fileActionPending.value !== null) return
+    if (window.kimiAgent === undefined || sessionId === null || fileActionPending.value !== null) return false
     const generation = ++fileActionGeneration
     fileActionPending.value = key
     fileActionError.value = null
     fileActionNotice.value = null
     try {
       const completed = await action(sessionId)
-      if (generation !== fileActionGeneration || sessionId !== requestedSessionId || completed === false) return
+      if (generation !== fileActionGeneration || sessionId !== requestedSessionId || completed === false) return false
       if (key.startsWith('download:')) fileActionNotice.value = '文件已保存到所选位置。'
       else if (key.startsWith('reveal:')) fileActionNotice.value = '已在 Finder 中显示文件。'
+      else if (key.startsWith('system-open:')) fileActionNotice.value = '已使用系统默认应用打开。'
+      else if (key.startsWith('trash:')) fileActionNotice.value = '已移到废纸篓。'
       else fileActionNotice.value = '已交给 Kimi 打开文件。'
+      return true
     } catch (error) {
       if (generation === fileActionGeneration && sessionId === requestedSessionId) {
         fileActionError.value = errorMessage(error)
       }
+      return false
     } finally {
       if (generation === fileActionGeneration) fileActionPending.value = null
     }
@@ -957,10 +962,26 @@ export function useRuntimeBridge() {
     })
   }
 
+  const openWorkspaceFileSystem = async (path: string): Promise<void> => {
+    await runFileAction(`system-open:${path}`, async (sessionId) => {
+      await window.kimiAgent!.openWorkspaceFileSystem(sessionId, path)
+    })
+  }
+
   const revealWorkspaceFile = async (path: string): Promise<void> => {
     await runFileAction(`reveal:${path}`, async (sessionId) => {
       await window.kimiAgent!.revealWorkspaceFile(sessionId, path)
     })
+  }
+
+  const trashWorkspaceEntry = async (path: string): Promise<void> => {
+    const sessionId = requestedSessionId
+    const trashed = await runFileAction(`trash:${path}`, async (activeSessionId) => {
+      await window.kimiAgent!.trashWorkspaceEntry(activeSessionId, path)
+    })
+    if (!trashed || sessionId === null || sessionId !== requestedSessionId) return
+    if (filePreview.value?.path === path || filePreview.value?.path.startsWith(`${path}/`)) closeFilePreview()
+    await refreshWorkspaceContext(sessionId)
   }
 
   const loadFileDiff = async (path: string): Promise<void> => {
@@ -988,7 +1009,8 @@ export function useRuntimeBridge() {
     const generation = ++workspaceGeneration
     gitStatusPending.value = true
     gitStatusError.value = null
-    const directoryPromise = loadDirectoryForSession(sessionId, '.', generation)
+    const currentPath = fileList.value?.path ?? '.'
+    const directoryPromise = loadDirectoryForSession(sessionId, currentPath, generation)
     const gitPromise = window.kimiAgent.getGitStatus(sessionId)
       .then((status) => {
         if (generation === workspaceGeneration && sessionId === requestedSessionId) gitStatus.value = status
@@ -1405,7 +1427,9 @@ export function useRuntimeBridge() {
     downloadWorkspaceFile,
     openWorkspaceFile,
     openWorkspaceFileIn,
+    openWorkspaceFileSystem,
     revealWorkspaceFile,
+    trashWorkspaceEntry,
     loadFileDiff,
     refreshWorkspaceContext,
     toggle,

@@ -200,7 +200,11 @@ export class KimiSessionBridge extends EventEmitter {
         })
       }
     }
-    return await this.#submitContent(sessionId, content, undefined, input.controls)
+    const result = await this.#submitContent(sessionId, content, undefined, input.controls)
+    if (input.deliveryMode === 'steer' && result.status === 'queued') {
+      await this.steerPrompts(sessionId, [result.promptId])
+    }
+    return result
   }
 
   async startSideChat(sessionId: string): Promise<KimiSideChatView> {
@@ -444,6 +448,27 @@ export class KimiSessionBridge extends EventEmitter {
   async revealWorkspaceFile(sessionId: string, path: string): Promise<{ revealed: true }> {
     this.#assertActiveSession(sessionId)
     return await this.#runtime.createRestClient().revealFile(sessionId, path)
+  }
+
+  workspaceFileSystemPath(sessionId: string, path: string): string {
+    this.#assertActiveSession(sessionId)
+    const state = this.#getController().getState(sessionId)
+    if (state === null || state.workspaceRoot.length === 0) throw new Error('Kimi Workspace path is unavailable')
+    const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
+    if (
+      normalized.length === 0 ||
+      normalized === '.' ||
+      normalized.startsWith('/') ||
+      /^[A-Za-z]:\//.test(normalized) ||
+      normalized.split('/').some((segment) => segment === '..')
+    ) throw new Error('Workspace file path escapes the active Kimi Workspace')
+    const root = resolve(state.workspaceRoot)
+    const target = resolve(root, ...normalized.split('/'))
+    const inside = relative(root, target)
+    if (inside.length === 0 || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
+      throw new Error('Workspace file path escapes the active Kimi Workspace')
+    }
+    return target
   }
 
   async readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null> {

@@ -60,6 +60,19 @@ describe('MarkdownBlock', () => {
     expect(wrapper.emitted('openFile')).toEqual([['app/index.html']])
   })
 
+  it('recognizes generated HTML files with Chinese names as blue clickable paths', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: { text: '交付物：`校看板_大屏原型.html`，可直接预览。' }
+    })
+
+    const inlineFile = wrapper.get('code.markdown-file-inline')
+    expect(inlineFile.attributes('data-workspace-path')).toBe('校看板_大屏原型.html')
+    await inlineFile.trigger('contextmenu', { clientX: 120, clientY: 80 })
+    expect(wrapper.emitted('fileContext')?.[0]?.[0]).toBe('校看板_大屏原型.html')
+    await inlineFile.trigger('click')
+    expect(wrapper.emitted('openFile')).toEqual([['校看板_大屏原型.html']])
+  })
+
   it('does not execute raw HTML from model output', () => {
     const wrapper = mount(MarkdownBlock, {
       props: { text: '<img src=x onerror="window.pwned=true">' }

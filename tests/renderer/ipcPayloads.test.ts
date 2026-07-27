@@ -35,7 +35,8 @@ describe('renderer IPC payload DTOs', () => {
         mediaType: 'text/html',
         size: 128
       }],
-      goalObjective: '修复页面'
+      goalObjective: '修复页面',
+      deliveryMode: 'steer'
     })
 
     expect(() => structuredClone(input)).toThrow()
@@ -54,7 +55,8 @@ describe('renderer IPC payload DTOs', () => {
         mediaType: 'text/html',
         size: 128
       }],
-      goalObjective: '修复页面'
+      goalObjective: '修复页面',
+      deliveryMode: 'steer'
     })
     expect(structuredClone(toCloneablePromptControls(controls))).toEqual({ ...controls })
   })

@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events'
+import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ConnectOptions, KimiWsClient } from '../../packages/kimi-adapter/src/transport/KimiWsClient.js'
 import type { KimiCursor } from '../../packages/kimi-adapter/src/wire/ws.js'
+import type { PromptSubmitResult } from '../../packages/kimi-adapter/src/wire/schemas.js'
 import { KimiSessionBridge } from '../../src/main/kimi/KimiSessionBridge.js'
 import { KimiTerminalCompatibility } from '../../src/main/kimi/KimiTerminalCompatibility.js'
 import type { KimiRuntimeManager } from '../../src/main/runtime/KimiRuntimeManager.js'
@@ -32,10 +34,16 @@ class FakeRuntime extends EventEmitter {
     error: null
   }
   readonly backend = 'v1' as const
-  readonly submitPrompt = vi.fn(async () => ({
+  readonly submitPrompt = vi.fn(async (): Promise<PromptSubmitResult> => ({
     prompt_id: 'prompt-1',
     user_message_id: 'message-1',
-    status: 'running' as const
+    status: 'running' as const,
+    content: [],
+    created_at: '2026-07-23T00:00:00.000Z'
+  }))
+  readonly steerPrompts = vi.fn(async (_sessionId: string, promptIds: string[]) => ({
+    steered: true,
+    prompt_ids: promptIds
   }))
   readonly updateSessionGoalObjective = vi.fn(async () => ({}))
   readonly compactSession = vi.fn(async () => undefined)
@@ -81,6 +89,7 @@ class FakeRuntime extends EventEmitter {
   createRestClient(): unknown {
     return {
       submitPrompt: this.submitPrompt,
+      steerPrompts: this.steerPrompts,
       updateSessionGoalObjective: this.updateSessionGoalObjective,
       compactSession: this.compactSession,
       undoSession: this.undoSession,
@@ -322,6 +331,8 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.openWorkspaceFile('session-1', 'src/App.vue', 8)
     await bridge.openWorkspaceFileIn('session-1', 'vscode', 'src/App.vue', 8)
     await bridge.revealWorkspaceFile('session-1', 'src/App.vue')
+    expect(bridge.workspaceFileSystemPath('session-1', 'src/App.vue')).toBe(resolve(process.cwd(), 'src/App.vue'))
+    expect(() => bridge.workspaceFileSystemPath('session-1', '../outside.txt')).toThrow('escapes')
 
     expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/App.vue', 8)
     expect(runtime.openFileIn).toHaveBeenCalledWith('session-1', 'vscode', 'src/App.vue', 8)
@@ -344,6 +355,28 @@ describe('KimiSessionBridge terminals', () => {
     expect(runtime.updateSessionGoalObjective.mock.invocationCallOrder[0]).toBeLessThan(
       runtime.submitPrompt.mock.invocationCallOrder[0]!
     )
+    await bridge.close()
+  })
+
+  it('submits a busy-turn guidance Prompt and steers its queued id immediately', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    runtime.submitPrompt.mockResolvedValueOnce({
+      prompt_id: 'prompt-guidance',
+      user_message_id: 'message-guidance',
+      status: 'queued',
+      content: [{ type: 'text', text: '先别收尾，补充检查错误状态' }],
+      created_at: '2026-07-23T00:01:00.000Z'
+    })
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    await bridge.submitPrompt('session-1', {
+      text: '先别收尾，补充检查错误状态',
+      deliveryMode: 'steer',
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      }
+    })
+    expect(runtime.steerPrompts).toHaveBeenCalledWith('session-1', ['prompt-guidance'])
     await bridge.close()
   })
 

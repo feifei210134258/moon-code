@@ -12,7 +12,7 @@ import {
   PhSpinnerGap,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   KimiModelCatalogItem,
   KimiPromptControls,
@@ -38,7 +38,13 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [text: string, attachments: KimiUploadedFile[], controls: KimiPromptControls, goalMode: boolean]
+  submit: [
+    text: string,
+    attachments: KimiUploadedFile[],
+    controls: KimiPromptControls,
+    goalMode: boolean,
+    deliveryMode: 'queue' | 'steer'
+  ]
   abort: []
   toggleTerminal: []
   activateSkill: [skillName: string, args?: string]
@@ -53,6 +59,8 @@ const attachmentError = ref<string | null>(null)
 const optionsOpen = ref(false)
 const commandOpen = ref(false)
 const mentionOpen = ref(false)
+const deliveryOpen = ref(false)
+const deliveryMode = ref<'queue' | 'steer'>('queue')
 const mentionLoading = ref(false)
 const mentionError = ref<string | null>(null)
 const mentionItems = ref<WorkspaceFileSearchItem[]>([])
@@ -63,12 +71,14 @@ const composerRoot = ref<HTMLElement | null>(null)
 const modelTrigger = ref<HTMLButtonElement | null>(null)
 const commandTrigger = ref<HTMLButtonElement | null>(null)
 const mentionTrigger = ref<HTMLButtonElement | null>(null)
+const deliveryTrigger = ref<HTMLButtonElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
-type PopoverKind = 'options' | 'command' | 'mention'
+type PopoverKind = 'options' | 'command' | 'mention' | 'delivery'
 const popoverStyles = ref<Record<PopoverKind, Record<string, string>>>({
   options: {},
   command: {},
-  mention: {}
+  mention: {},
+  delivery: {}
 })
 let mentionTimer: ReturnType<typeof setTimeout> | null = null
 let mentionGeneration = 0
@@ -129,7 +139,14 @@ function submit(): void {
     const args = command?.[2]?.trim()
     emit('activateSkill', skill.name, args === undefined || args.length === 0 ? undefined : args)
   } else {
-    emit('submit', value.value, [...attachments.value], props.controls, props.goalMode === true)
+    emit(
+      'submit',
+      value.value,
+      [...attachments.value],
+      props.controls,
+      props.goalMode === true,
+      props.running === true ? deliveryMode.value : 'queue'
+    )
   }
   value.value = ''
   attachments.value = []
@@ -186,6 +203,7 @@ function disableBooleanMode(key: 'planMode' | 'swarmMode'): void {
 
 function toggleCommands(): void {
   commandOpen.value = !commandOpen.value
+  deliveryOpen.value = false
   if (commandOpen.value) {
     commandActiveIndex.value = 0
     optionsOpen.value = false
@@ -197,9 +215,24 @@ function toggleCommands(): void {
 function toggleSessionControls(): void {
   optionsOpen.value = !optionsOpen.value
   commandOpen.value = false
+  deliveryOpen.value = false
   closeMention()
   pendingPermissionMode.value = null
   if (optionsOpen.value) void nextTick(() => positionPopover('options'))
+}
+
+function toggleDeliveryMenu(): void {
+  deliveryOpen.value = !deliveryOpen.value
+  optionsOpen.value = false
+  commandOpen.value = false
+  closeMention()
+  if (deliveryOpen.value) void nextTick(() => positionPopover('delivery'))
+}
+
+function selectDeliveryMode(mode: 'queue' | 'steer'): void {
+  deliveryMode.value = mode
+  deliveryOpen.value = false
+  void nextTick(() => input.value?.focus())
 }
 
 function onComposerInput(): void {
@@ -207,6 +240,7 @@ function onComposerInput(): void {
     commandOpen.value = true
     commandActiveIndex.value = 0
     optionsOpen.value = false
+    deliveryOpen.value = false
     closeMention()
     void nextTick(() => positionPopover('command'))
     return
@@ -227,6 +261,7 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   attachments.value = [...files]
   commandOpen.value = false
   optionsOpen.value = false
+  deliveryOpen.value = false
   closeMention()
   await nextTick()
   input.value?.focus()
@@ -334,6 +369,7 @@ function queueMentionSearch(): void {
   mentionActiveIndex.value = 0
   commandOpen.value = false
   optionsOpen.value = false
+  deliveryOpen.value = false
   mentionTimer = setTimeout(() => {
     mentionTimer = null
     void search(token.query).then((items) => {
@@ -413,12 +449,18 @@ function skillSourceLabel(source: KimiSkill['source']): string {
 }
 
 function positionPopover(kind: PopoverKind): void {
-  const trigger = kind === 'options' ? modelTrigger.value : kind === 'command' ? commandTrigger.value : mentionTrigger.value
+  const trigger = kind === 'options'
+    ? modelTrigger.value
+    : kind === 'command'
+      ? commandTrigger.value
+      : kind === 'mention'
+        ? mentionTrigger.value
+        : deliveryTrigger.value
   if (trigger === null) return
   const rect = trigger.getBoundingClientRect()
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
-  const preferredWidth = kind === 'options' ? 344 : kind === 'command' ? 420 : 460
+  const preferredWidth = kind === 'options' ? 344 : kind === 'command' ? 420 : kind === 'mention' ? 460 : 250
   const width = Math.max(240, Math.min(preferredWidth, viewportWidth - 16))
   const alignedLeft = kind === 'options' ? rect.right - width : rect.left
   const left = Math.max(8, Math.min(alignedLeft, viewportWidth - width - 8))
@@ -440,11 +482,13 @@ function positionOpenPopovers(): void {
   if (optionsOpen.value) positionPopover('options')
   if (commandOpen.value) positionPopover('command')
   if (mentionOpen.value) positionPopover('mention')
+  if (deliveryOpen.value) positionPopover('delivery')
 }
 
 function closeComposerPopovers(): void {
   optionsOpen.value = false
   commandOpen.value = false
+  deliveryOpen.value = false
   pendingPermissionMode.value = null
   closeMention()
 }
@@ -452,13 +496,13 @@ function closeComposerPopovers(): void {
 function onDocumentPointerdown(event: PointerEvent): void {
   const target = event.target
   if (!(target instanceof Node) || composerRoot.value?.contains(target)) return
-  if (optionsOpen.value || commandOpen.value || mentionOpen.value) closeComposerPopovers()
+  if (optionsOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
 function onDocumentFocusin(event: FocusEvent): void {
   const target = event.target
   if (!(target instanceof Node) || composerRoot.value?.contains(target)) return
-  if (optionsOpen.value || commandOpen.value || mentionOpen.value) closeComposerPopovers()
+  if (optionsOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
 defineExpose({ loadDraft })
@@ -527,7 +571,10 @@ function onKeydown(event: KeyboardEvent): void {
 
 function onWindowKeydown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
-  if (event.key !== 'Escape' || (!optionsOpen.value && !commandOpen.value && !mentionOpen.value)) return
+  if (
+    event.key !== 'Escape' ||
+    (!optionsOpen.value && !commandOpen.value && !mentionOpen.value && !deliveryOpen.value)
+  ) return
   event.preventDefault()
   closeComposerPopovers()
   void nextTick(() => input.value?.focus())
@@ -547,6 +594,12 @@ onBeforeUnmount(() => {
   document.removeEventListener('scroll', positionOpenPopovers, true)
   document.removeEventListener('pointerdown', onDocumentPointerdown, true)
   document.removeEventListener('focusin', onDocumentFocusin, true)
+})
+
+watch(() => props.running, (running) => {
+  if (running === true) return
+  deliveryMode.value = 'queue'
+  deliveryOpen.value = false
 })
 </script>
 
@@ -635,7 +688,21 @@ onBeforeUnmount(() => {
           <span v-if="controls?.thinking" class="model-effort-chip">{{ thinkingLabel(controls.thinking) }}</span>
           <PhCaretDown :size="12" />
         </button>
-        <span v-if="running" class="queue-hint">发送将加入队列</span>
+        <button
+          v-if="running"
+          ref="deliveryTrigger"
+          class="delivery-trigger"
+          type="button"
+          aria-haspopup="listbox"
+          aria-controls="composer-delivery-listbox"
+          :aria-expanded="deliveryOpen"
+          :aria-label="deliveryMode === 'steer' ? '发送方式：引导当前任务' : '发送方式：加入队列'"
+          :title="deliveryMode === 'steer' ? '立即补充给当前任务' : '当前任务完成后发送'"
+          @click="toggleDeliveryMenu"
+        >
+          <span>{{ deliveryMode === 'steer' ? '引导' : '排队' }}</span>
+          <PhCaretDown :size="11" />
+        </button>
         <button
           v-if="running"
           class="send-button stop-button"
@@ -649,13 +716,42 @@ onBeforeUnmount(() => {
         <button
           class="send-button"
           type="button"
-          aria-label="发送任务"
+          :aria-label="running ? (deliveryMode === 'steer' ? '发送引导' : '加入队列') : '发送任务'"
           :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (value.trim().length === 0 && attachments.length === 0) || (goalMode && value.trim().length === 0)"
           @click="submit"
         >
           <PhPaperPlaneTilt :size="19" weight="fill" />
         </button>
       </div>
+    </div>
+    <div
+      v-if="running && deliveryOpen"
+      id="composer-delivery-listbox"
+      class="delivery-popover"
+      role="listbox"
+      aria-label="新消息发送方式"
+      :style="popoverStyles.delivery"
+    >
+      <button
+        type="button"
+        role="option"
+        :class="{ 'is-selected': deliveryMode === 'steer' }"
+        :aria-selected="deliveryMode === 'steer'"
+        @click="selectDeliveryMode('steer')"
+      >
+        <span><strong>引导当前任务</strong><small>立即补充给正在执行的 Kimi</small></span>
+        <i aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        role="option"
+        :class="{ 'is-selected': deliveryMode === 'queue' }"
+        :aria-selected="deliveryMode === 'queue'"
+        @click="selectDeliveryMode('queue')"
+      >
+        <span><strong>加入队列</strong><small>当前任务完成后再发送</small></span>
+        <i aria-hidden="true" />
+      </button>
     </div>
     <div
       v-if="optionsOpen"

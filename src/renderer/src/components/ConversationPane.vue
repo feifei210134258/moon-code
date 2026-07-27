@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { PhArrowSquareOut, PhTrash } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ChatTurn } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
@@ -90,12 +91,20 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  submit: [text: string, attachments: KimiUploadedFile[], controls: KimiPromptControls, goalMode: boolean]
+  submit: [
+    text: string,
+    attachments: KimiUploadedFile[],
+    controls: KimiPromptControls,
+    goalMode: boolean,
+    deliveryMode: 'queue' | 'steer'
+  ]
   abort: []
   respondApproval: [approvalId: string, response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }]
   respondQuestion: [questionId: string, answers: Record<string, QuestionAnswerInput>]
   dismissQuestion: [questionId: string]
   openFile: [path: string]
+  openSystem: [path: string]
+  trashEntry: [path: string]
   closeTerminal: []
   toggleTerminal: []
   activateSkill: [skillName: string, args?: string]
@@ -117,6 +126,8 @@ const transcriptScroll = ref<HTMLElement | null>(null)
 const interactionDock = ref<HTMLElement | null>(null)
 const stickToBottom = ref(true)
 const composer = ref<InstanceType<typeof ComposerBar> | null>(null)
+const contextFilePath = ref<string | null>(null)
+const contextMenuPosition = ref({ top: '0px', left: '0px' })
 const tocItems = computed(() => props.turns.flatMap((turn) => {
   if (turn.role !== 'user') return []
   const text = turn.blocks
@@ -271,17 +282,59 @@ function formatTokenCount(value: number): string {
   return new Intl.NumberFormat(rendererLocale(), { maximumFractionDigits: 0 }).format(value)
 }
 
+function openOutputFileContextMenu(path: string, event: MouseEvent): void {
+  const menuWidth = 160
+  const menuHeight = 76
+  const top = Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
+  const left = Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8))
+  contextMenuPosition.value = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
+  contextFilePath.value = path
+}
+
+function closeOutputFileContextMenu(): void {
+  contextFilePath.value = null
+}
+
+function openOutputFileInSystem(): void {
+  const path = contextFilePath.value
+  closeOutputFileContextMenu()
+  if (path !== null) emit('openSystem', path)
+}
+
+function trashOutputFile(): void {
+  const path = contextFilePath.value
+  closeOutputFileContextMenu()
+  if (path === null) return
+  const filePath = path.replace(/:\d+(?::\d+)?$/, '')
+  const name = filePath.split('/').filter(Boolean).at(-1) ?? filePath
+  if (window.confirm(`将文件“${name}”移到废纸篓？`)) emit('trashEntry', path)
+}
+
+function closeOutputMenuOnOutsideClick(event: MouseEvent): void {
+  if (!(event.target as HTMLElement).closest('.output-file-context-menu')) closeOutputFileContextMenu()
+}
+
+function closeOutputMenuOnEscape(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || contextFilePath.value === null) return
+  event.preventDefault()
+  closeOutputFileContextMenu()
+}
+
 onMounted(() => {
   if (typeof ResizeObserver !== 'undefined') {
     railObserver = new ResizeObserver(() => measureTocRail())
     if (transcriptScroll.value !== null) railObserver.observe(transcriptScroll.value)
   }
   window.addEventListener('resize', measureTocRail)
+  document.addEventListener('click', closeOutputMenuOnOutsideClick)
+  window.addEventListener('keydown', closeOutputMenuOnEscape)
   void nextTick(measureTocRail)
 })
 onBeforeUnmount(() => {
   railObserver?.disconnect()
   window.removeEventListener('resize', measureTocRail)
+  document.removeEventListener('click', closeOutputMenuOnOutsideClick)
+  window.removeEventListener('keydown', closeOutputMenuOnEscape)
 })
 
 defineExpose({ focusFromPet, loadPromptDraft })
@@ -369,9 +422,16 @@ watch(
                 :text="block.text"
                 :session-id="sessionId"
                 @open-file="emit('openFile', $event)"
+                @file-context="openOutputFileContextMenu"
               />
               <ActivityBlock v-else-if="block.type === 'activity'" :activity="block.activity" />
-              <button v-else-if="block.type === 'file'" class="linked-file" type="button" @click="emit('openFile', block.name)">{{ block.name }}</button>
+              <button
+                v-else-if="block.type === 'file'"
+                class="linked-file"
+                type="button"
+                @click="emit('openFile', block.name)"
+                @contextmenu.prevent.stop="openOutputFileContextMenu(block.name, $event)"
+              >{{ block.name }}</button>
               <AttachmentBlock
                 v-else-if="block.type === 'attachment'"
                 :file-id="block.fileId"
@@ -433,6 +493,22 @@ watch(
       :error="agentTranscriptError"
       @close="emit('closeAgent')"
     />
+
+    <Teleport to="body">
+      <div
+        v-if="contextFilePath"
+        class="tree-menu tree-menu-overlay file-context-menu output-file-context-menu"
+        :style="contextMenuPosition"
+        @click.stop
+      >
+        <button type="button" @click="openOutputFileInSystem">
+          <PhArrowSquareOut :size="14" />系统打开
+        </button>
+        <button class="is-danger" type="button" @click="trashOutputFile">
+          <PhTrash :size="14" />删除
+        </button>
+      </div>
+    </Teleport>
 
     <TerminalDrawer
       :session-id="sessionId"
@@ -498,7 +574,7 @@ watch(
         :goal-mode="goalMode"
         :mention-search="mentionSearch"
         :disabled-reason="controlsPending ? '正在读取 Kimi 会话控制…' : '连接 Kimi 并选择一个会话后即可输入'"
-        @submit="(text, attachments, controls, goalMode) => emit('submit', text, attachments, controls, goalMode)"
+        @submit="(text, attachments, controls, goalMode, deliveryMode) => emit('submit', text, attachments, controls, goalMode, deliveryMode)"
         @abort="emit('abort')"
         @toggle-terminal="emit('toggleTerminal')"
         @activate-skill="(skillName, args) => emit('activateSkill', skillName, args)"

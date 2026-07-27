@@ -20,7 +20,10 @@ import 'katex/dist/katex.min.css'
 import 'highlight.js/styles/github.css'
 
 const props = defineProps<{ text: string; sessionId?: string }>()
-const emit = defineEmits<{ openFile: [path: string] }>()
+const emit = defineEmits<{
+  openFile: [path: string]
+  fileContext: [path: string, event: MouseEvent]
+}>()
 const root = ref<HTMLElement | null>(null)
 const TRANSPARENT_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='
 let imageLoadGeneration = 0
@@ -162,6 +165,15 @@ function onClick(event: MouseEvent): void {
   if (!/^https?:\/\//i.test(href)) event.preventDefault()
 }
 
+function onContextMenu(event: MouseEvent): void {
+  const target = (event.target as HTMLElement).closest<HTMLElement>('[data-workspace-path]')
+  const path = target?.dataset.workspacePath
+  if (path === undefined) return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('fileContext', path, event)
+}
+
 watch(() => [props.text, props.sessionId], renderRichContent)
 onMounted(renderRichContent)
 
@@ -196,8 +208,10 @@ function decodeLocalSource(source: string): string {
 
 function installFilePathLinks(markdownRenderer: MarkdownIt): void {
   const extensions = '(?:html?|css|s[ac]ss|less|m?[jt]sx?|c[jt]sx?|vue|svelte|astro|py|go|rs|java|kt|kts|swift|c|cc|cpp|cxx|h|hpp|cs|php|rb|lua|r|sh|bash|zsh|fish|ps1|sql|graphql|gql|md|mdx|markdown|txt|log|csv|tsv|jsonc?|ya?ml|toml|ini|cfg|conf|xml|xsd|xsl|svg|png|jpe?g|gif|webp|avif|ico|pdf|docx?|xlsx?|pptx?|zip|tar|gz|tgz|lock)'
-  const pattern = new RegExp(`((?:\\.{0,2}\\/)?(?:[\\w.@+-]+\\/)*[\\w.@+-]+\\.${extensions})(?::\\d+(?::\\d+)?)?`, 'gi')
-  const inlineFilePattern = new RegExp(`(?:^|\\s)((?:\\.{0,2}\\/)?(?:[\\w.@+-]+\\/)*[\\w.@+-]+\\.${extensions})(?::\\d+(?::\\d+)?)?(?=$|\\s)`, 'i')
+  /* Unicode letters/numbers keep generated files with Chinese names clickable too. */
+  const fileSegment = '[\\p{L}\\p{N}._@+~-]+'
+  const pattern = new RegExp(`((?:\\.{0,2}\\/)?(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?`, 'giu')
+  const inlineFilePattern = new RegExp(`(?:^|\\s)((?:\\.{0,2}\\/)?(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?(?=$|\\s)`, 'iu')
   markdownRenderer.core.ruler.after('inline', 'kimi_file_paths', (state) => {
     for (const block of state.tokens) {
       if (block.type !== 'inline' || block.children === null) continue
@@ -255,5 +269,5 @@ function escapeHtml(value: string): string {
 </script>
 
 <template>
-  <div ref="root" class="markdown-block" @click="onClick" v-html="html" />
+  <div ref="root" class="markdown-block" @click="onClick" @contextmenu="onContextMenu" v-html="html" />
 </template>

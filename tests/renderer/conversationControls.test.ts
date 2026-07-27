@@ -23,6 +23,7 @@ const turns = [
 function mountConversation() {
   return shallowMount(ConversationPane, {
     attachTo: document.body,
+    global: { stubs: { Teleport: true } },
     props: {
       turns,
       phase: 'ready' as const,
@@ -104,6 +105,35 @@ describe('Conversation controls', () => {
     const wrapper = mountConversation()
     expect(wrapper.text()).toContain('上下文已压缩')
     expect(wrapper.text()).toContain('48,000 → 12,500 tokens')
+    wrapper.unmount()
+  })
+
+  it('offers the same system-open and delete menu for files in assistant output', async () => {
+    const confirm = vi.fn(() => true)
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm })
+    const wrapper = mountConversation()
+    await wrapper.setProps({
+      turns: [{
+        id: 'turn-file', role: 'assistant', author: 'Kimi', time: '10:26',
+        blocks: [{ id: 'turn-file:file:0', type: 'file', name: 'dist/校看板.html' }]
+      }]
+    })
+
+    const file = wrapper.get('.linked-file')
+    await file.trigger('contextmenu', { clientX: 140, clientY: 90 })
+    let menu = document.querySelector('.output-file-context-menu') as HTMLElement
+    expect(menu.textContent).toContain('系统打开')
+    ;(menu.querySelectorAll('button')[0] as HTMLButtonElement).click()
+    await nextTick()
+    expect(wrapper.emitted('openSystem')).toEqual([['dist/校看板.html']])
+
+    await file.trigger('contextmenu', { clientX: 140, clientY: 90 })
+    menu = document.querySelector('.output-file-context-menu') as HTMLElement
+    ;(menu.querySelectorAll('button')[1] as HTMLButtonElement).click()
+    await nextTick()
+    expect(confirm).toHaveBeenCalledWith('将文件“校看板.html”移到废纸篓？')
+    expect(wrapper.emitted('trashEntry')).toEqual([['dist/校看板.html']])
+    Object.defineProperty(window, 'confirm', { configurable: true, value: undefined })
     wrapper.unmount()
   })
 

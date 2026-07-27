@@ -40,6 +40,7 @@ export function toCloneablePromptInput(input: KimiPromptInput): KimiPromptInput 
     cloneable.attachments = input.attachments.map(toCloneableUploadedFile)
   }
   if (input.goalObjective !== undefined) cloneable.goalObjective = input.goalObjective
+  if (input.deliveryMode !== undefined) cloneable.deliveryMode = input.deliveryMode
   return cloneable
 }
 

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import ExtensionsPanel from '../../src/renderer/src/components/ExtensionsPanel.vue'
 
 const baseProps = {
@@ -134,6 +134,27 @@ describe('ExtensionsPanel', () => {
 
     expect(wrapper.get('.file-parent-row').text()).toContain('返回上一级')
     expect(wrapper.get('.file-row .is-html-file').classes()).toContain('is-html-file')
+  })
+
+  it('offers system open and confirmed deletion from a file row context menu', async () => {
+    const confirm = vi.fn(() => true)
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm })
+    const wrapper = mount(ExtensionsPanel, {
+      props: { ...baseProps, activeTab: 'files' },
+      global: { stubs: { Teleport: true } }
+    })
+    const fileRow = wrapper.findAll('.file-row')[1]!
+
+    await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
+    expect(wrapper.get('.file-context-menu').text()).toContain('系统打开')
+    await wrapper.findAll('.file-context-menu button')[0]!.trigger('click')
+    expect(wrapper.emitted('openSystem')).toEqual([['README.md']])
+
+    await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
+    await wrapper.findAll('.file-context-menu button')[1]!.trigger('click')
+    expect(confirm).toHaveBeenCalledWith('将文件“README.md”移到废纸篓？')
+    expect(wrapper.emitted('trashEntry')).toEqual([['README.md']])
+    Object.defineProperty(window, 'confirm', { configurable: true, value: undefined })
   })
 
   it('submits native file queries and routes search directories without trying to read them as files', async () => {

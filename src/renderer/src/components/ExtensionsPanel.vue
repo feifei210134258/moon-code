@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   PhArrowClockwise,
+  PhArrowSquareOut,
   PhArrowUp,
   PhCaretRight,
   PhFile,
@@ -13,10 +14,11 @@ import {
   PhSidebarSimple,
   PhSpinnerGap,
   PhTextT,
+  PhTrash,
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -45,6 +47,9 @@ const props = withDefaults(defineProps<{
   fileListPending: boolean
   fileListError: string | null
   filePreview: WorkspaceFilePreview | null
+  fileActionPending?: string | null
+  fileActionError?: string | null
+  fileActionNotice?: string | null
   gitStatus: WorkspaceGitStatus | null
   gitStatusPending: boolean
   gitStatusError: string | null
@@ -80,6 +85,9 @@ const props = withDefaults(defineProps<{
   fileGrep: null,
   fileGrepPending: false,
   fileGrepError: null,
+  fileActionPending: null,
+  fileActionError: null,
+  fileActionNotice: null,
   todos: () => [],
   tasks: () => [],
   tasksPending: false,
@@ -93,6 +101,8 @@ const emit = defineEmits<{
   openEntry: [entry: WorkspaceFileEntry]
   openFile: [path: string]
   openDirectory: [path: string]
+  openSystem: [path: string]
+  trashEntry: [path: string]
   searchFiles: [query: string]
   grepFiles: [pattern: string]
   refresh: []
@@ -121,6 +131,8 @@ const todoItems = computed(() => activeTodo.value?.items ?? [])
 const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
 const fileSearchQuery = ref('')
 const grepPattern = ref('')
+const contextEntry = ref<WorkspaceFileEntry | null>(null)
+const contextMenuPosition = ref({ top: '0px', left: '0px' })
 
 function submitFileSearch(): void {
   const query = fileSearchQuery.value.trim()
@@ -161,6 +173,52 @@ function statusLabel(status: string): string {
     conflicted: '!'
   } as Record<string, string>)[status] ?? ''
 }
+
+function openEntryContextMenu(entry: WorkspaceFileEntry, event: MouseEvent): void {
+  const menuWidth = 160
+  const menuHeight = 76
+  const top = Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
+  const left = Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8))
+  contextMenuPosition.value = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
+  contextEntry.value = entry
+}
+
+function closeEntryContextMenu(): void {
+  contextEntry.value = null
+}
+
+function openContextEntryInSystem(): void {
+  const entry = contextEntry.value
+  closeEntryContextMenu()
+  if (entry !== null) emit('openSystem', entry.path)
+}
+
+function confirmTrashContextEntry(): void {
+  const entry = contextEntry.value
+  closeEntryContextMenu()
+  if (entry === null) return
+  const kind = entry.kind === 'directory' ? '文件夹' : '文件'
+  if (window.confirm(`将${kind}“${entry.name}”移到废纸篓？`)) emit('trashEntry', entry.path)
+}
+
+function closeContextMenuOnOutsideClick(event: MouseEvent): void {
+  if (!(event.target as HTMLElement).closest('.file-context-menu')) closeEntryContextMenu()
+}
+
+function onWindowKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || contextEntry.value === null) return
+  event.preventDefault()
+  closeEntryContextMenu()
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeContextMenuOnOutsideClick)
+  window.addEventListener('keydown', onWindowKeydown)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeContextMenuOnOutsideClick)
+  window.removeEventListener('keydown', onWindowKeydown)
+})
 
 </script>
 
@@ -267,6 +325,8 @@ function statusLabel(status: string): string {
         <strong><PhFolderOpen :size="18" />{{ workspaceName }}</strong>
         <span>{{ fileList?.path ?? '.' }}</span>
       </header>
+      <p v-if="fileActionError" class="files-action-message is-error" role="alert">{{ fileActionError }}</p>
+      <p v-else-if="fileActionNotice" class="files-action-message">{{ fileActionNotice }}</p>
       <div class="files-search-tools">
         <form @submit.prevent="submitFileSearch">
           <input v-model="fileSearchQuery" type="search" maxlength="512" placeholder="搜索文件名…" aria-label="搜索文件名" />
@@ -325,6 +385,7 @@ function statusLabel(status: string): string {
         class="file-row"
         :class="{ 'is-active': filePreview?.path === entry.path }"
         @click="emit('openEntry', entry)"
+        @contextmenu.prevent.stop="openEntryContextMenu(entry, $event)"
       >
         <PhCaretRight v-if="entry.kind === 'directory'" :size="13" />
         <span v-else class="file-row-spacer" />
@@ -362,4 +423,20 @@ function statusLabel(status: string): string {
       @overlay="emit('browserOverlay', $event)"
     />
   </aside>
+
+  <Teleport to="body">
+    <div
+      v-if="contextEntry"
+      class="tree-menu tree-menu-overlay file-context-menu"
+      :style="contextMenuPosition"
+      @click.stop
+    >
+      <button type="button" :disabled="fileActionPending !== null" @click="openContextEntryInSystem">
+        <PhArrowSquareOut :size="14" />系统打开
+      </button>
+      <button class="is-danger" type="button" :disabled="fileActionPending !== null" @click="confirmTrashContextEntry">
+        <PhTrash :size="14" />删除
+      </button>
+    </div>
+  </Teleport>
 </template>

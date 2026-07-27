@@ -52,7 +52,9 @@ export const ipcChannels = {
   filesDownload: 'files:download',
   filesOpen: 'files:open',
   filesOpenIn: 'files:open-in',
+  filesOpenSystem: 'files:open-system',
   filesReveal: 'files:reveal',
+  filesTrash: 'files:trash',
   markdownImageRead: 'markdown:image:read',
   gitStatus: 'git:status',
   fileDiff: 'file:diff',
@@ -492,6 +494,7 @@ export interface KimiPromptInput {
   controls: KimiPromptControls
   attachments?: KimiUploadedFile[]
   goalObjective?: string
+  deliveryMode?: 'queue' | 'steer'
 }
 
 export interface KimiSideChatPromptInput {
@@ -1083,7 +1086,9 @@ export interface KimiAgentDesktopApi {
   downloadWorkspaceFile(sessionId: string, path: string): Promise<{ saved: boolean }>
   openWorkspaceFile(sessionId: string, path: string, line?: number): Promise<{ opened: true }>
   openWorkspaceFileIn(sessionId: string, appId: WorkspaceOpenApp, path: string, line?: number): Promise<{ opened: true }>
+  openWorkspaceFileSystem(sessionId: string, path: string): Promise<{ opened: true }>
   revealWorkspaceFile(sessionId: string, path: string): Promise<{ revealed: true }>
+  trashWorkspaceEntry(sessionId: string, path: string): Promise<{ trashed: true }>
   readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null>
   getGitStatus(sessionId: string): Promise<WorkspaceGitStatus>
   getFileDiff(sessionId: string, path: string): Promise<WorkspaceFileDiff>

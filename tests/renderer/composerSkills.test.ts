@@ -45,7 +45,7 @@ describe('ComposerBar Skills menu', () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('textarea').setValue('/unknown continue')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['/unknown continue', [], controls, false]])
+    expect(wrapper.emitted('submit')).toEqual([['/unknown continue', [], controls, false, 'queue']])
   })
 
   it('filters slash commands as the user types and shows a Chinese empty state', async () => {
@@ -83,15 +83,28 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.find('.command-popover').exists()).toBe(false)
   })
 
-  it('keeps Stop available and allows a follow-up to enter the Kimi prompt queue', async () => {
+  it('keeps Stop available and lets follow-ups choose between queue and steer', async () => {
     const wrapper = mount(ComposerBar, {
       props: { skills: [], models, controls, running: true }
     })
 
     expect(wrapper.get('textarea').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('.delivery-trigger').text()).toContain('排队')
     await wrapper.get('textarea').setValue('继续检查测试')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['继续检查测试', [], controls, false]])
+    expect(wrapper.emitted('submit')).toEqual([['继续检查测试', [], controls, false, 'queue']])
+
+    await wrapper.get('.delivery-trigger').trigger('click')
+    expect(wrapper.get('.delivery-popover').text()).toContain('引导当前任务')
+    expect(wrapper.get('.delivery-popover').text()).toContain('当前任务完成后再发送')
+    await wrapper.findAll('.delivery-popover button')[0]!.trigger('click')
+    expect(wrapper.get('.delivery-trigger').text()).toContain('引导')
+    await wrapper.get('textarea').setValue('先不要收尾，补充检查边界情况')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([
+      ['继续检查测试', [], controls, false, 'queue'],
+      ['先不要收尾，补充检查边界情况', [], controls, false, 'steer']
+    ])
     await wrapper.get('.stop-button').trigger('click')
     expect(wrapper.emitted('abort')).toEqual([[]])
   })
@@ -209,7 +222,7 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.get('.composer-attachment-chip').text()).toContain('design.png')
     await wrapper.get('textarea').setValue('看看这里')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['看看这里', [attachment], controls, false]])
+    expect(wrapper.emitted('submit')).toEqual([['看看这里', [attachment], controls, false, 'queue']])
   })
 
   it('matches Kimi Web file mentions with debounced search, keyboard selection, and path insertion', async () => {
@@ -233,7 +246,7 @@ describe('ComposerBar Skills menu', () => {
 
     await wrapper.get('textarea').setValue('docs/adr 检查')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['docs/adr 检查', [], controls, false]])
+    expect(wrapper.emitted('submit')).toEqual([['docs/adr 检查', [], controls, false, 'queue']])
   })
 
   it('distinguishes mention-search failure from no results and supports retry', async () => {

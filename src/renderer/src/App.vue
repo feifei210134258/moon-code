@@ -31,6 +31,7 @@ import type {
   WorkspaceFileSearchItem
 } from '@shared/contracts'
 import type { LocalPromptDraft } from './utils/localPromptQueue'
+import type { ExtensionTab } from './types'
 
 const store = useWorkbenchStore()
 const showSettingsFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('settings-fixture')
@@ -106,8 +107,7 @@ watch(
 const composerEnabled = computed(() => showOperationalFixture || (
   runtimeBridge.runtime.value.status === 'running' &&
   activeSessionId.value.length > 0 &&
-  transcriptPhase.value === 'ready' &&
-  !runtimeBridge.promptPending.value
+  transcriptPhase.value === 'ready'
 ))
 const terminalEnabled = computed(() => (
   runtimeBridge.runtime.value.status === 'running' &&
@@ -179,13 +179,20 @@ async function searchMentionFiles(query: string): Promise<WorkspaceFileSearchIte
     : mentionFixtureItems.filter((item) => `${item.name} ${item.path}`.toLowerCase().includes(normalized))
 }
 
-function submitPrompt(text: string, attachments: KimiUploadedFile[], controls: KimiPromptControls, goalMode: boolean): void {
+function submitPrompt(
+  text: string,
+  attachments: KimiUploadedFile[],
+  controls: KimiPromptControls,
+  goalMode: boolean,
+  deliveryMode: 'queue' | 'steer'
+): void {
   if (activeSessionId.value.length === 0) return
   void runtimeBridge.submitPrompt(activeSessionId.value, {
     text,
     ...(attachments.length === 0 ? {} : { attachments }),
     controls,
-    ...(goalMode ? { goalObjective: text.trim() } : {})
+    ...(goalMode ? { goalObjective: text.trim() } : {}),
+    deliveryMode
   })
 }
 
@@ -353,6 +360,13 @@ function openWorkspaceEntry(entry: WorkspaceFileEntry): void {
   else openWorkspaceFile(entry.path)
 }
 
+function selectExtension(tab: ExtensionTab): void {
+  store.setExtension(tab)
+  if (tab === 'files' && activeSessionId.value.length > 0) {
+    void runtimeBridge.refreshWorkspaceContext(activeSessionId.value)
+  }
+}
+
 function openWorkspaceFile(reference: string): void {
   const { path } = normalizeWorkspaceFileReference(reference)
   if (path.length === 0) return
@@ -364,6 +378,16 @@ function openWorkspaceFile(reference: string): void {
   }
   store.setExtension('files')
   void runtimeBridge.openFile(path)
+}
+
+function openWorkspaceFileSystem(reference: string): void {
+  const { path } = normalizeWorkspaceFileReference(reference)
+  if (path.length > 0) void runtimeBridge.openWorkspaceFileSystem(path)
+}
+
+function trashWorkspaceEntry(reference: string): void {
+  const { path } = normalizeWorkspaceFileReference(reference)
+  if (path.length > 0) void runtimeBridge.trashWorkspaceEntry(path)
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
@@ -676,6 +700,8 @@ onBeforeUnmount(() => {
         @respond-question="respondQuestion"
         @dismiss-question="dismissQuestion"
         @open-file="openWorkspaceFile"
+        @open-system="openWorkspaceFileSystem"
+        @trash-entry="trashWorkspaceEntry"
         @close-terminal="store.toggleTerminal(false)"
         @toggle-terminal="toggleTerminal"
         @activate-skill="activateSkill"
@@ -714,6 +740,9 @@ onBeforeUnmount(() => {
           :file-list-pending="runtimeBridge.fileListPending.value"
           :file-list-error="runtimeBridge.fileListError.value"
           :file-preview="runtimeBridge.filePreview.value"
+          :file-action-pending="runtimeBridge.fileActionPending.value"
+          :file-action-error="runtimeBridge.fileActionError.value"
+          :file-action-notice="runtimeBridge.fileActionNotice.value"
           :git-status="runtimeBridge.gitStatus.value"
           :git-status-pending="runtimeBridge.gitStatusPending.value"
           :git-status-error="runtimeBridge.gitStatusError.value"
@@ -737,10 +766,12 @@ onBeforeUnmount(() => {
           :tasks-pending="runtimeBridge.sessionOperationalPending.value"
           :tasks-error="runtimeBridge.sessionOperationalError.value"
           :operational-action-pending="runtimeBridge.operationalActionPending.value"
-          @select-tab="store.setExtension"
+          @select-tab="selectExtension"
           @open-entry="openWorkspaceEntry"
           @open-file="openWorkspaceFile"
           @open-directory="runtimeBridge.loadDirectory"
+          @open-system="openWorkspaceFileSystem"
+          @trash-entry="trashWorkspaceEntry"
           @search-files="runtimeBridge.searchFiles"
           @grep-files="runtimeBridge.grepFiles"
           @refresh="runtimeBridge.refreshWorkspaceContext(activeSessionId)"
@@ -774,7 +805,7 @@ onBeforeUnmount(() => {
       :action-notice="runtimeBridge.fileActionNotice.value"
       @close="runtimeBridge.closeFilePreview"
       @download="runtimeBridge.downloadWorkspaceFile"
-      @open-external="runtimeBridge.openWorkspaceFile"
+      @open-external="openWorkspaceFileSystem"
       @reveal="runtimeBridge.revealWorkspaceFile"
     />
     <SettingsPanel

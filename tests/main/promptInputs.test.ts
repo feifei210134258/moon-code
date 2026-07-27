@@ -16,12 +16,16 @@ describe('prompt inputs', () => {
     expect(validatePromptInput({ text: '持续完成', controls, goalObjective: '  完成所有 P0  ' })).toEqual({
       text: '持续完成', controls, goalObjective: '完成所有 P0'
     })
+    expect(validatePromptInput({ text: '先检查失败原因', controls, deliveryMode: 'steer' })).toEqual({
+      text: '先检查失败原因', controls, deliveryMode: 'steer'
+    })
   })
 
   it('rejects incomplete or invented session modes', () => {
     expect(() => validatePromptInput({ text: '继续', controls: { ...controls, permissionMode: 'workspace' } })).toThrow()
     expect(() => validatePromptControls({ ...controls, model: '' })).toThrow()
     expect(() => validatePromptInput({ text: ' ', controls })).toThrow()
+    expect(() => validatePromptInput({ text: '继续', controls, deliveryMode: 'interrupt' })).toThrow()
   })
 
   it('accepts attachment-only prompts while validating uploaded file descriptors', () => {

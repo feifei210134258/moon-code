@@ -279,6 +279,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
+    vi.useFakeTimers()
 
     await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
     const petToggle = wrapper.find('.settings-section input[type="checkbox"]')
@@ -288,7 +289,11 @@ describe('SettingsPanel', () => {
 
     expect(api.updateKimiUsagePreferences).toHaveBeenCalledWith(expect.objectContaining({ petEnabled: true }))
     expect(wrapper.text()).toContain('宠物设置已保存在本机')
+    expect(wrapper.get('.settings-message').attributes('role')).toBe('status')
+    await vi.advanceTimersByTimeAsync(2_800)
+    expect(wrapper.text()).not.toContain('宠物设置已保存在本机')
     wrapper.unmount()
+    vi.useRealTimers()
   })
 
   it('checks and downloads a Kimi Code CLI update from General settings', async () => {

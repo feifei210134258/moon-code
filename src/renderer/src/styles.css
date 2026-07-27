@@ -1650,6 +1650,10 @@ select:focus-visible {
   scrollbar-color: rgba(96, 116, 138, 0.22) transparent;
 }
 
+.transcript-scroll:focus {
+  outline: none;
+}
+
 .transcript-marker-list {
   max-width: 760px;
   display: grid;
@@ -2228,37 +2232,88 @@ select:focus-visible {
 }
 
 .media-preview-dialog {
-  position: relative;
   width: min(94vw, 1440px);
   height: min(90vh, 960px);
   display: grid;
-  place-items: center;
+  grid-template-rows: 44px minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(13, 18, 27, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
 }
 
-.media-preview-dialog > img {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  border-radius: 10px;
-  object-fit: contain;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+.media-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 7px 0 13px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(25, 33, 47, 0.96);
+  font-size: 11px;
 }
 
-.media-preview-dialog > button {
-  position: absolute;
-  z-index: 1;
-  top: -12px;
-  right: -12px;
-  width: 36px;
-  height: 36px;
+.media-preview-toolbar > div {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.media-preview-toolbar button {
+  min-width: 31px;
+  height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: #ffffff;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.media-preview-toolbar button[aria-label="重置图片缩放"] {
+  min-width: 72px;
+  padding: 0 7px;
+}
+
+.media-preview-toolbar button:hover:not(:disabled),
+.media-preview-toolbar button:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.media-preview-toolbar button:disabled {
+  cursor: default;
+  opacity: 0.36;
+}
+
+.media-preview-viewport {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  overscroll-behavior: contain;
+}
+
+.media-preview-viewport:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(48, 133, 250, 0.72);
+}
+
+.media-preview-canvas {
   display: grid;
   place-items: center;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 50%;
-  color: #ffffff;
-  background: rgba(19, 27, 39, 0.82);
-  cursor: pointer;
+}
+
+.media-preview-canvas > img {
+  display: block;
+  max-width: none;
+  max-height: none;
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .media-block figcaption,
@@ -3022,10 +3077,83 @@ select:focus-visible {
   line-height: 1.5;
 }
 
-.queue-hint {
-  color: var(--muted);
-  font-size: 10px;
+.delivery-trigger {
+  min-width: 52px;
+  height: 29px;
+  gap: 3px;
+  padding: 0 7px 0 9px;
+  border-radius: 8px;
+  color: #526177;
+  background: rgba(15, 23, 42, 0.045) !important;
+  font-size: 10.5px;
   white-space: nowrap;
+}
+
+.delivery-trigger:hover,
+.delivery-trigger[aria-expanded="true"] {
+  color: #315f9f;
+  background: rgba(48, 133, 250, 0.1) !important;
+}
+
+.delivery-popover {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  overflow: hidden;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.12);
+}
+
+.delivery-popover > button {
+  width: 100%;
+  min-height: 50px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.delivery-popover > button:hover,
+.delivery-popover > button.is-selected {
+  background: rgba(48, 133, 250, 0.08);
+}
+
+.delivery-popover > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.delivery-popover strong {
+  font-size: 11.5px;
+  font-weight: 620;
+}
+
+.delivery-popover small {
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.delivery-popover i {
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgba(15, 23, 42, 0.22);
+  border-radius: 50%;
+}
+
+.delivery-popover > button.is-selected i {
+  border: 4px solid var(--blue);
+  background: #ffffff;
 }
 
 .send-button {
@@ -4150,6 +4278,30 @@ body.is-panel-resizing {
   font-size: 9.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.files-action-message {
+  margin: 5px 8px 2px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: var(--muted);
+  background: var(--blue-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.files-action-message.is-error {
+  color: #a34848;
+  background: var(--red-soft);
+}
+
+.file-context-menu {
+  width: 160px;
+}
+
+.file-context-menu button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .files-search-tools {
@@ -5314,6 +5466,7 @@ body.is-panel-resizing {
 .runtime-connect-error { color: #984848 !important; }
 
 .settings-panel {
+  position: relative;
   width: min(920px, calc(100vw - 68px));
   height: min(720px, calc(100vh - 68px));
   min-height: 540px;
@@ -5957,9 +6110,10 @@ body.is-panel-resizing {
 
 .settings-message {
   position: absolute;
-  right: 24px;
-  bottom: 18px;
-  left: 24px;
+  z-index: 3;
+  top: 66px;
+  right: 18px;
+  width: min(360px, calc(100% - 214px));
   min-height: 37px;
   gap: 7px;
   padding: 8px 11px;
@@ -5967,13 +6121,32 @@ body.is-panel-resizing {
   border-radius: 10px;
   color: #27644f;
   background: rgba(238, 250, 246, 0.94);
-  font-size: 10.5px;
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.1);
+  font-size: 11px;
 }
 
 .settings-message.is-error {
   border-color: rgba(226, 85, 85, 0.2);
   color: #a84646;
   background: rgba(255, 244, 244, 0.96);
+}
+
+.settings-toast-enter-active,
+.settings-toast-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.settings-toast-enter-from,
+.settings-toast-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-toast-enter-active,
+  .settings-toast-leave-active {
+    transition-duration: 0.01ms;
+  }
 }
 
 .settings-empty {

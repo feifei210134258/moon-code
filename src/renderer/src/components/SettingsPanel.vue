@@ -57,8 +57,10 @@ const archivesPending = ref(false)
 const cliUpdate = ref<KimiCliUpdateState | null>(null)
 const cliUpdateAction = ref<'check' | 'download' | null>(null)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
+let noticeTimer: ReturnType<typeof setTimeout> | null = null
 let oauthGeneration = 0
 let capabilitiesGeneration = 0
+const NOTICE_DURATION_MS = 2_800
 
 const managedProviderName = computed(() =>
   snapshot.value?.auth.managedProvider?.name ?? 'managed:kimi-code'
@@ -176,7 +178,7 @@ async function restoreSession(sessionId: string): Promise<void> {
   try {
     const restored = await api.restoreSession(sessionId)
     archivedSessions.value = archivedSessions.value.filter((session) => session.id !== sessionId)
-    notice.value = '任务已恢复到原项目。'
+    showNotice('任务已恢复到原项目。')
     emit('sessionRestored', restored.sessionId)
   } catch (reason) {
     error.value = errorMessage(reason)
@@ -201,7 +203,7 @@ async function restartMcpServer(serverId: string): Promise<void> {
     await api.restartMcpServer(serverId)
     await loadCapabilityTab()
     const status = mcpServers.value.find((server) => server.id === serverId)?.status
-    notice.value = `已请求 Kimi 重启 MCP Server ${serverId}${status === undefined ? '' : `；当前状态：${status}`}。`
+    showNotice(`已请求 Kimi 重启 MCP Server ${serverId}${status === undefined ? '' : `；当前状态：${status}`}。`)
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -217,7 +219,7 @@ async function setDefaultModel(modelId: string): Promise<void> {
   notice.value = null
   try {
     snapshot.value = await api.setDefaultModel(modelId)
-    notice.value = '默认模型已更新；现有 Session 仍保持自己的模型。'
+    showNotice('默认模型已更新；现有 Session 仍保持自己的模型。')
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -235,9 +237,9 @@ async function refreshModels(): Promise<void> {
     const result = await api.refreshKimiProviders({ scope: 'oauth' })
     await loadSettings()
     const changed = result.changed.reduce((count, item) => count + item.added + item.removed, 0)
-    notice.value = result.failed.length > 0
+    showNotice(result.failed.length > 0
       ? 'Kimi 模型目录刷新失败，请稍后重试。'
-      : `模型目录已刷新${changed > 0 ? `，共 ${changed} 项变化` : '，没有变化'}。`
+      : `模型目录已刷新${changed > 0 ? `，共 ${changed} 项变化` : '，没有变化'}。`)
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -270,9 +272,9 @@ async function updateUsagePreference(patch: Partial<KimiUsagePreferences>): Prom
   notice.value = null
   try {
     await api.updateKimiUsagePreferences({ ...props.usage.preferences, ...patch })
-    notice.value = 'petEnabled' in patch
+    showNotice('petEnabled' in patch
       ? '宠物设置已保存在本机。'
-      : '用量阈值已保存在本机；不会修改 Kimi 套餐数据。'
+      : '用量阈值已保存在本机；不会修改 Kimi 套餐数据。')
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -300,7 +302,7 @@ async function startOAuthLogin(): Promise<void> {
     if (generation !== oauthGeneration || !props.open) return
     oauthFlow.value = flow
     if (oauthFlow.value.status === 'authenticated') {
-      notice.value = 'Kimi 账号已登录。'
+      showNotice('Kimi 账号已登录。')
       await loadSettings()
     } else {
       scheduleOAuthPoll(oauthFlow.value)
@@ -322,7 +324,7 @@ async function pollOAuthLogin(): Promise<void> {
     oauthFlow.value = flow
     if (flow?.status === 'pending') scheduleOAuthPoll(flow)
     else if (flow?.status === 'authenticated') {
-      notice.value = '登录成功，Kimi 已刷新可用模型。'
+      showNotice('登录成功，Kimi 已刷新可用模型。')
       await loadSettings()
     } else if (flow !== null) {
       error.value = flow.errorMessage ?? `登录流程已结束：${flow.status}`
@@ -358,7 +360,7 @@ async function logoutOAuth(): Promise<void> {
     await api.logoutOAuth(managedProviderName.value)
     oauthFlow.value = null
     await loadSettings()
-    notice.value = 'Kimi 账号已退出。'
+    showNotice('Kimi 账号已退出。')
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -376,6 +378,20 @@ function clearOAuthPoll(): void {
   pollTimer = null
 }
 
+function clearNoticeTimer(): void {
+  if (noticeTimer !== null) clearTimeout(noticeTimer)
+  noticeTimer = null
+}
+
+function showNotice(message: string): void {
+  clearNoticeTimer()
+  notice.value = message
+  noticeTimer = setTimeout(() => {
+    notice.value = null
+    noticeTimer = null
+  }, NOTICE_DURATION_MS)
+}
+
 function onDialogKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') emit('close')
 }
@@ -386,6 +402,8 @@ watch(
     if (!open) {
       oauthGeneration += 1
       clearOAuthPoll()
+      clearNoticeTimer()
+      notice.value = null
       return
     }
     if (running) {
@@ -426,6 +444,7 @@ function onWindowKeydown(event: KeyboardEvent): void {
 onMounted(() => window.addEventListener('keydown', onWindowKeydown))
 onBeforeUnmount(() => {
   clearOAuthPoll()
+  clearNoticeTimer()
   window.removeEventListener('keydown', onWindowKeydown)
 })
 
@@ -705,11 +724,12 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
               </section>
 
             </template>
-
-            <div v-if="error" class="settings-message is-error" role="alert">{{ error }}</div>
-            <div v-else-if="notice" class="settings-message"><PhCheck :size="14" />{{ notice }}</div>
           </div>
         </div>
+        <Transition name="settings-toast">
+          <div v-if="error" class="settings-message is-error" role="alert">{{ error }}</div>
+          <div v-else-if="notice" class="settings-message" role="status" aria-live="polite"><PhCheck :size="14" />{{ notice }}</div>
+        </Transition>
       </section>
     </div>
   </Teleport>

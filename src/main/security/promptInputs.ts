@@ -47,17 +47,22 @@ export function validatePromptInput(value: unknown): KimiPromptInput {
     goalObjective !== undefined &&
     (typeof goalObjective !== 'string' || goalObjective.trim().length < 1 || goalObjective.length > MAX_PROMPT_TEXT)
   ) throw new TypeError('Invalid Kimi goal objective')
+  const deliveryMode = value.deliveryMode
+  if (deliveryMode !== undefined && deliveryMode !== 'queue' && deliveryMode !== 'steer') {
+    throw new TypeError('Invalid Kimi prompt delivery mode')
+  }
   return {
     text: value.text,
     controls: validatePromptControls(value.controls),
     ...(attachments.length === 0 ? {} : { attachments }),
-    ...(goalObjective === undefined ? {} : { goalObjective: goalObjective.trim() })
+    ...(goalObjective === undefined ? {} : { goalObjective: goalObjective.trim() }),
+    ...(deliveryMode === undefined ? {} : { deliveryMode })
   }
 }
 
 export function validateSideChatPromptInput(value: unknown): KimiSideChatPromptInput {
   const input = validatePromptInput(value)
-  if (input.attachments !== undefined || input.goalObjective !== undefined) {
+  if (input.attachments !== undefined || input.goalObjective !== undefined || input.deliveryMode !== undefined) {
     throw new TypeError('Kimi Side Chat only accepts text prompts')
   }
   return { text: input.text, controls: input.controls }

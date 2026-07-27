@@ -181,11 +181,21 @@ describe('useRuntimeBridge session races', () => {
     }))
     await flushPromises()
     await bridge.openSession('session-queue')
+    await flushPromises()
+    expect(api.listFiles).toHaveBeenCalledTimes(1)
 
     const controls = reactive({
       model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
       planMode: false, swarmMode: false
     })
+    await bridge.submitPrompt('session-queue', reactive({
+      text: '先不要收尾，补充检查边界情况', controls, deliveryMode: 'steer' as const
+    }))
+    expect(api.submitPrompt).toHaveBeenCalledWith('session-queue', expect.objectContaining({
+      text: '先不要收尾，补充检查边界情况', deliveryMode: 'steer'
+    }))
+    ;(api.submitPrompt as ReturnType<typeof vi.fn>).mockClear()
+
     await bridge.submitPrompt('session-queue', reactive({ text: '先执行 A', controls }))
     await bridge.submitPrompt('session-queue', reactive({ text: '再执行 B', controls }))
     expect(api.submitPrompt).not.toHaveBeenCalled()
@@ -197,6 +207,7 @@ describe('useRuntimeBridge session races', () => {
     stateListener({ ...active, busy: false, mainTurnActive: false, activePromptStatus: null })
     await flushPromises()
 
+    expect(api.listFiles).toHaveBeenCalledTimes(2)
     expect(api.submitPrompt).toHaveBeenCalledWith('session-queue', expect.objectContaining({
       text: '再执行 B', controls: expect.objectContaining({ permissionMode: 'auto' })
     }))
@@ -435,6 +446,66 @@ describe('useRuntimeBridge session races', () => {
     expect(bridge.gitStatus.value).toBeNull()
     await bridge.openFile('b.ts')
     expect(api.readFile).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('uses the device default app and refreshes the current directory after moving an entry to Trash', async () => {
+    const listFiles = vi.fn(async (_sessionId: string, path = '.') => ({
+      path,
+      items: path === 'dist' ? [{
+        path: 'dist/dashboard.html', name: 'dashboard.html', kind: 'file' as const, size: 1,
+        modifiedAt: null, mime: 'text/html', languageId: 'html', isBinary: false,
+        gitStatus: null, childCount: null
+      }] : [],
+      truncated: false
+    }))
+    const openWorkspaceFileSystem = vi.fn(async () => ({ opened: true as const }))
+    const trashWorkspaceEntry = vi.fn(async () => ({ trashed: true as const }))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession: vi.fn(async () => sessionState('session-files')),
+      listFiles,
+      getGitStatus: vi.fn(async () => ({
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      openWorkspaceFileSystem,
+      trashWorkspaceEntry
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-files')
+    await flushPromises()
+    await bridge.loadDirectory('dist')
+
+    await bridge.openWorkspaceFileSystem('dist/dashboard.html')
+    await bridge.trashWorkspaceEntry('dist/dashboard.html')
+
+    expect(openWorkspaceFileSystem).toHaveBeenCalledWith('session-files', 'dist/dashboard.html')
+    expect(trashWorkspaceEntry).toHaveBeenCalledWith('session-files', 'dist/dashboard.html')
+    expect(listFiles).toHaveBeenLastCalledWith('session-files', 'dist')
+    expect(bridge.fileActionNotice.value).toBe('已移到废纸篓。')
     wrapper.unmount()
   })
 

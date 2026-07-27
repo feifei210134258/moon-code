@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { basename } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import { lookup as lookupMediaType } from 'mime-types'
@@ -611,6 +611,27 @@ export function registerIpc(
       assertTrustedSender(event)
       assertSessionId(sessionId)
       return await sessions.revealWorkspaceFile(sessionId, validateWorkspacePath(path))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesOpenSystem,
+    async (event, sessionId?: unknown, path?: unknown): Promise<{ opened: true }> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      const target = sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      const reason = await shell.openPath(target)
+      if (reason.length > 0) throw new Error(`系统无法打开该文件：${reason}`)
+      return { opened: true }
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.filesTrash,
+    async (event, sessionId?: unknown, path?: unknown): Promise<{ trashed: true }> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      const target = sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      await shell.trashItem(target)
+      return { trashed: true }
     }
   )
   ipcMain.handle(

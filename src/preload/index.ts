@@ -70,7 +70,10 @@ const api: KimiAgentDesktopApi = {
   openWorkspaceFile: (sessionId, path, line) => ipcRenderer.invoke(ipcChannels.filesOpen, sessionId, path, line),
   openWorkspaceFileIn: (sessionId, appId, path, line) =>
     ipcRenderer.invoke(ipcChannels.filesOpenIn, sessionId, appId, path, line),
+  openWorkspaceFileSystem: (sessionId, path) =>
+    ipcRenderer.invoke(ipcChannels.filesOpenSystem, sessionId, path),
   revealWorkspaceFile: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesReveal, sessionId, path),
+  trashWorkspaceEntry: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesTrash, sessionId, path),
   readMarkdownImage: (sessionId, source) =>
     ipcRenderer.invoke(ipcChannels.markdownImageRead, sessionId, source),
   getGitStatus: (sessionId) => ipcRenderer.invoke(ipcChannels.gitStatus, sessionId),
