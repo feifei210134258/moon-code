@@ -3,6 +3,7 @@ import {
   PhCaretDown,
   PhInfo,
   PhLightbulb,
+  PhSparkle,
   PhTerminalWindow
 } from '@phosphor-icons/vue'
 import { computed, ref, watch } from 'vue'
@@ -19,6 +20,10 @@ const hasDetails = computed(() =>
 const statusLabel = computed(() =>
   props.activity.status === 'running' ? '运行中' : props.activity.status === 'error' ? '失败' : '完成'
 )
+const isSkillActivity = computed(() => {
+  if (props.activity.kind !== 'tool') return false
+  return /skill|技能/i.test(props.activity.label.trim())
+})
 
 watch(
   () => props.activity.status,
@@ -42,6 +47,7 @@ function toggle(): void {
       @click="toggle"
     >
       <PhLightbulb v-if="activity.kind === 'thinking'" :size="18" />
+      <PhSparkle v-else-if="isSkillActivity" :size="18" class="blue" />
       <PhTerminalWindow v-else-if="activity.kind === 'tool'" :size="18" class="blue" />
       <PhInfo v-else :size="18" />
       <strong>{{ activity.label }}</strong>

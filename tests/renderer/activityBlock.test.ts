@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { mount } from '@vue/test-utils'
+import { PhSparkle, PhTerminalWindow } from '@phosphor-icons/vue'
 import { describe, expect, it } from 'vitest'
 import ActivityBlock from '../../src/renderer/src/components/ActivityBlock.vue'
 
@@ -54,6 +55,23 @@ describe('ActivityBlock', () => {
     await wrapper.get('.activity-row').trigger('click')
     expect(wrapper.findAll('.activity-detail-section')).toHaveLength(2)
     expect(wrapper.get('pre.is-stderr').text()).toBe('running tests')
+  })
+
+  it('uses a distinct sparkle icon for Skill activities', () => {
+    const wrapper = mount(ActivityBlock, {
+      props: {
+        activity: {
+          id: 'skill-1',
+          kind: 'tool',
+          label: 'Skill',
+          description: '读取并使用技能',
+          status: 'done'
+        }
+      }
+    })
+
+    expect(wrapper.findComponent(PhSparkle).exists()).toBe(true)
+    expect(wrapper.findComponent(PhTerminalWindow).exists()).toBe(false)
   })
 
   it('opens failed activity details immediately', () => {

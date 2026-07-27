@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   PhCaretDown,
   PhFolderSimple,
@@ -29,6 +29,10 @@ const props = defineProps<{
   conversationActionPending?: 'compact' | 'undo' | null
 }>()
 
+// Keep the short 5h window as the steady-state readout; surface 7d briefly for context.
+const PRIMARY_USAGE_DISPLAY_MS = 5_000
+const WEEKLY_USAGE_DISPLAY_MS = 2_000
+
 const emit = defineEmits<{
   toggleRuntime: []
   chooseWorkspace: []
@@ -47,15 +51,57 @@ const contextRatio = computed(() => {
     : Math.max(0, Math.min(1, usage.contextTokens / usage.contextLimit))
 })
 
-const tightestWindow = computed<KimiPlanUsageWindow | null>(() => {
-  const windows = [props.usage.summary, ...props.usage.limits].filter(
-    (window): window is KimiPlanUsageWindow => window !== null && window.ratio !== null
-  )
-  return windows.sort((left, right) => (right.ratio ?? 0) - (left.ratio ?? 0))[0] ?? null
-})
 const usageWindows = computed(() => [props.usage.summary, ...props.usage.limits].filter(
   (window): window is KimiPlanUsageWindow => window !== null
 ))
+
+function isFiveHourWindow(window: KimiPlanUsageWindow): boolean {
+  const value = `${window.key} ${window.label}`.toLocaleLowerCase()
+  return /\b5\s*h(?:ours?)?\b|5\s*小时|5-hour/.test(value)
+}
+
+function isWeeklyWindow(window: KimiPlanUsageWindow): boolean {
+  const value = `${window.key} ${window.label}`.toLocaleLowerCase()
+  return /\b7\s*d(?:ays?)?\b|7\s*天|7-day|weekly|week/.test(value)
+}
+
+const primaryUsageWindow = computed<KimiPlanUsageWindow | null>(() =>
+  usageWindows.value.find(isFiveHourWindow) ?? null
+)
+const weeklyUsageWindow = computed<KimiPlanUsageWindow | null>(() =>
+  usageWindows.value.find(isWeeklyWindow) ?? null
+)
+const usageDisplayMode = ref<'primary' | 'weekly'>('primary')
+const displayUsageWindow = computed<KimiPlanUsageWindow | null>(() =>
+  usageDisplayMode.value === 'weekly'
+    ? weeklyUsageWindow.value
+    : primaryUsageWindow.value
+)
+const displayUsageLabel = computed(() =>
+  usageDisplayMode.value === 'weekly' && weeklyUsageWindow.value !== null ? '7d用量' : '5h用量'
+)
+let usageDisplayTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearUsageDisplayTimer(): void {
+  if (usageDisplayTimer !== null) clearTimeout(usageDisplayTimer)
+  usageDisplayTimer = null
+}
+
+function scheduleUsageDisplay(): void {
+  clearUsageDisplayTimer()
+  if (primaryUsageWindow.value === null || weeklyUsageWindow.value === null) return
+  usageDisplayTimer = setTimeout(() => {
+    usageDisplayMode.value = usageDisplayMode.value === 'primary' ? 'weekly' : 'primary'
+    scheduleUsageDisplay()
+  }, usageDisplayMode.value === 'primary' ? PRIMARY_USAGE_DISPLAY_MS : WEEKLY_USAGE_DISPLAY_MS)
+}
+
+onMounted(scheduleUsageDisplay)
+onBeforeUnmount(clearUsageDisplayTimer)
+watch([primaryUsageWindow, weeklyUsageWindow], ([, weeklyWindow]) => {
+  if (weeklyWindow === null) usageDisplayMode.value = 'primary'
+  scheduleUsageDisplay()
+})
 
 function percent(value: number | null): string {
   return value === null ? '--' : `${Math.round(value * 100)}%`
@@ -171,11 +217,11 @@ function resetHintLabel(hint: string): string {
           <span id="context-compact-tooltip" class="context-compact-tooltip" role="tooltip">压缩上下文</span>
         </span>
       </div>
-      <button class="usage-pill plan-usage" :class="usageTone(tightestWindow?.ratio ?? null)" type="button" aria-label="查看 Kimi 套餐用量" aria-controls="usage-popover" :aria-expanded="usageOpen" @click="$emit('toggleUsage')">
-        <span>套餐</span>
-        <strong>{{ percent(tightestWindow?.ratio ?? null) }}</strong>
+      <button class="usage-pill plan-usage" :class="usageTone(displayUsageWindow?.ratio ?? null)" type="button" :aria-label="`查看 Kimi ${displayUsageLabel}`" aria-controls="usage-popover" :aria-expanded="usageOpen" @click="$emit('toggleUsage')">
+        <span>{{ displayUsageLabel }}</span>
+        <strong>{{ percent(displayUsageWindow?.ratio ?? null) }}</strong>
         <span v-if="usage.phase === 'stale'" class="muted">· 已过期</span>
-        <span v-else-if="tightestWindow?.resetHint" class="muted">· {{ tightestWindow.resetHint }}</span>
+        <span v-else-if="displayUsageWindow?.resetHint" class="muted">· {{ displayUsageWindow.resetHint }}</span>
       </button>
       <button class="icon-button" type="button" :aria-label="extensionsOpen ? '收起扩展栏' : '展开扩展栏'" @click="$emit('toggleExtensions')">
         <PhSidebarSimple :size="19" />
