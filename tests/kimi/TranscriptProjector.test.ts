@@ -231,6 +231,21 @@ describe('TranscriptProjector', () => {
     })
   })
 
+  it('requests a snapshot rebuild when a volatile delta arrives before its assistant step', () => {
+    const idle = snapshot()
+    idle.session.busy = false
+    idle.session.main_turn_active = false
+    idle.in_flight_turn = null
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', idle)
+
+    expect(projector.project(frame('assistant.delta', { delta: 'Recovered reply' }, 0))).toEqual({
+      changed: false,
+      resyncRequired: true,
+      reason: 'history_rewrite'
+    })
+  })
+
   it('omits embedded base64 media from tool previews before sending state to the renderer', () => {
     const projector = new TranscriptProjector()
     projector.seedSnapshot('session-1', snapshot())

@@ -78,6 +78,8 @@ export class KimiWsClient extends EventEmitter {
   #helloSent = false
   #messageSeq = 0
   #connectRequest: { id: string; frame: ClientHelloFrame } | null = null
+  #connectionGeneration = 0
+  #messageQueue: Promise<void> = Promise.resolve()
 
   constructor(options: KimiWsClientOptions) {
     super()
@@ -99,6 +101,8 @@ export class KimiWsClient extends EventEmitter {
   async connect(options: ConnectOptions = {}): Promise<void> {
     if (this.#socket !== null) throw new Error('Kimi WebSocket is already connected or connecting')
     if (options.cursors !== undefined) this.#ledger.seed(options.cursors)
+    const connectionGeneration = ++this.#connectionGeneration
+    this.#messageQueue = Promise.resolve()
 
     const id = this.#nextId()
     this.#connectRequest = {
@@ -117,9 +121,9 @@ export class KimiWsClient extends EventEmitter {
     const socket = this.#factory(withClientId(this.#url, this.#clientId), [`kimi-code.bearer.${this.#token}`])
     this.#socket = socket
     socket.addEventListener('open', () => this.emit('open'))
-    socket.addEventListener('message', (event) => void this.#handleMessage(event.data))
+    socket.addEventListener('message', (event) => this.#enqueueMessage(event.data, connectionGeneration))
     socket.addEventListener('error', () => this.emit('transport-error', new Error('Kimi WebSocket transport error')))
-    socket.addEventListener('close', (event) => this.#handleClose(event))
+    socket.addEventListener('close', (event) => this.#handleClose(event, connectionGeneration))
 
     await this.#awaitAck(id)
     for (const attachment of this.#terminalAttachments.values()) this.#sendTerminalAttach(attachment)
@@ -215,6 +219,8 @@ export class KimiWsClient extends EventEmitter {
 
   close(): void {
     const socket = this.#socket
+    this.#connectionGeneration += 1
+    this.#messageQueue = Promise.resolve()
     this.#socket = null
     this.#helloSent = false
     this.#connectRequest = null
@@ -226,8 +232,22 @@ export class KimiWsClient extends EventEmitter {
     socket?.close(1000, 'client shutdown')
   }
 
-  async #handleMessage(data: unknown): Promise<void> {
+  #enqueueMessage(data: unknown, connectionGeneration: number): void {
+    this.#messageQueue = this.#messageQueue
+      .then(async () => {
+        if (connectionGeneration !== this.#connectionGeneration) return
+        await this.#handleMessage(data, connectionGeneration)
+      })
+      .catch((error: unknown) => {
+        if (connectionGeneration === this.#connectionGeneration) {
+          this.emit('protocol-error', error instanceof Error ? error : new Error(String(error)))
+        }
+      })
+  }
+
+  async #handleMessage(data: unknown, connectionGeneration: number): Promise<void> {
     const raw = await messageDataToText(data)
+    if (connectionGeneration !== this.#connectionGeneration) return
     if (raw === null) {
       this.emit('protocol-error', new Error('Unsupported Kimi WebSocket frame encoding'))
       return
@@ -372,7 +392,10 @@ export class KimiWsClient extends EventEmitter {
     return `c_${this.#messageSeq}`
   }
 
-  #handleClose(event: WebSocketCloseEventLike): void {
+  #handleClose(event: WebSocketCloseEventLike, connectionGeneration: number): void {
+    if (connectionGeneration !== this.#connectionGeneration) return
+    this.#connectionGeneration += 1
+    this.#messageQueue = Promise.resolve()
     this.#socket = null
     this.#helloSent = false
     this.#connectRequest = null

@@ -547,7 +547,14 @@ export class TranscriptProjector {
   ): TranscriptProjectionResult {
     const message = currentAssistant(state)
     const delta = stringValue(payload.delta)
-    if (message === null || delta === null || delta.length === 0) return this.#unknown(state)
+    // A volatile delta can race the durable turn-start frame (or arrive after
+    // a history rewrite). Dropping it silently leaves the view stuck on the
+    // loading state forever; let the sync controller rebuild from the
+    // authoritative snapshot instead.
+    if (message === null) {
+      return { changed: false, resyncRequired: true, reason: 'history_rewrite' }
+    }
+    if (delta === null || delta.length === 0) return this.#unknown(state)
     if (state.retryTarget?.messageId === message.id) {
       if (!retryDeltaMatches(state.retryTarget, payload)) return { changed: false, resyncRequired: false }
       state.retryTarget = null
