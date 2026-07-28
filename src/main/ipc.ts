@@ -92,7 +92,8 @@ import {
   validateModelId,
   validatePreferencesPatch,
   validateProviderId,
-  validateProviderRefreshInput
+  validateProviderRefreshInput,
+  validateSecondaryModelInput
 } from './security/settingsInputs.js'
 import { validateWorkspacePath } from './security/workspaceInputs.js'
 import {
@@ -178,6 +179,11 @@ export function registerIpc(
       throw new TypeError('Invalid Kimi runtime mode')
     }
     return runtime.start(mode)
+  })
+  ipcMain.handle(ipcChannels.runtimeRestart, async (event) => {
+    assertTrustedSender(event)
+    await sessions.close()
+    return await runtime.restart()
   })
   ipcMain.handle(ipcChannels.runtimeConnectExternal, (event, input?: unknown) => {
     assertTrustedSender(event)
@@ -735,6 +741,27 @@ export function registerIpc(
     async (event, modelId?: unknown): Promise<KimiSettingsSnapshot> => {
       assertTrustedSender(event)
       return await settings.setDefaultModel(validateModelId(modelId))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.settingsSecondaryModelSet,
+    async (event, input?: unknown): Promise<KimiSettingsSnapshot> => {
+      assertTrustedSender(event)
+      return await settings.setSecondaryModel(validateSecondaryModelInput(input))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.settingsSecondaryModelDisable,
+    async (event): Promise<KimiSettingsSnapshot> => {
+      assertTrustedSender(event)
+      return await settings.disableSecondaryModel()
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.settingsSecondaryModelInherit,
+    async (event): Promise<KimiSettingsSnapshot> => {
+      assertTrustedSender(event)
+      return await settings.inheritSecondaryModel()
     }
   )
   ipcMain.handle(

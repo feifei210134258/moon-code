@@ -9,15 +9,15 @@ import {
 } from '../../packages/kimi-adapter/src/contract/validateContract.js'
 
 const openapiPath = fileURLToPath(
-  new URL('../../packages/kimi-adapter/contracts/kimi-0.29.0-openapi.json', import.meta.url)
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.29.2-openapi.json', import.meta.url)
 )
 const asyncapiPath = fileURLToPath(
-  new URL('../../packages/kimi-adapter/contracts/kimi-0.29.0-asyncapi.json', import.meta.url)
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.29.2-asyncapi.json', import.meta.url)
 )
 const openapi = JSON.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocumentLike
 const asyncapi = JSON.parse(readFileSync(asyncapiPath, 'utf8')) as AsyncApiDocumentLike
 
-describe('pinned Kimi 0.29 contract', () => {
+describe('pinned Kimi 0.29.2 contract', () => {
   it('contains every route and WebSocket message required by the desktop foundation', () => {
     expect(() => assertKimiContract(openapi, asyncapi)).not.toThrow()
   })

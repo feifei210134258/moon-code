@@ -289,6 +289,26 @@ export class KimiRestClient {
     return this.request('/api/v1/config', {}, kimiConfigSnapshotSchema)
   }
 
+  async supportsSecondaryModelConfigWrite(): Promise<boolean> {
+    try {
+      const response = await this.#fetch(`${this.#origin}/openapi.json`, {
+        headers: this.#identifiedHeaders({
+          authorization: `Bearer ${this.#token}`,
+          accept: 'application/json'
+        })
+      })
+      if (!response.ok) return false
+      return openApiRequestBodyHasProperty(
+        await response.json(),
+        '/api/v1/config',
+        'post',
+        'secondary_model'
+      )
+    } catch {
+      return false
+    }
+  }
+
   setConfig(patch: Record<string, unknown>): Promise<KimiConfigSnapshot> {
     return this.request(
       '/api/v1/config',
@@ -996,4 +1016,51 @@ function parseRetryAfter(value: string | null): number | null {
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) return null
   return Math.max(0, Math.min(timestamp - Date.now(), 60 * 60 * 1_000))
+}
+
+function openApiRequestBodyHasProperty(
+  document: unknown,
+  path: string,
+  method: string,
+  property: string
+): boolean {
+  const root = recordValue(document)
+  const paths = recordValue(root?.paths)
+  const operation = recordValue(recordValue(paths?.[path])?.[method])
+  const requestBody = recordValue(operation?.requestBody)
+  if (root === null || requestBody === null) return false
+  return openApiNodeHasProperty(root, requestBody, property, new Set())
+}
+
+function openApiNodeHasProperty(
+  root: Record<string, unknown>,
+  node: unknown,
+  property: string,
+  seenRefs: Set<string>
+): boolean {
+  if (Array.isArray(node)) {
+    return node.some((item) => openApiNodeHasProperty(root, item, property, seenRefs))
+  }
+  const record = recordValue(node)
+  if (record === null) return false
+  const ref = typeof record.$ref === 'string' ? record.$ref : null
+  if (ref !== null && ref.startsWith('#/') && !seenRefs.has(ref)) {
+    seenRefs.add(ref)
+    const target = ref.slice(2).split('/').reduce<unknown>((value, segment) => {
+      return recordValue(value)?.[segment.replaceAll('~1', '/').replaceAll('~0', '~')]
+    }, root)
+    if (openApiNodeHasProperty(root, target, property, seenRefs)) return true
+  }
+  const properties = recordValue(record.properties)
+  if (properties !== null && Object.prototype.hasOwnProperty.call(properties, property)) return true
+  return Object.entries(record).some(([key, value]) => {
+    if (key === 'responses' || key === 'security') return false
+    return openApiNodeHasProperty(root, value, property, seenRefs)
+  })
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
 }

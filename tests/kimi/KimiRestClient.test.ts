@@ -629,6 +629,11 @@ describe('KimiRestClient', () => {
         'managed:kimi-code': { type: 'kimi', base_url: 'https://api.kimi.com/coding/v1', has_api_key: true }
       },
       default_model: 'kimi-for-coding',
+      secondary_model: {
+        model: 'kimi-for-coding',
+        defaultEffort: 'low',
+        maxOutputSize: 8192
+      },
       telemetry: false
     }
     const pendingFlow = {
@@ -697,6 +702,60 @@ describe('KimiRestClient', () => {
     expect(fetchImpl).toHaveBeenNthCalledWith(13,
       'http://127.0.0.1:1234/api/v1/oauth/login?provider=managed%3Akimi-code',
       expect.objectContaining({ method: 'DELETE' }))
+  })
+
+  it('detects secondary_model write support from the current Runtime OpenAPI request schema', async () => {
+    const supportedDocument = {
+      paths: {
+        '/api/v1/config': {
+          post: {
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ConfigPatch' }
+                }
+              }
+            }
+          }
+        }
+      },
+      components: {
+        schemas: {
+          ConfigPatch: {
+            type: 'object',
+            properties: { secondary_model: { type: 'object' } }
+          }
+        }
+      }
+    }
+    const unsupportedDocument = {
+      paths: {
+        '/api/v1/config': {
+          post: {
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: { type: 'object', properties: { telemetry: { type: 'boolean' } } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    const supported = new KimiRestClient({
+      origin: 'http://127.0.0.1:1234',
+      token: 'secret',
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify(supportedDocument), { status: 200 }))
+    })
+    const unsupported = new KimiRestClient({
+      origin: 'http://127.0.0.1:1234',
+      token: 'secret',
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify(unsupportedDocument), { status: 200 }))
+    })
+
+    await expect(supported.supportsSecondaryModelConfigWrite()).resolves.toBe(true)
+    await expect(unsupported.supportsSecondaryModelConfigWrite()).resolves.toBe(false)
   })
 
   it('uses the pinned Skills, Tools and MCP management routes', async () => {

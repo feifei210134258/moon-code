@@ -12,6 +12,7 @@ import { KimiPetService } from './pet/KimiPetService.js'
 import { KimiPetWindowManager } from './pet/KimiPetWindowManager.js'
 import { PetPositionStore } from './pet/PetPositionStore.js'
 import { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
+import { SecondaryModelPreferencesStore } from './runtime/SecondaryModelPreferencesStore.js'
 import { KimiCliUpdateService } from './runtime/KimiCliUpdateService.js'
 import { isTrustedRendererUrl, rendererEntryUrl } from './security/trustedRenderer.js'
 import { PACKAGED_PTY_SMOKE_MARKER, runPackagedPtySmoke } from './packagedPtySmoke.js'
@@ -20,10 +21,16 @@ import { PACKAGED_PET_SMOKE_MARKER, runPackagedPetSmoke } from './packagedPetSmo
 import { ipcChannels, type KimiUsageState, type PetOpenSessionIntent } from '../shared/contracts.js'
 
 let mainWindow: BrowserWindow | null = null
-const runtime = new KimiRuntimeManager({ clientVersion: app.getVersion() })
+const secondaryModelPreferences = new SecondaryModelPreferencesStore(
+  () => join(app.getPath('userData'), 'secondary-model-preferences.json')
+)
+const runtime = new KimiRuntimeManager({
+  clientVersion: app.getVersion(),
+  secondaryModelPreferencesStore: secondaryModelPreferences
+})
 const cliUpdates = new KimiCliUpdateService()
 const sessions = new KimiSessionBridge(runtime)
-const settings = new KimiSettingsBridge(runtime)
+const settings = new KimiSettingsBridge(runtime, secondaryModelPreferences)
 const capabilities = new KimiCapabilitiesBridge(runtime)
 const browser = new KimiBrowserManager(runtime, () => mainWindow)
 const pets = new KimiPetService(runtime)

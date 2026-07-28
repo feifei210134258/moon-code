@@ -4,11 +4,21 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Readable } from 'node:stream'
-import type { RuntimeDiscovery, RuntimeExternalConnectionInput, RuntimePublicState } from '../../shared/contracts.js'
+import type {
+  KimiSecondaryModelAppliedSource,
+  KimiSecondaryModelPreference,
+  RuntimeDiscovery,
+  RuntimeExternalConnectionInput,
+  RuntimePublicState
+} from '../../shared/contracts.js'
 import { KimiRestClient } from '../kimi/KimiRestClient.js'
 import { KimiWsClient } from '../../../packages/kimi-adapter/src/transport/KimiWsClient.js'
 import { discoverRuntimes, resolveManagedKimiEntry } from './discovery.js'
 import { parseRuntimeReadyOutput, redactRuntimeOutput } from './readyLine.js'
+import {
+  DEFAULT_SECONDARY_MODEL_PREFERENCE,
+  type SecondaryModelPreferencesStore
+} from './SecondaryModelPreferencesStore.js'
 
 interface RuntimeConnection {
   origin: string
@@ -25,12 +35,17 @@ interface RuntimeManagerOptions {
   readSharedToken?: () => Promise<string | null>
   sharedOrigin?: string
   clientVersion?: string
+  secondaryModelPreferencesStore?: Pick<SecondaryModelPreferencesStore, 'load'>
 }
 
 type RuntimeChild = ChildProcessByStdio<null, Readable, Readable>
 
 const DEFAULT_SHARED_KIMI_WEB_ORIGIN = 'http://127.0.0.1:58627'
 const DESKTOP_CLIENT_ID = 'kimi-agent-desktop-main'
+const SECONDARY_MODEL_EXPERIMENT_ENV = 'KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL'
+const EXPERIMENT_MASTER_ENV = 'KIMI_CODE_EXPERIMENTAL_FLAG'
+const SECONDARY_MODEL_ENV = 'KIMI_SECONDARY_MODEL'
+const SECONDARY_EFFORT_ENV = 'KIMI_SECONDARY_EFFORT'
 
 async function readSharedKimiWebToken(): Promise<string | null> {
   try {
@@ -48,8 +63,11 @@ export class KimiRuntimeManager extends EventEmitter {
   readonly #readSharedToken: () => Promise<string | null>
   readonly #sharedOrigin: string
   readonly #clientVersion: string
+  readonly #secondaryModelPreferencesStore: Pick<SecondaryModelPreferencesStore, 'load'> | null
   #process: RuntimeChild | null = null
   #connection: RuntimeConnection | null = null
+  #appliedSecondaryModelPreference: KimiSecondaryModelPreference | null = null
+  #appliedSecondaryModelSource: KimiSecondaryModelAppliedSource | null = null
   #state: RuntimePublicState = {
     status: 'stopped',
     mode: null,
@@ -67,6 +85,7 @@ export class KimiRuntimeManager extends EventEmitter {
     this.#readSharedToken = options.readSharedToken ?? readSharedKimiWebToken
     this.#sharedOrigin = (options.sharedOrigin ?? DEFAULT_SHARED_KIMI_WEB_ORIGIN).replace(/\/$/, '')
     this.#clientVersion = options.clientVersion ?? '0.0.0-dev'
+    this.#secondaryModelPreferencesStore = options.secondaryModelPreferencesStore ?? null
   }
 
   get state(): RuntimePublicState {
@@ -75,6 +94,16 @@ export class KimiRuntimeManager extends EventEmitter {
 
   get backend(): 'v1' | 'v2' | null {
     return this.#connection?.backend ?? null
+  }
+
+  get appliedSecondaryModelPreference(): KimiSecondaryModelPreference | null {
+    return this.#appliedSecondaryModelPreference === null
+      ? null
+      : { ...this.#appliedSecondaryModelPreference }
+  }
+
+  get appliedSecondaryModelSource(): KimiSecondaryModelAppliedSource | null {
+    return this.#appliedSecondaryModelSource
   }
 
   createRestClient(): KimiRestClient {
@@ -145,19 +174,26 @@ export class KimiRuntimeManager extends EventEmitter {
       const args = managed
         ? [resolveManagedKimiEntry(), 'web', '--port', '58627', '--no-open', '--log-level', 'error']
         : ['web', '--port', '58627', '--no-open', '--log-level', 'error']
+      const secondaryPreference = await this.#loadSecondaryModelPreference()
+      const launchEnvironment = {
+        ...process.env,
+        NO_COLOR: '1',
+        ...(managed && process.versions.electron !== undefined ? { ELECTRON_RUN_AS_NODE: '1' } : {})
+      }
       const child = this.#spawn(executable, args, {
         cwd: process.cwd(),
-        env: {
-          ...process.env,
-          NO_COLOR: '1',
-          ...(managed && process.versions.electron !== undefined ? { ELECTRON_RUN_AS_NODE: '1' } : {})
-        },
+        env: buildSecondaryModelRuntimeEnvironment(launchEnvironment, secondaryPreference),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       this.#process = child
 
       const connection = await this.#waitUntilReady(child)
       this.#connection = connection
+      this.#appliedSecondaryModelPreference = { ...secondaryPreference }
+      this.#appliedSecondaryModelSource = secondaryModelRuntimeSource(
+        launchEnvironment,
+        secondaryPreference
+      )
       this.#setState({
         status: 'running',
         mode,
@@ -171,6 +207,8 @@ export class KimiRuntimeManager extends EventEmitter {
         if (this.#process !== child) return
         this.#process = null
         this.#connection = null
+        this.#appliedSecondaryModelPreference = null
+        this.#appliedSecondaryModelSource = null
         const expected = this.#state.status === 'stopping'
         this.#setState({
           status: expected ? 'stopped' : 'error',
@@ -187,6 +225,8 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#process?.kill('SIGTERM')
       this.#process = null
       this.#connection = null
+      this.#appliedSecondaryModelPreference = null
+      this.#appliedSecondaryModelSource = null
       this.#setState({
         status: 'error',
         mode,
@@ -213,12 +253,16 @@ export class KimiRuntimeManager extends EventEmitter {
       if (!health.ok) throw new Error(`Kimi health check failed with HTTP ${health.status}`)
       const connection = await this.#verifyRuntimeConnection(origin, input.token)
       this.#connection = connection
+      this.#appliedSecondaryModelPreference = null
+      this.#appliedSecondaryModelSource = null
       this.#setState({
         status: 'running', mode: 'external', version: connection.version,
         serverId: connection.serverId, origin, error: null
       })
     } catch {
       this.#connection = null
+      this.#appliedSecondaryModelPreference = null
+      this.#appliedSecondaryModelSource = null
       this.#setState({
         status: 'error', mode: 'external', version: null, serverId: null, origin: null,
         error: 'Unable to connect to the protected Kimi Runtime.'
@@ -231,6 +275,9 @@ export class KimiRuntimeManager extends EventEmitter {
     const child = this.#process
     const connection = this.#connection
     if (child === null) {
+      this.#connection = null
+      this.#appliedSecondaryModelPreference = null
+      this.#appliedSecondaryModelSource = null
       this.#setState({
         status: 'stopped',
         mode: null,
@@ -265,6 +312,8 @@ export class KimiRuntimeManager extends EventEmitter {
 
     this.#process = null
     this.#connection = null
+    this.#appliedSecondaryModelPreference = null
+    this.#appliedSecondaryModelSource = null
     this.#setState({
       status: 'stopped',
       mode: null,
@@ -274,6 +323,22 @@ export class KimiRuntimeManager extends EventEmitter {
       error: null
     })
     return this.state
+  }
+
+  async restart(): Promise<RuntimePublicState> {
+    const mode = this.#state.mode
+    if (this.#state.status !== 'running' || (mode !== 'managed' && mode !== 'system')) {
+      throw new Error('Only a Moon Code-owned Kimi Runtime can be restarted')
+    }
+    await this.stop()
+    return await this.start(mode)
+  }
+
+  async #loadSecondaryModelPreference(): Promise<KimiSecondaryModelPreference> {
+    if (this.#secondaryModelPreferencesStore === null) {
+      return { ...DEFAULT_SECONDARY_MODEL_PREFERENCE }
+    }
+    return await this.#secondaryModelPreferencesStore.load()
   }
 
   async #tryConnectSharedRuntime(): Promise<RuntimeConnection | null> {
@@ -356,4 +421,47 @@ export class KimiRuntimeManager extends EventEmitter {
     this.#state = next
     this.emit('state-changed', this.state)
   }
+}
+
+export function buildSecondaryModelRuntimeEnvironment(
+  base: NodeJS.ProcessEnv,
+  preference: KimiSecondaryModelPreference
+): NodeJS.ProcessEnv {
+  const env = { ...base }
+  if (preference.mode === 'disabled') {
+    // Kimi's master experimental flag has higher precedence than the
+    // feature-specific flag. Stop inheriting it or a parent value of `1`
+    // would silently re-enable secondary-model support.
+    delete env[EXPERIMENT_MASTER_ENV]
+    delete env[SECONDARY_MODEL_ENV]
+    delete env[SECONDARY_EFFORT_ENV]
+    env[SECONDARY_MODEL_EXPERIMENT_ENV] = '0'
+    return env
+  }
+  env[SECONDARY_MODEL_EXPERIMENT_ENV] = '1'
+  if (preference.mode === 'configured') {
+    delete env[SECONDARY_MODEL_ENV]
+    delete env[SECONDARY_EFFORT_ENV]
+    env[SECONDARY_MODEL_ENV] = preference.model!
+    if (preference.defaultEffort !== null) {
+      env[SECONDARY_EFFORT_ENV] = preference.defaultEffort
+    }
+  }
+  return env
+}
+
+export function secondaryModelRuntimeSource(
+  base: NodeJS.ProcessEnv,
+  preference: KimiSecondaryModelPreference
+): KimiSecondaryModelAppliedSource {
+  if (preference.mode === 'disabled') return 'disabled'
+  if (preference.mode === 'configured') return 'moon-code-environment'
+  return nonBlankEnvironmentValue(base[SECONDARY_MODEL_ENV]) ||
+    nonBlankEnvironmentValue(base[SECONDARY_EFFORT_ENV])
+    ? 'inherited-environment'
+    : 'kimi-config'
+}
+
+function nonBlankEnvironmentValue(value: string | undefined): boolean {
+  return value !== undefined && value.trim().length > 0
 }

@@ -132,7 +132,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 | Telemetry 开关        | Settings           | P0       | 尊重 Kimi 官方设置，不增加默认追踪        |
 | Archived sessions     | Settings           | P0       | 浏览和恢复                                |
 
-实现状态：Model/Provider/Auth/Config 已接入真实 Runtime，覆盖目录读取、默认模型、单个/全部/OAuth 模型刷新、Provider 添加、device-code 登录/轮询/取消/登出，以及 telemetry、默认 Permission/Plan、Skill merge 白名单设置。运行时弹窗可启动托管 Kimi 或连接用户声明的受 Bearer 保护外部 Server；token 只短暂进入 Main 内存，并经 health/meta 验证后使用。已打开 Session 收到 Kimi 全局 Workspace、Session 或 Config WebSocket 广播后，会以受控 REST 重读左栏与 Settings，且全局重连/gap 同样会收敛；边界见 [ADR 0017](./adr/0017-kimi-global-state-invalidation-boundary.md)。设置页保存 zh-CN/en-US locale、任务完成通知和通知声音；locale 会切换静态产品 UI、原生通知、日期/数字格式和页面语言语义，而不会翻译 Kimi 返回的对话、工具输出或文件内容。Kimi `0.29.0` v2 没有 Provider 删除 REST 路由，客户端按 [ADR 0005](./adr/0005-kimi-v2-provider-mutation-boundary.md) 禁止用遮盖凭据后的 Config 全量回写模拟删除；该项等待上游补齐。
+实现状态：Model/Provider/Auth/Config 已接入真实 Runtime，覆盖目录读取、默认模型、单个/全部/OAuth 模型刷新、Provider 添加、device-code 登录/轮询/取消/登出，以及 telemetry、默认 Permission/Plan、Skill merge 白名单设置。运行时弹窗可启动托管 Kimi 或连接用户声明的受 Bearer 保护外部 Server；token 只短暂进入 Main 内存，并经 health/meta 验证后使用。已打开 Session 收到 Kimi 全局 Workspace、Session 或 Config WebSocket 广播后，会以受控 REST 重读左栏与 Settings，且全局重连/gap 同样会收敛；边界见 [ADR 0017](./adr/0017-kimi-global-state-invalidation-boundary.md)。设置页保存 zh-CN/en-US locale、任务完成通知和通知声音；locale 会切换静态产品 UI、原生通知、日期/数字格式和页面语言语义，而不会翻译 Kimi 返回的对话、工具输出或文件内容。当前 Kimi v2 没有 Provider 删除 REST 路由，客户端按 [ADR 0005](./adr/0005-kimi-v2-provider-mutation-boundary.md) 禁止用遮盖凭据后的 Config 全量回写模拟删除；该项等待上游补齐。
 
 ## 8. 在官方基线上的新增能力
 
@@ -150,7 +150,7 @@ P0 开发时，本表每一行应补充自动化测试 ID 和实现位置；在�
 
 ## 9. 版本兼容策略
 
-1. 客户端声明一个经过验证的 Kimi 版本区间，例如 `>=0.29.0 <0.30.0`，而不是假设所有版本兼容。
+1. 客户端声明最低支持版本，不设置未来版本硬上限；启动时读取 `/meta`，并用公开契约和 capability 对各项功能单独门禁。
 2. 托管运行时默认锁定到已通过测试的 patch 版本；新版本先进入兼容 CI，再进入客户端更新通道。
 3. 启动时读取 `/meta` 的 server version、backend 和 capabilities。
 4. 开发/CI 中读取 `/openapi.json` 和 `/asyncapi.json`，对所需 route、schema 与 event 做快照差异检查。

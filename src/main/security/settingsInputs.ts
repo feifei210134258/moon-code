@@ -1,7 +1,8 @@
 import type {
   AddKimiProviderInput,
   KimiPreferencesPatch,
-  KimiProviderType
+  KimiProviderType,
+  KimiSecondaryModelUpdateInput
 } from '../../shared/contracts.js'
 
 const PROVIDER_TYPES = new Set<KimiProviderType>([
@@ -19,6 +20,31 @@ export function validateModelId(value: unknown): string {
     throw new TypeError('Invalid Kimi model id')
   }
   return value
+}
+
+export function validateSecondaryModelInput(value: unknown): KimiSecondaryModelUpdateInput {
+  if (!isRecord(value)) throw new TypeError('Invalid Kimi secondary model input')
+  const allowed = new Set(['model', 'defaultEffort', 'maxOutputSize'])
+  if (Object.keys(value).some((key) => !allowed.has(key))) {
+    throw new TypeError('Invalid Kimi secondary model input')
+  }
+  const model = validateModelId(value.model).trim()
+  if (model.length < 1) throw new TypeError('Invalid Kimi secondary model id')
+  const defaultEffort = optionalString(value.defaultEffort, 'secondary effort', 128)
+  const maxOutputSize = value.maxOutputSize
+  if (maxOutputSize !== undefined && (
+    typeof maxOutputSize !== 'number' ||
+    !Number.isInteger(maxOutputSize) ||
+    maxOutputSize < 1 ||
+    maxOutputSize > 16_777_216
+  )) {
+    throw new TypeError('Invalid Kimi secondary max output size')
+  }
+  return {
+    model,
+    ...(defaultEffort === undefined ? {} : { defaultEffort }),
+    ...(maxOutputSize === undefined ? {} : { maxOutputSize })
+  }
 }
 
 export function validateProviderId(value: unknown, optional = false): string | undefined {

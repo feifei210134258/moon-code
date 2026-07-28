@@ -17,7 +17,7 @@ describe('external protected Kimi Runtime', () => {
     const state = await manager.connectExternal({ origin, token: 'secret-token' })
 
     expect(state).toEqual(expect.objectContaining({
-      status: 'running', mode: 'external', version: '0.29.0', serverId: 'external-server', origin
+      status: 'running', mode: 'external', version: '0.29.2', serverId: 'external-server', origin
     }))
     expect(JSON.stringify(state)).not.toContain('secret-token')
     await manager.stop()
@@ -51,7 +51,7 @@ async function startServer(token: string): Promise<string> {
         code: 0,
         msg: 'ok',
         data: {
-          server_version: '0.29.0', capabilities: {}, server_id: 'external-server',
+          server_version: '0.29.2', capabilities: {}, server_id: 'external-server',
           started_at: '2026-07-24T00:00:00.000Z', dangerous_bypass_auth: false, backend: 'v2'
         }
       }))

@@ -9,6 +9,7 @@ import type { ChatTurn, ExtensionTab, ProjectItem } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
 
 const VIEWED_SESSION_UPDATES_KEY = 'moon-code:viewed-session-updates'
+const NAVIGATION_ACTIVITY_KEY = 'moon-code:navigation-activity'
 
 const initialProjects: ProjectItem[] = [
   {
@@ -83,12 +84,14 @@ export const useWorkbenchStore = defineStore('workbench', {
     transcriptError: null as string | null,
     transcriptHasMore: false,
     viewedSessionUpdates: loadViewedSessionUpdates(),
+    navigationActivity: loadNavigationActivity(),
     sessionUpdates: {} as Record<string, string | null>
   }),
   actions: {
     toggleProject(projectId: string) {
       const project = this.projects.find((item) => item.id === projectId)
       if (project !== undefined) project.expanded = !project.expanded
+      this.touchNavigation('workspace', projectId)
     },
     selectWorkspace(workspaceId: string) {
       const workspace = this.projects.find((project) => project.id === workspaceId)
@@ -98,6 +101,7 @@ export const useWorkbenchStore = defineStore('workbench', {
       if (!workspace.sessions.some((session) => session.id === this.activeSessionId)) {
         this.activeSessionId = workspace.sessions[0]?.id ?? ''
       }
+      this.touchNavigation('workspace', workspaceId)
     },
     selectSession(sessionId: string) {
       this.activeSessionId = sessionId
@@ -112,6 +116,13 @@ export const useWorkbenchStore = defineStore('workbench', {
         }
         persistViewedSessionUpdates(this.viewedSessionUpdates)
       }
+      this.touchNavigation('session', sessionId)
+    },
+    touchNavigation(kind: 'workspace' | 'session', id: string) {
+      if (id.length === 0) return
+      this.navigationActivity[`${kind}:${id}`] = new Date().toISOString()
+      persistNavigationActivity(this.navigationActivity)
+      sortProjectsByNavigationActivity(this.projects, this.navigationActivity, this.sessionUpdates)
     },
     setExtension(tab: ExtensionTab) {
       this.activeExtension = tab
@@ -135,7 +146,13 @@ export const useWorkbenchStore = defineStore('workbench', {
         id: workspace.id,
         name: workspace.name,
         expanded: expandedById.get(workspace.id) ?? index < 2,
-        sessions: workspace.sessions.map((session) => {
+        sessions: [...workspace.sessions].sort((left, right) => compareNavigationItems(
+          `session:${left.id}`,
+          `session:${right.id}`,
+          left.updatedAt,
+          right.updatedAt,
+          this.navigationActivity
+        )).map((session) => {
           const relativeTime = formatRelativeTime(session.updatedAt)
           return {
             id: session.id,
@@ -145,7 +162,7 @@ export const useWorkbenchStore = defineStore('workbench', {
             tone: navigationTone(session, this.viewedSessionUpdates)
           }
         })
-      }))
+      })).sort((left, right) => compareProjects(left, right, this.navigationActivity, this.sessionUpdates))
       this.projects = projects
       const selectedWorkspace = projects.find((project) => project.id === this.activeWorkspaceId)
       const activeStillExists = projects.some((project) =>
@@ -229,6 +246,86 @@ function persistViewedSessionUpdates(updates: Record<string, string | null>): vo
   } catch {
     // Status acknowledgement remains valid for this renderer lifetime if storage is unavailable.
   }
+}
+
+function loadNavigationActivity(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const value = JSON.parse(window.localStorage.getItem(NAVIGATION_ACTIVITY_KEY) ?? '{}') as unknown
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => (
+      typeof entry[1] === 'string' && Number.isFinite(Date.parse(entry[1]))
+    )))
+  } catch {
+    return {}
+  }
+}
+
+function persistNavigationActivity(activity: Record<string, string>): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(NAVIGATION_ACTIVITY_KEY, JSON.stringify(activity))
+  } catch {
+    // Sorting remains correct for the current renderer lifetime if storage is unavailable.
+  }
+}
+
+function navigationTimestamp(value: string | null | undefined): number {
+  if (value === null || value === undefined) return 0
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function compareNavigationItems(
+  leftKey: string,
+  rightKey: string,
+  leftUpdatedAt: string | null | undefined,
+  rightUpdatedAt: string | null | undefined,
+  activity: Record<string, string>
+): number {
+  const leftTimestamp = Math.max(navigationTimestamp(activity[leftKey]), navigationTimestamp(leftUpdatedAt))
+  const rightTimestamp = Math.max(navigationTimestamp(activity[rightKey]), navigationTimestamp(rightUpdatedAt))
+  return rightTimestamp - leftTimestamp
+}
+
+function compareProjects(
+  left: ProjectItem,
+  right: ProjectItem,
+  activity: Record<string, string>,
+  sessionUpdates: Record<string, string | null>
+): number {
+  const leftTimestamp = Math.max(
+    navigationTimestamp(activity[`workspace:${left.id}`]),
+    ...left.sessions.map((session) => Math.max(
+      navigationTimestamp(activity[`session:${session.id}`]),
+      navigationTimestamp(sessionUpdates[session.id])
+    ))
+  )
+  const rightTimestamp = Math.max(
+    navigationTimestamp(activity[`workspace:${right.id}`]),
+    ...right.sessions.map((session) => Math.max(
+      navigationTimestamp(activity[`session:${session.id}`]),
+      navigationTimestamp(sessionUpdates[session.id])
+    ))
+  )
+  return rightTimestamp - leftTimestamp
+}
+
+function sortProjectsByNavigationActivity(
+  projects: ProjectItem[],
+  activity: Record<string, string>,
+  sessionUpdates: Record<string, string | null>
+): void {
+  for (const project of projects) {
+    project.sessions.sort((left, right) => compareNavigationItems(
+      `session:${left.id}`,
+      `session:${right.id}`,
+      sessionUpdates[left.id],
+      sessionUpdates[right.id],
+      activity
+    ))
+  }
+  projects.sort((left, right) => compareProjects(left, right, activity, sessionUpdates))
 }
 
 /* 同一轮里 Kimi CLI 会拆出多条 assistant 消息；展示层聚合成一个 Kimi 回合，

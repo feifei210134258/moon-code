@@ -2,7 +2,11 @@ import { EventEmitter } from 'node:events'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { KimiRuntimeManager } from '../../src/main/runtime/KimiRuntimeManager.js'
+import {
+  buildSecondaryModelRuntimeEnvironment,
+  KimiRuntimeManager,
+  secondaryModelRuntimeSource
+} from '../../src/main/runtime/KimiRuntimeManager.js'
 
 const servers: Server[] = []
 
@@ -11,6 +15,47 @@ afterEach(async () => {
 })
 
 describe('shared Kimi Web Runtime', () => {
+  it('builds official secondary-model environment overrides for each local preference mode', () => {
+    const inherited = buildSecondaryModelRuntimeEnvironment({
+      KIMI_CODE_EXPERIMENTAL_FLAG: '1',
+      KIMI_SECONDARY_MODEL: 'shell-model',
+      KIMI_SECONDARY_EFFORT: 'shell-effort'
+    }, { mode: 'inherit', model: null, defaultEffort: null })
+    expect(inherited).toEqual(expect.objectContaining({
+      KIMI_CODE_EXPERIMENTAL_FLAG: '1',
+      KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL: '1',
+      KIMI_SECONDARY_MODEL: 'shell-model',
+      KIMI_SECONDARY_EFFORT: 'shell-effort'
+    }))
+    expect(secondaryModelRuntimeSource(inherited, {
+      mode: 'inherit', model: null, defaultEffort: null
+    })).toBe('inherited-environment')
+
+    const configured = buildSecondaryModelRuntimeEnvironment(inherited, {
+      mode: 'configured', model: 'local/coder', defaultEffort: null
+    })
+    expect(configured.KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL).toBe('1')
+    expect(configured.KIMI_SECONDARY_MODEL).toBe('local/coder')
+    expect(configured.KIMI_SECONDARY_EFFORT).toBeUndefined()
+    expect(secondaryModelRuntimeSource(inherited, {
+      mode: 'configured', model: 'local/coder', defaultEffort: null
+    })).toBe('moon-code-environment')
+
+    const disabled = buildSecondaryModelRuntimeEnvironment(inherited, {
+      mode: 'disabled', model: null, defaultEffort: null
+    })
+    expect(disabled.KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL).toBe('0')
+    expect(disabled.KIMI_CODE_EXPERIMENTAL_FLAG).toBeUndefined()
+    expect(disabled.KIMI_SECONDARY_MODEL).toBeUndefined()
+    expect(disabled.KIMI_SECONDARY_EFFORT).toBeUndefined()
+    expect(secondaryModelRuntimeSource(inherited, {
+      mode: 'disabled', model: null, defaultEffort: null
+    })).toBe('disabled')
+    expect(secondaryModelRuntimeSource({}, {
+      mode: 'inherit', model: null, defaultEffort: null
+    })).toBe('kimi-config')
+  })
+
   it('reuses a verified local Kimi Web Runtime without spawning a second CLI', async () => {
     const token = 'local-shared-token'
     const { origin, requests } = await startServer(token)
@@ -26,7 +71,7 @@ describe('shared Kimi Web Runtime', () => {
     const state = await manager.start('system')
 
     expect(state).toEqual(expect.objectContaining({
-      status: 'running', mode: 'shared', version: '0.29.0', serverId: 'shared-server', origin
+      status: 'running', mode: 'shared', version: '0.29.2', serverId: 'shared-server', origin
     }))
     expect(JSON.stringify(state)).not.toContain(token)
     expect(spawnImpl).not.toHaveBeenCalled()
@@ -46,9 +91,9 @@ describe('shared Kimi Web Runtime', () => {
       spawnImpl: spawnImpl as never,
       readSharedToken: async () => null,
       discoverRuntimes: async () => ({
-        supportedRange: '>=0.29.0',
-        managed: { kind: 'managed', version: '0.29.0', executable: '/managed.mjs', compatible: true, reason: null },
-        system: { kind: 'system', version: '0.29.0', executable: '/usr/local/bin/kimi', compatible: true, reason: null }
+        supportedRange: '>=0.29.2',
+        managed: { kind: 'managed', version: '0.29.2', executable: '/managed.mjs', compatible: true, reason: null },
+        system: { kind: 'system', version: '0.29.2', executable: '/usr/local/bin/kimi', compatible: true, reason: null }
       })
     })
 
@@ -57,7 +102,9 @@ describe('shared Kimi Web Runtime', () => {
     expect(state).toEqual(expect.objectContaining({ status: 'error', mode: 'system' }))
     expect(spawnImpl).toHaveBeenCalledWith('/usr/local/bin/kimi', [
       'web', '--port', '58627', '--no-open', '--log-level', 'error'
-    ], expect.any(Object))
+    ], expect.objectContaining({
+      env: expect.objectContaining({ KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL: '1' })
+    }))
   })
 })
 
@@ -89,7 +136,7 @@ async function startServer(token: string): Promise<{ origin: string; requests: {
         code: 0,
         msg: 'ok',
         data: {
-          server_version: '0.29.0', capabilities: {}, server_id: 'shared-server',
+          server_version: '0.29.2', capabilities: {}, server_id: 'shared-server',
           started_at: '2026-07-25T00:00:00.000Z', dangerous_bypass_auth: false, backend: 'v2'
         }
       }))

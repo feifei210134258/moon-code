@@ -1,6 +1,6 @@
 {
   "name": "moon-code-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Moon Code is a Kimi Code-native desktop agent client.",
   "author": "Moon Code",
@@ -24,11 +24,12 @@
     "capture:kimi-contracts": "node scripts/capture-kimi-contracts.mjs",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
+    "test:secondary-runtime": "KIMI_SECONDARY_RUNTIME_INTEGRATION=1 vitest run tests/runtime/secondaryModel.integration.test.ts --reporter=verbose",
     "test:watch": "vitest",
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
-    "@moonshot-ai/kimi-code": "0.29.0",
+    "@moonshot-ai/kimi-code": "0.29.2",
     "@phosphor-icons/vue": "2.2.1",
     "@xterm/addon-fit": "0.10.0",
     "@xterm/xterm": "5.5.0",
