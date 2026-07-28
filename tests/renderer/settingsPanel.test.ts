@@ -8,7 +8,7 @@ import SettingsPanel from '../../src/renderer/src/components/SettingsPanel.vue'
 const snapshot: KimiSettingsSnapshot = {
   auth: {
     ready: true,
-    providersCount: 1,
+    providersCount: 2,
     defaultModel: 'kimi-for-coding',
     managedProvider: { name: 'managed:kimi-code', status: 'unauthenticated' }
   },
@@ -22,10 +22,30 @@ const snapshot: KimiSettingsSnapshot = {
       maxContextSize: 131_072, capabilities: [], supportEfforts: [], defaultEffort: null
     }
   ],
-  providers: [{
-    id: 'managed:kimi-code', type: 'kimi', baseUrl: null, defaultModel: null,
-    hasCredential: false, status: 'unconfigured', models: ['kimi-for-coding', 'kimi-fast']
-  }],
+  secondaryModelOptions: [
+    {
+      id: 'kimi-for-coding', providerId: 'managed:kimi-code', displayName: 'Kimi for Coding',
+      maxContextSize: 262_144, capabilities: [], supportEfforts: ['off', 'high'], defaultEffort: 'high'
+    },
+    {
+      id: 'kimi-fast', providerId: 'managed:kimi-code', displayName: 'Kimi Fast',
+      maxContextSize: 131_072, capabilities: [], supportEfforts: [], defaultEffort: null
+    },
+    {
+      id: 'gpt-5-mini', providerId: 'openai-main', displayName: 'GPT-5 mini',
+      maxContextSize: 400_000, capabilities: ['thinking'], supportEfforts: ['low', 'medium', 'high'], defaultEffort: 'medium'
+    }
+  ],
+  providers: [
+    {
+      id: 'managed:kimi-code', type: 'kimi', baseUrl: null, defaultModel: null,
+      hasCredential: false, status: 'unconfigured', models: ['kimi-for-coding', 'kimi-fast']
+    },
+    {
+      id: 'openai-main', type: 'openai_responses', baseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-5-mini',
+      hasCredential: true, status: 'connected', models: ['gpt-5-mini']
+    }
+  ],
   preferences: {
     defaultProvider: 'managed:kimi-code',
     defaultModel: 'kimi-for-coding',
@@ -34,10 +54,26 @@ const snapshot: KimiSettingsSnapshot = {
     mergeAllAvailableSkills: true,
     telemetry: false
   },
+  secondaryModel: { model: 'kimi-fast', defaultEffort: 'low', maxOutputSize: 8192 },
+  secondaryModelControl: {
+    preference: { mode: 'inherit', model: null, defaultEffort: null },
+    appliedPreference: { mode: 'inherit', model: null, defaultEffort: null },
+    appliedSource: null,
+    requiresRestart: false,
+    configurationMode: 'read-only'
+  },
   capabilities: {
     canAddProvider: true,
     canDeleteProvider: false,
-    providerDeleteUnavailableReason: 'Kimi v2 has no delete route.'
+    providerDeleteUnavailableReason: 'Kimi v2 has no delete route.',
+    secondaryModel: {
+      supported: true,
+      enabled: true,
+      writable: false,
+      canDisable: false,
+      maxOutputSizeWritable: false,
+      unavailableReason: 'Kimi 0.29.2 Config API does not accept secondary_model yet.'
+    }
   }
 }
 
@@ -49,6 +85,8 @@ const usage: KimiUsageState = {
 
 afterEach(() => {
   delete window.kimiAgent
+  Reflect.deleteProperty(window, 'confirm')
+  vi.restoreAllMocks()
 })
 
 describe('SettingsPanel', () => {
@@ -76,6 +114,7 @@ describe('SettingsPanel', () => {
 
     expect(api.getKimiSettings).toHaveBeenCalledTimes(2)
     await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
     expect(wrapper.findAll('.model-row')[1]!.classes()).toContain('is-selected')
     wrapper.unmount()
   })
@@ -98,6 +137,7 @@ describe('SettingsPanel', () => {
 
     expect(api.getKimiSettings).toHaveBeenCalledOnce()
     await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
     const modelRows = wrapper.findAll('.model-row')
     expect(modelRows).toHaveLength(2)
     await modelRows[1]!.trigger('click')
@@ -108,7 +148,274 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
-  it('keeps settings focused on Kimi and hides Provider controls', async () => {
+  it('shows the effective secondary model without offering a fake write path', async () => {
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => snapshot)
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: {
+        open: true,
+        runtimeRunning: true,
+        activeSessionId: 'session-1',
+        activeWorkspaceId: 'workspace-1',
+        usage
+      },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+
+    expect(wrapper.text()).toContain('子 Agent 模型')
+    expect(wrapper.text()).toContain('Kimi Fast')
+    expect(wrapper.text()).toContain('独立模型已启用')
+    expect(wrapper.text()).toContain('Config API does not accept secondary_model yet')
+    expect(wrapper.findAll('.provider-model-item')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('shows when the effective secondary value comes from an inherited environment override', async () => {
+    const environmentSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      secondaryModelControl: {
+        preference: { mode: 'inherit', model: null, defaultEffort: null },
+        appliedPreference: { mode: 'inherit', model: null, defaultEffort: null },
+        appliedSource: 'inherited-environment',
+        requiresRestart: false,
+        configurationMode: 'runtime-env'
+      },
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          supported: true,
+          enabled: true,
+          writable: true,
+          canDisable: true,
+          maxOutputSizeWritable: false,
+          unavailableReason: null
+        }
+      }
+    }
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => environmentSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: {
+        open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage
+      },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+
+    expect(wrapper.text()).toContain('外部环境变量覆盖')
+    wrapper.unmount()
+  })
+
+  it('uses the typed secondary write API when the Runtime contract declares support', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          supported: true,
+          enabled: true,
+          writable: true,
+          canDisable: false,
+          maxOutputSizeWritable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const updated = {
+      ...writableSnapshot,
+      secondaryModel: { model: 'kimi-fast', defaultEffort: 'low', maxOutputSize: 4096 }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      setSecondaryModel: vi.fn(async () => updated)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: {
+        open: true,
+        runtimeRunning: true,
+        activeSessionId: 'session-1',
+        activeWorkspaceId: 'workspace-1',
+        usage
+      },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.find('.secondary-model-form input[type="number"]').setValue('4096')
+    const saveButton = wrapper.find('.secondary-model-actions .primary-button')
+    expect(saveButton.attributes('disabled')).toBeUndefined()
+    await saveButton.trigger('click')
+    await flushPromises()
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({
+      model: 'kimi-fast', defaultEffort: 'low', maxOutputSize: 4096
+    })
+    expect((wrapper.get('.secondary-model-form input[type="number"]').element as HTMLInputElement).value).toBe('4096')
+    expect(wrapper.text()).toContain('子 Agent 模型已更新')
+    wrapper.unmount()
+  })
+
+  it('saves, disables, and restarts a Moon Code-owned 0.29.2 Runtime through local controls', async () => {
+    const localSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      secondaryModelControl: {
+        preference: { mode: 'inherit', model: null, defaultEffort: null },
+        appliedPreference: { mode: 'inherit', model: null, defaultEffort: null },
+        appliedSource: 'kimi-config',
+        requiresRestart: false,
+        configurationMode: 'runtime-env'
+      },
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          supported: true,
+          enabled: true,
+          writable: true,
+          canDisable: true,
+          maxOutputSizeWritable: false,
+          unavailableReason: null
+        }
+      }
+    }
+    const configured: KimiSettingsSnapshot = {
+      ...localSnapshot,
+      secondaryModelControl: {
+        ...localSnapshot.secondaryModelControl,
+        preference: { mode: 'configured', model: 'kimi-fast', defaultEffort: 'low' },
+        requiresRestart: true
+      }
+    }
+    const disabled: KimiSettingsSnapshot = {
+      ...configured,
+      secondaryModelControl: {
+        ...configured.secondaryModelControl,
+        preference: { mode: 'disabled', model: null, defaultEffort: null }
+      }
+    }
+    const appliedDisabled: KimiSettingsSnapshot = {
+      ...disabled,
+      secondaryModelControl: {
+        ...disabled.secondaryModelControl,
+        appliedPreference: { mode: 'disabled', model: null, defaultEffort: null },
+        appliedSource: 'disabled',
+        requiresRestart: false
+      },
+      capabilities: {
+        ...disabled.capabilities,
+        secondaryModel: { ...disabled.capabilities.secondaryModel, enabled: false }
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn()
+        .mockResolvedValueOnce(localSnapshot)
+        .mockResolvedValueOnce(appliedDisabled),
+      setSecondaryModel: vi.fn(async () => configured),
+      disableSecondaryModel: vi.fn(async () => disabled),
+      inheritSecondaryModel: vi.fn(async () => localSnapshot),
+      restartRuntime: vi.fn(async () => ({
+        status: 'running' as const, mode: 'system' as const, version: '0.29.2', serverId: 'server-2',
+        origin: 'http://127.0.0.1:58627', error: null
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const confirm = vi.fn(() => true)
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm })
+    const wrapper = mount(SettingsPanel, {
+      props: {
+        open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage
+      },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+
+    expect(wrapper.find('.secondary-model-form input[type="number"]').exists()).toBe(false)
+    await wrapper.find('.secondary-model-actions .primary-button').trigger('click')
+    await flushPromises()
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'kimi-fast', defaultEffort: 'low' })
+    expect(wrapper.text()).toContain('等待重启生效')
+
+    const disableButton = wrapper.findAll('.secondary-model-actions .secondary-button')
+      .find((button) => button.text().includes('跟随主模型'))
+    expect(disableButton).toBeDefined()
+    await disableButton!.trigger('click')
+    await flushPromises()
+    expect(api.disableSecondaryModel).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('子 Agent 将跟随主模型')
+
+    const restartButton = wrapper.findAll('button').find((button) => button.text().includes('立即重启'))
+    expect(restartButton).toBeDefined()
+    await restartButton!.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(api.restartRuntime).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('已禁用')
+    expect(wrapper.text()).not.toContain('等待重启生效')
+    wrapper.unmount()
+  })
+
+  it('lets the user remove a Moon Code override and return to Kimi configuration', async () => {
+    const configured: KimiSettingsSnapshot = {
+      ...snapshot,
+      secondaryModelControl: {
+        preference: { mode: 'configured', model: 'kimi-fast', defaultEffort: 'low' },
+        appliedPreference: { mode: 'configured', model: 'kimi-fast', defaultEffort: 'low' },
+        appliedSource: 'moon-code-environment',
+        requiresRestart: false,
+        configurationMode: 'runtime-env'
+      },
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          supported: true,
+          enabled: true,
+          writable: true,
+          canDisable: true,
+          maxOutputSizeWritable: false,
+          unavailableReason: null
+        }
+      }
+    }
+    const inherited: KimiSettingsSnapshot = {
+      ...configured,
+      secondaryModelControl: {
+        ...configured.secondaryModelControl,
+        preference: { mode: 'inherit', model: null, defaultEffort: null },
+        requiresRestart: true
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => configured),
+      inheritSecondaryModel: vi.fn(async () => inherited)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: {
+        open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage
+      },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+
+    await wrapper.get('.secondary-runtime-details summary').trigger('click')
+    const inheritButton = wrapper.findAll('.secondary-runtime-details .provider-disclosure-button')
+      .find((button) => button.text().includes('恢复 Kimi 原有设置'))
+    expect(inheritButton).toBeDefined()
+    await inheritButton!.trigger('click')
+    await flushPromises()
+
+    expect(api.inheritSecondaryModel).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('已恢复 Kimi 原有设置；重启 Kimi Runtime 后生效。')
+    wrapper.unmount()
+  })
+
+  it('keeps default models focused on Kimi and hides write controls for a read-only Runtime', async () => {
     const api = {
       getKimiSettings: vi.fn(async () => snapshot)
     } as unknown as KimiAgentDesktopApi
@@ -120,7 +427,79 @@ describe('SettingsPanel', () => {
     await flushPromises()
 
     expect(wrapper.findAll('.settings-nav button').map((button) => button.text())).not.toContain('Provider')
-    expect(wrapper.find('.provider-form').exists()).toBe(false)
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    expect(wrapper.findAll('.provider-catalog-item')).toHaveLength(2)
+    expect(wrapper.find('.secondary-model-footer').exists()).toBe(false)
+    expect(wrapper.text()).toContain('新子 Agent 将使用')
+    expect(wrapper.text()).toContain('子 Agent 模型')
+    wrapper.unmount()
+  })
+
+  it('connects a third-party Provider through typed IPC and selects its refreshed model', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const connected: KimiSettingsSnapshot = {
+      ...writableSnapshot,
+      auth: { ...writableSnapshot.auth, providersCount: 3 },
+      secondaryModelOptions: [
+        ...writableSnapshot.secondaryModelOptions,
+        {
+          id: 'claude-sonnet-4-5', providerId: 'anthropic-main', displayName: 'Claude Sonnet 4.5',
+          maxContextSize: 200_000, capabilities: ['thinking'], supportEfforts: ['low', 'high'], defaultEffort: 'high'
+        }
+      ],
+      providers: [
+        ...writableSnapshot.providers,
+        {
+          id: 'anthropic-main', type: 'anthropic', baseUrl: 'https://api.anthropic.com', defaultModel: null,
+          hasCredential: true, status: 'connected', models: ['claude-sonnet-4-5']
+        }
+      ]
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      addKimiProvider: vi.fn(async () => connected)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    const addButton = wrapper.findAll('.provider-manager button')
+      .find((button) => button.text().includes('添加模型服务'))
+    expect(addButton).toBeDefined()
+    await addButton!.trigger('click')
+
+    const form = wrapper.get('.secondary-provider-form')
+    const inputs = form.findAll('input')
+    await inputs[0]!.setValue('anthropic-main')
+    await form.get('select').setValue('anthropic')
+    await inputs[1]!.setValue('https://api.anthropic.com')
+    await inputs[2]!.setValue('sk-ant-secret')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(api.addKimiProvider).toHaveBeenCalledWith({
+      id: 'anthropic-main',
+      type: 'anthropic',
+      baseUrl: 'https://api.anthropic.com',
+      apiKey: 'sk-ant-secret'
+    })
+    expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
+    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('claude-sonnet-4-5')
+    expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
     wrapper.unmount()
   })
 

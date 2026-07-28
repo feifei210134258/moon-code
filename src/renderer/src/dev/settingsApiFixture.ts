@@ -1,4 +1,5 @@
 import type {
+  AddKimiProviderInput,
   KimiAgentDesktopApi,
   KimiPreferencesPatch,
   KimiSettingsSnapshot,
@@ -8,7 +9,7 @@ import type {
 const runtime: RuntimePublicState = {
   status: 'running',
   mode: 'managed',
-  version: '0.29.0',
+  version: '0.29.2',
   serverId: 'settings-fixture',
   origin: 'http://127.0.0.1:1',
   error: null
@@ -17,7 +18,7 @@ const runtime: RuntimePublicState = {
 const snapshot: KimiSettingsSnapshot = {
   auth: {
     ready: true,
-    providersCount: 1,
+    providersCount: 2,
     defaultModel: 'kimi-for-coding',
     managedProvider: { name: 'managed:kimi-code', status: 'authenticated' }
   },
@@ -31,11 +32,30 @@ const snapshot: KimiSettingsSnapshot = {
       maxContextSize: 262_144, capabilities: ['thinking', 'vision'], supportEfforts: ['low', 'high'], defaultEffort: 'high'
     }
   ],
+  secondaryModelOptions: [
+    {
+      id: 'kimi-for-coding', providerId: 'managed:kimi-code', displayName: 'Kimi for Coding',
+      maxContextSize: 262_144, capabilities: ['thinking'], supportEfforts: ['off', 'high'], defaultEffort: 'high'
+    },
+    {
+      id: 'kimi-k2.5', providerId: 'managed:kimi-code', displayName: 'Kimi K2.5',
+      maxContextSize: 262_144, capabilities: ['thinking', 'vision'], supportEfforts: ['low', 'high'], defaultEffort: 'high'
+    },
+    {
+      id: 'gpt-5-mini', providerId: 'openai-main', displayName: 'GPT-5 mini',
+      maxContextSize: 400_000, capabilities: ['thinking'], supportEfforts: ['low', 'medium', 'high'], defaultEffort: 'medium'
+    }
+  ],
   providers: [
     {
       id: 'managed:kimi-code', type: 'kimi', baseUrl: 'https://api.kimi.com/coding/v1',
       defaultModel: 'kimi-for-coding', hasCredential: true, status: 'connected',
       models: ['kimi-for-coding', 'kimi-k2.5']
+    },
+    {
+      id: 'openai-main', type: 'openai_responses', baseUrl: 'https://api.openai.com/v1',
+      defaultModel: 'gpt-5-mini', hasCredential: true, status: 'connected',
+      models: ['gpt-5-mini']
     }
   ],
   preferences: {
@@ -46,23 +66,39 @@ const snapshot: KimiSettingsSnapshot = {
     mergeAllAvailableSkills: true,
     telemetry: false
   },
+  secondaryModel: { model: 'gpt-5-mini', defaultEffort: 'low', maxOutputSize: 8192 },
+  secondaryModelControl: {
+    preference: { mode: 'inherit', model: null, defaultEffort: null },
+    appliedPreference: { mode: 'inherit', model: null, defaultEffort: null },
+    appliedSource: 'kimi-config',
+    requiresRestart: false,
+    configurationMode: 'runtime-env'
+  },
   capabilities: {
     canAddProvider: true,
     canDeleteProvider: false,
     providerDeleteUnavailableReason:
-      'Kimi Code 0.29.0 v2 没有安全的 Provider 删除 REST 接口；客户端不会绕过 Kimi 直接改配置文件。'
+      '当前 Kimi Runtime 没有安全的 Provider 删除 REST 接口；客户端不会绕过 Kimi 直接改配置文件。',
+    secondaryModel: {
+      supported: true,
+      enabled: true,
+      writable: true,
+      canDisable: true,
+      maxOutputSizeWritable: false,
+      unavailableReason: null
+    }
   }
 }
 
 export function installSettingsApiFixture(): void {
   const api = {
     getBootstrapState: async () => ({
-      appVersion: '0.1.0',
+      appVersion: '0.2.0',
       platform: 'darwin',
       runtime,
       discovery: {
-        supportedRange: '>=0.29.0 <0.30.0',
-        managed: { kind: 'managed', version: '0.29.0', executable: 'kimi', compatible: true, reason: null },
+        supportedRange: '>=0.29.2',
+        managed: { kind: 'managed', version: '0.29.2', executable: 'kimi', compatible: true, reason: null },
         system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'not found' }
       }
     }),
@@ -101,8 +137,8 @@ export function installSettingsApiFixture(): void {
     getKimiSettings: async () => structuredClone(snapshot),
     checkKimiCliUpdate: async () => ({
       phase: 'available' as const,
-      currentVersion: '0.29.0',
-      latestVersion: '0.29.1',
+      currentVersion: '0.29.2',
+      latestVersion: '0.29.3',
       executable: '/path/to/.kimi-code/bin/kimi',
       checkedAt: new Date().toISOString(),
       error: null,
@@ -110,8 +146,8 @@ export function installSettingsApiFixture(): void {
     }),
     downloadKimiCliUpdate: async () => ({
       phase: 'installed' as const,
-      currentVersion: '0.29.1',
-      latestVersion: '0.29.1',
+      currentVersion: '0.29.3',
+      latestVersion: '0.29.3',
       executable: '/path/to/.kimi-code/bin/kimi',
       checkedAt: new Date().toISOString(),
       error: null,
@@ -121,11 +157,49 @@ export function installSettingsApiFixture(): void {
       snapshot.preferences.defaultModel = modelId
       return structuredClone(snapshot)
     },
+    setSecondaryModel: async (input: {
+      model: string
+      defaultEffort?: string
+      maxOutputSize?: number
+    }) => {
+      snapshot.secondaryModel = {
+        model: input.model,
+        defaultEffort: input.defaultEffort ?? null,
+        maxOutputSize: input.maxOutputSize ?? null
+      }
+      snapshot.secondaryModelControl.preference = {
+        mode: 'configured', model: input.model, defaultEffort: input.defaultEffort ?? null
+      }
+      snapshot.secondaryModelControl.requiresRestart = true
+      return structuredClone(snapshot)
+    },
+    disableSecondaryModel: async () => {
+      snapshot.secondaryModelControl.preference = { mode: 'disabled', model: null, defaultEffort: null }
+      snapshot.secondaryModelControl.requiresRestart = true
+      return structuredClone(snapshot)
+    },
+    inheritSecondaryModel: async () => {
+      snapshot.secondaryModelControl.preference = { mode: 'inherit', model: null, defaultEffort: null }
+      snapshot.secondaryModelControl.requiresRestart = true
+      return structuredClone(snapshot)
+    },
     updateKimiPreferences: async (patch: KimiPreferencesPatch) => {
       Object.assign(snapshot.preferences, patch)
       return structuredClone(snapshot.preferences)
     },
-    addKimiProvider: async () => structuredClone(snapshot),
+    addKimiProvider: async (input: AddKimiProviderInput) => {
+      snapshot.providers.push({
+        id: input.id,
+        type: input.type,
+        baseUrl: input.baseUrl ?? null,
+        defaultModel: input.defaultModel ?? null,
+        hasCredential: input.apiKey !== undefined,
+        status: 'connected',
+        models: []
+      })
+      snapshot.auth.providersCount = snapshot.providers.length
+      return structuredClone(snapshot)
+    },
     refreshKimiProviders: async () => ({ changed: [], unchanged: [], failed: [] }),
     startOAuthLogin: async () => ({
       flowId: 'fixture-flow', provider: 'managed:kimi-code', status: 'authenticated' as const,

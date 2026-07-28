@@ -510,6 +510,24 @@ export const configProviderSummarySchema = z.object({
   has_api_key: z.boolean()
 })
 
+export const secondaryModelConfigSchema = z.object({
+  model: z.string().min(1).optional(),
+  defaultEffort: z.string().min(1).optional(),
+  maxContextSize: z.number().int().positive().optional(),
+  maxInputSize: z.number().int().positive().optional(),
+  maxOutputSize: z.number().int().positive().optional(),
+  capabilities: z.array(z.string()).optional(),
+  displayName: z.string().min(1).optional(),
+  reasoningKey: z.string().min(1).optional(),
+  adaptiveThinking: z.boolean().optional(),
+  supportEfforts: z.array(z.string()).optional(),
+  default_effort: z.string().min(1).optional(),
+  max_context_size: z.number().int().positive().optional(),
+  max_input_size: z.number().int().positive().optional(),
+  max_output_size: z.number().int().positive().optional(),
+  support_efforts: z.array(z.string()).optional()
+}).passthrough()
+
 export const kimiConfigSnapshotSchema = z.object({
   providers: z.record(z.string(), configProviderSummarySchema),
   default_provider: z.string().optional(),
@@ -527,6 +545,7 @@ export const kimiConfigSnapshotSchema = z.object({
   extra_skill_dirs: z.array(z.string()).optional(),
   loop_control: z.unknown().optional(),
   background: z.unknown().optional(),
+  secondary_model: secondaryModelConfigSchema.optional(),
   experimental: z.record(z.string(), z.boolean()).optional(),
   telemetry: z.boolean().optional(),
   raw: z.record(z.string(), z.unknown()).optional()

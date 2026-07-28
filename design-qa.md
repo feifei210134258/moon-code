@@ -272,9 +272,111 @@ final result: passed
 - A/B 截图对比：`r8b-variantA-transparent.png`（透明底，已落地）vs `r8b-variantB-halfwhite.png`（注入 rgba(255,255,255,0.55) 半白底）——空态下两者差异很小，透明底更干净。
 - 测试：334 passed / 2 skipped，无回归。
 
+---
+
+## Latest QA Result
+
+- Scope: v0.2.0 Secondary Model Provider master/detail redesign.
+- Full report: `# Secondary Model Provider Master/Detail (v0.2.0)` above.
+
+final result: passed
+
+---
+
+# Secondary Model Provider Master/Detail (v0.2.0)
+
+- Source visual truth: `/var/folders/td/2bghhqcx6l52c06vq81_n35m0000gn/T/codex-clipboard-0d92e2be-232b-4d10-af73-2f4106c215e0.png`
+- Browser-rendered implementation: `/Users/feili/.codex/visualizations/2026/07/27/019fa3bd-753d-7c33-bdae-5c031c73bffb/model-settings-provider-master-detail-v2.png`
+- Full-view comparison: `/Users/feili/.codex/visualizations/2026/07/27/019fa3bd-753d-7c33-bdae-5c031c73bffb/model-settings-design-qa-comparison-v2.png`
+- Focused add-provider state: `/Users/feili/.codex/visualizations/2026/07/27/019fa3bd-753d-7c33-bdae-5c031c73bffb/model-settings-provider-add-custom-v2.png`
+- Responsive state: `/Users/feili/.codex/visualizations/2026/07/27/019fa3bd-753d-7c33-bdae-5c031c73bffb/model-settings-provider-narrow.png`
+- Viewport: `1296 × 1010` CSS px, DPR 1; responsive check at `900 × 800` CSS px.
+- Source pixels: `1296 × 1010`; implementation pixels: `1296 × 1010`; comparison pixels: `2592 × 1010`.
+- Density normalization: none required; source and implementation were captured at identical pixel dimensions.
+- State: light theme, Settings → Models → Sub-agent model, `openai-main` selected, `GPT-5 mini` selected.
+
+## Findings
+
+No actionable P0, P1, or P2 mismatch remains. The implementation adopts the source's defining structure—provider catalog on the left, selected provider detail and model list on the right—while retaining Moon Code's outer Settings navigation and Kimi-owned configuration boundaries.
+
+## Required Fidelity Surfaces
+
+- Fonts and typography: system UI sans is retained to match Moon Code. Provider names, section headings, connection values and model rows now use the source's larger, clearer hierarchy; small metadata remains compact but readable.
+- Spacing and layout rhythm: the Settings modal was expanded to `1220 × 900` maximum, the provider rail widened to 270 px, and the right detail pane uses 26–28 px inset spacing. Border radius, row height and section rhythm follow the source without introducing nested decorative cards.
+- Colors and visual tokens: white and quiet gray surfaces, one restrained Moon Code blue, mint connection states, neutral dividers and no gradients. State colors retain sufficient contrast and do not replace text labels.
+- Image quality and asset fidelity: the source's vendor logos are not available from Kimi's Provider payload. The implementation intentionally uses Phosphor provider/CPU icons rather than fabricated logos, inline SVG or CSS drawings. Kimi and custom providers remain distinguishable through icon, title and protocol copy.
+- Copy and content: technical terms are reduced to the task vocabulary: model service, API Key, API Base URL, available models, reasoning effort and save. Runtime implementation details remain collapsed.
+
+## Primary Interactions Tested
+
+- Switched between Primary model and Sub-agent model tabs.
+- Selected existing providers and verified their connection/model state.
+- Opened and cancelled the Add custom provider flow.
+- Verified model selection, reasoning-effort control, follow-primary and save actions remain present.
+- At `900 × 800`, `.settings-content` and `.provider-manager` both reported `scrollWidth === clientWidth`; selected provider and Save remain available.
+- Browser console checked. Two errors are emitted by the broader development fixture because it omits `onKimiUsageStateChanged` and `markPetSessionViewed`; neither originates in SettingsPanel or occurs through the production preload contract. Component tests and the production build cover the real contract.
+
+## Comparison History
+
+### Iteration 1
+
+- Earlier finding: `[P1]` the first add-provider capture inherited an obsolete two-column grid from the previous form CSS, putting the header beside the fields and breaking the source's clear vertical hierarchy.
+- Fix: reset `.secondary-provider-form` to a single explicit grid column, preserving the two-column layout only inside `.provider-form-grid`.
+- Post-fix evidence: `model-settings-provider-add-custom-v2.png` shows the provider header, fields, credential note and actions in a clean top-to-bottom sequence.
+
+### Iteration 2
+
+- Earlier finding: `[P2]` the first master/detail capture used a `1120 × 720` modal and 236 px provider rail, making the source-inspired structure feel too small and leaving the Add custom action below the visible fold.
+- Fix: expanded the modal to `1220 × 900`, widened the provider rail to 270 px, increased row heights and type sizes, and raised the provider workspace minimum height.
+- Post-fix evidence: `model-settings-provider-master-detail-v2.png` keeps the Provider catalog, selected provider, model row and primary actions visible together.
+
+## Focused Region Comparison
+
+The full-view composite was used for major-region proportions and hierarchy. The add-provider state received a separate focused comparison because the source's API Key and Base URL form is a key fidelity surface and its field alignment was too small to judge reliably in the full composite.
+
+## Follow-up Polish
+
+- `[P3]` Use official vendor logos only if Kimi later exposes stable Provider branding metadata; do not infer brands from arbitrary custom IDs.
+- `[P3]` Recheck optical density with a real Provider that returns a long model catalog; the list has bounded internal scrolling, but the fixture currently exposes one model for the selected provider.
+
+final result: passed
+
 ### Round 8c 修正：标题外置 + 内容驱动容器（自选方案）
 
 - 原则：标题放卡片外面建立节奏（macOS 设置式）；空态只留标题 + 一行灰字，不画框；框只给需要边界的滚动内容，线性阅读列表永不加框。
 - 落地：`.changes-view` 区块完全去框（gap 18px 留白分隔）；文件列表的轮廓卡从 section 下沉到 `.changed-files-list`（只在有更改文件时渲染，max-height 30vh 内部滚动，行间 0.05 发丝分隔线）；计划/后台任务平铺列表（任务行间分隔线，首行去顶线）；标题行（灰小标题 + 右侧计数/摘要）外置于内容之上。
 - 截图：`r8c-empty.png`（空态无框，干净）、`r8c-populated.png` / `r8c-full-populated.png`（注入 4 文件 + 5 计划 + 3 任务验证填充态；填充态为 DOM 注入示意，非真实数据）。
 - 测试：334 passed / 2 skipped，无回归。
+
+---
+
+## Current QA Gate
+
+- Current scope: v0.2.0 Secondary Model approved master/detail layout with graphite and indigo visual system.
+- Desktop evidence: `/Users/feili/.codex/visualizations/2026/07/27/019fa3bd-753d-7c33-bdae-5c031c73bffb/model-settings-graphite-provider.png`.
+- Add Provider evidence: `/Users/feili/.codex/visualizations/2026/07/27/019fa3bd-753d-7c33-bdae-5c031c73bffb/model-settings-graphite-add-custom.png`.
+- Responsive evidence: `/Users/feili/.codex/visualizations/2026/07/27/019fa3bd-753d-7c33-bdae-5c031c73bffb/model-settings-taste-narrow.png` at `900 × 800`; content and Provider manager both report `scrollWidth === clientWidth`.
+- Layout decision: restored the approved vertical Provider rail and right-side configuration workspace.
+- Color decision: graphite Provider rail, cold-white configuration surface, one restrained indigo action color, semantic green only for real connection state.
+- Shape rule: 10 px structural surfaces, 8-9 px controls, compact status labels only. No decorative gradients, glass, wide shadows or mixed radius language.
+- Interaction checks: Provider selection, Add Provider open/cancel, Primary/Sub-agent tabs, model controls and responsive collapse verified in the browser.
+- Verification: `pnpm check` passes with 376 tests passed and 6 skipped; typecheck and production build pass.
+
+final result: passed
+
+---
+
+# Round 9: 子 Agent 模型设置页重构（回归 DESIGN.md 亮色体系）
+
+## 本轮改动
+
+1. **样式三层覆盖合并为单层**：`styles.css` 中 6090–7873 的基础层 + 两个 taste-pass 覆盖层（graphite 深色导航 + indigo  Accent）全部删除，重写为单层实现；回归 DESIGN.md 的冷白工作台 + 唯一 Moon Blue（#3085fa）动作色。同时清理无组件引用的死样式（`.provider-row`、`.provider-list`、`.secondary-outcome`、`.secondary-config-*`、`.secondary-source-*`、`.secondary-field`、`.experimental-chip`、`.settings-actions` 等）及 760px 遗留媒体查询。
+2. **Provider rail 去深色化**：深石墨 rail 改为 `#f6f9fc` 冷白，选中项白底 + 中性描边；Kimi 内置服务用蓝底图标区分，第三方用浅灰蓝图标。
+3. **状态文字化**（DESIGN.md：状态不只靠颜色）：rail 条目副行从 `Kimi 内置` / `openai_responses` 改为 `内置 · 已连接` / `openai_responses · 已连接`；详情 header 状态徽章新增 `is-unconfigured`（待配置琥珀态），模板补充对应 class 绑定。
+4. **文案对齐功能语义**：`添加自定义` → `添加模型服务`；表单标题 `添加自定义服务` → `添加模型服务`，说明补全 Google/兼容接口与凭据归属。测试 `settingsPanel.test.ts` 同步更新按钮查找文案。
+
+## 验证
+
+- `pnpm check` 通过：typecheck 0 错误，376 passed / 6 skipped，生产构建成功。
+- 截图（fixture，1296×1010）：`model-v3-secondary-openai.png`（默认 openai-main + GPT-5 mini 选中）、`model-v3-secondary-kimi.png`（Kimi 内置选中态）、`model-v3-secondary-add.png`（添加模型服务表单）、`model-v3-primary.png`（主模型 Tab 回归）。采集脚本 `artifacts/design-qa/shots-model-settings.mjs`。
+- `.settings-content` 无横向溢出；浏览器控制台 0 error。

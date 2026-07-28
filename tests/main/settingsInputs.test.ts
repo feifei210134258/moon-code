@@ -4,7 +4,8 @@ import {
   validateModelId,
   validatePreferencesPatch,
   validateProviderId,
-  validateProviderRefreshInput
+  validateProviderRefreshInput,
+  validateSecondaryModelInput
 } from '../../src/main/security/settingsInputs.js'
 
 describe('settings IPC input validation', () => {
@@ -53,5 +54,24 @@ describe('settings IPC input validation', () => {
     })
     expect(() => validatePreferencesPatch({ raw: { providers: {} } })).toThrow('Invalid Kimi preferences patch')
     expect(() => validateProviderRefreshInput({ scope: 'provider' })).toThrow('Invalid Kimi provider id')
+  })
+
+  it('accepts only bounded secondary model settings', () => {
+    expect(validateSecondaryModelInput({
+      model: 'local:openai/coder',
+      defaultEffort: 'low',
+      maxOutputSize: 8192
+    })).toEqual({
+      model: 'local:openai/coder',
+      defaultEffort: 'low',
+      maxOutputSize: 8192
+    })
+    expect(() => validateSecondaryModelInput({ model: ' ' })).toThrow('Invalid Kimi secondary model id')
+    expect(() => validateSecondaryModelInput({ model: 'coder', maxOutputSize: 0 })).toThrow(
+      'Invalid Kimi secondary max output size'
+    )
+    expect(() => validateSecondaryModelInput({ model: 'coder', raw: {} })).toThrow(
+      'Invalid Kimi secondary model input'
+    )
   })
 })

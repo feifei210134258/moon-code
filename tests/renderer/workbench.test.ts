@@ -1,5 +1,7 @@
+// @vitest-environment happy-dom
+
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useWorkbenchStore } from '../../src/renderer/src/stores/workbench.js'
 import type { SessionViewState } from '../../src/shared/contracts.js'
 
@@ -45,7 +47,14 @@ function sessionState(): SessionViewState {
 }
 
 describe('workbench transcript hydration', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    window.localStorage.removeItem('moon-code:navigation-activity')
+  })
+
+  afterEach(() => {
+    window.localStorage.removeItem('moon-code:navigation-activity')
+  })
 
   it('maps the authoritative Kimi transcript into conversation turns without local mock activities', () => {
     const store = useWorkbenchStore()
@@ -191,6 +200,40 @@ describe('workbench transcript hydration', () => {
     expect(store.projects[0]?.expanded).toBe(false)
     expect(store.activeWorkspaceId).toBe('workspace-active')
     expect(store.activeSessionId).toBe('session-1')
+  })
+
+  it('puts recently operated projects and sessions before older creation-order entries across reloads', () => {
+    const tree = [
+      {
+        id: 'workspace-created-first', name: 'Created first', root: '/first', sessions: [{
+          id: 'session-created-first', title: 'Created first session', updatedAt: '2026-07-20T10:00:00.000Z',
+          busy: false, pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      },
+      {
+        id: 'workspace-created-last', name: 'Created last', root: '/last', sessions: [{
+          id: 'session-created-last', title: 'Created last session', updatedAt: '2026-07-25T10:00:00.000Z',
+          busy: false, pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      }
+    ]
+    const store = useWorkbenchStore()
+    store.hydrateProjects(tree)
+
+    expect(store.projects.map((project) => project.id)).toEqual([
+      'workspace-created-last', 'workspace-created-first'
+    ])
+    store.selectSession('session-created-first')
+    expect(store.projects[0]?.id).toBe('workspace-created-first')
+    expect(store.projects[0]?.sessions[0]?.id).toBe('session-created-first')
+
+    setActivePinia(createPinia())
+    const reloadedStore = useWorkbenchStore()
+    reloadedStore.hydrateProjects(tree)
+    expect(reloadedStore.projects.map((project) => project.id)).toEqual([
+      'workspace-created-first', 'workspace-created-last'
+    ])
+    expect(reloadedStore.projects[0]?.sessions[0]?.id).toBe('session-created-first')
   })
 
   it('allows the right panel to grow to twice its previous maximum width', () => {

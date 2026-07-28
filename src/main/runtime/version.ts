@@ -1,7 +1,7 @@
 import semver from 'semver'
 
-export const SUPPORTED_KIMI_RANGE = '>=0.29.0 <0.30.0'
-export const MANAGED_KIMI_VERSION = '0.29.0'
+export const SUPPORTED_KIMI_RANGE = '>=0.29.2'
+export const MANAGED_KIMI_VERSION = '0.29.2'
 
 export function parseKimiVersion(output: string): string | null {
   const match = output.match(/\b(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\b/)

@@ -9,10 +9,15 @@ const require = createRequire(import.meta.url)
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const outputDir = resolve(packageRoot, 'packages/kimi-adapter/contracts')
 const kimiEntry = require.resolve('@moonshot-ai/kimi-code/dist/main.mjs')
+const kimiVersion = require('@moonshot-ai/kimi-code/package.json').version
 const args = [kimiEntry, 'web', '--port', '0', '--no-open', '--log-level', 'error']
 const child = spawn(process.execPath, args, {
   cwd: packageRoot,
-  env: { ...process.env, NO_COLOR: '1' },
+  env: {
+    ...process.env,
+    NO_COLOR: '1',
+    KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL: '1'
+  },
   stdio: ['ignore', 'pipe', 'pipe']
 })
 
@@ -57,24 +62,26 @@ async function capture(origin, token) {
     readJson(origin, token, '/api/v1/meta')
   ])
   const version = metaEnvelope?.data?.server_version
-  if (version !== '0.29.0') throw new Error(`Expected Kimi 0.29.0, got ${String(version)}`)
+  if (version !== kimiVersion) throw new Error(`Expected Kimi ${kimiVersion}, got ${String(version)}`)
 
   const openapiText = `${JSON.stringify(openapi, null, 2)}\n`
   const asyncapiText = `${JSON.stringify(asyncapi, null, 2)}\n`
+  const openapiFile = `kimi-${version}-openapi.json`
+  const asyncapiFile = `kimi-${version}-asyncapi.json`
   const manifest = {
     capturedAt: new Date().toISOString(),
     kimiVersion: version,
-    source: '@moonshot-ai/kimi-code@0.29.0',
+    source: `@moonshot-ai/kimi-code@${version}`,
     files: {
-      'kimi-0.29.0-openapi.json': sha256(openapiText),
-      'kimi-0.29.0-asyncapi.json': sha256(asyncapiText)
+      [openapiFile]: sha256(openapiText),
+      [asyncapiFile]: sha256(asyncapiText)
     }
   }
 
   await mkdir(outputDir, { recursive: true })
   await Promise.all([
-    writeFile(resolve(outputDir, 'kimi-0.29.0-openapi.json'), openapiText),
-    writeFile(resolve(outputDir, 'kimi-0.29.0-asyncapi.json'), asyncapiText),
+    writeFile(resolve(outputDir, openapiFile), openapiText),
+    writeFile(resolve(outputDir, asyncapiFile), asyncapiText),
     writeFile(resolve(outputDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   ])
   await shutdown(origin, token)

@@ -4,6 +4,7 @@ export const ipcChannels = {
   kimiCliUpdateCheck: 'kimi-cli:update:check',
   kimiCliUpdateDownload: 'kimi-cli:update:download',
   runtimeStart: 'runtime:start',
+  runtimeRestart: 'runtime:restart',
   runtimeConnectExternal: 'runtime:connect-external',
   runtimeStop: 'runtime:stop',
   runtimeStateChanged: 'runtime:state-changed',
@@ -69,6 +70,9 @@ export const ipcChannels = {
   terminalExit: 'terminal:exit',
   settingsGet: 'settings:get',
   settingsDefaultModelSet: 'settings:default-model:set',
+  settingsSecondaryModelSet: 'settings:secondary-model:set',
+  settingsSecondaryModelDisable: 'settings:secondary-model:disable',
+  settingsSecondaryModelInherit: 'settings:secondary-model:inherit',
   settingsPreferencesUpdate: 'settings:preferences:update',
   providerAdd: 'provider:add',
   providersRefresh: 'providers:refresh',
@@ -755,15 +759,60 @@ export interface KimiSettingsPreferences {
   telemetry: boolean | null
 }
 
+export interface KimiSecondaryModelSettings {
+  model: string | null
+  defaultEffort: string | null
+  maxOutputSize: number | null
+}
+
+export type KimiSecondaryModelPreferenceMode = 'inherit' | 'configured' | 'disabled'
+
+export interface KimiSecondaryModelPreference {
+  mode: KimiSecondaryModelPreferenceMode
+  model: string | null
+  defaultEffort: string | null
+}
+
+export type KimiSecondaryModelAppliedSource =
+  | 'moon-code-environment'
+  | 'inherited-environment'
+  | 'kimi-config'
+  | 'disabled'
+
+export interface KimiSecondaryModelControlState {
+  preference: KimiSecondaryModelPreference
+  appliedPreference: KimiSecondaryModelPreference | null
+  appliedSource: KimiSecondaryModelAppliedSource | null
+  requiresRestart: boolean
+  configurationMode: 'runtime-env' | 'runtime-rest' | 'read-only'
+}
+
+export interface KimiSecondaryModelUpdateInput {
+  model: string
+  defaultEffort?: string
+  maxOutputSize?: number
+}
+
 export interface KimiSettingsSnapshot {
   auth: KimiAuthSummary
   models: KimiModelCatalogItem[]
+  secondaryModelOptions: KimiModelCatalogItem[]
   providers: KimiProviderCatalogItem[]
   preferences: KimiSettingsPreferences
+  secondaryModel: KimiSecondaryModelSettings
+  secondaryModelControl: KimiSecondaryModelControlState
   capabilities: {
     canAddProvider: boolean
     canDeleteProvider: boolean
     providerDeleteUnavailableReason: string | null
+    secondaryModel: {
+      supported: boolean
+      enabled: boolean | null
+      writable: boolean
+      canDisable: boolean
+      maxOutputSizeWritable: boolean
+      unavailableReason: string | null
+    }
   }
 }
 
@@ -1029,6 +1078,7 @@ export interface KimiAgentDesktopApi {
   checkKimiCliUpdate(): Promise<KimiCliUpdateState>
   downloadKimiCliUpdate(): Promise<KimiCliUpdateState>
   startRuntime(mode?: 'managed' | 'system'): Promise<RuntimePublicState>
+  restartRuntime(): Promise<RuntimePublicState>
   connectExternalRuntime(input: RuntimeExternalConnectionInput): Promise<RuntimePublicState>
   stopRuntime(): Promise<RuntimePublicState>
   getWorkspaceTree(): Promise<WorkspaceNavigationItem[]>
@@ -1101,6 +1151,9 @@ export interface KimiAgentDesktopApi {
   closeTerminal(sessionId: string, terminalId: string): Promise<{ closed: boolean }>
   getKimiSettings(): Promise<KimiSettingsSnapshot>
   setDefaultModel(modelId: string): Promise<KimiSettingsSnapshot>
+  setSecondaryModel(input: KimiSecondaryModelUpdateInput): Promise<KimiSettingsSnapshot>
+  disableSecondaryModel(): Promise<KimiSettingsSnapshot>
+  inheritSecondaryModel(): Promise<KimiSettingsSnapshot>
   updateKimiPreferences(patch: KimiPreferencesPatch): Promise<KimiSettingsPreferences>
   addKimiProvider(input: AddKimiProviderInput): Promise<KimiSettingsSnapshot>
   refreshKimiProviders(input: { scope: 'all' | 'oauth' | 'provider'; providerId?: string }): Promise<KimiProviderRefreshResult>

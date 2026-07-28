@@ -18,7 +18,7 @@ describe.skipIf(!runIntegration)('managed Kimi runtime integration', () => {
       expect.objectContaining({
         status: 'running',
         mode: 'managed',
-        version: '0.29.0'
+        version: '0.29.2'
       })
     )
     expect(running.serverId).toEqual(expect.any(String))
