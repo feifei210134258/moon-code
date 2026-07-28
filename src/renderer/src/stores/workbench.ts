@@ -9,7 +9,9 @@ import type { ChatTurn, ExtensionTab, ProjectItem } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
 
 const VIEWED_SESSION_UPDATES_KEY = 'moon-code:viewed-session-updates'
-const NAVIGATION_ACTIVITY_KEY = 'moon-code:navigation-activity'
+// v2 intentionally drops the old selection-based timestamps. Only accepted
+// conversation submissions are written to this activity store now.
+const NAVIGATION_ACTIVITY_KEY = 'moon-code:navigation-activity:v2'
 
 const initialProjects: ProjectItem[] = [
   {
@@ -91,7 +93,6 @@ export const useWorkbenchStore = defineStore('workbench', {
     toggleProject(projectId: string) {
       const project = this.projects.find((item) => item.id === projectId)
       if (project !== undefined) project.expanded = !project.expanded
-      this.touchNavigation('workspace', projectId)
     },
     selectWorkspace(workspaceId: string) {
       const workspace = this.projects.find((project) => project.id === workspaceId)
@@ -101,7 +102,6 @@ export const useWorkbenchStore = defineStore('workbench', {
       if (!workspace.sessions.some((session) => session.id === this.activeSessionId)) {
         this.activeSessionId = workspace.sessions[0]?.id ?? ''
       }
-      this.touchNavigation('workspace', workspaceId)
     },
     selectSession(sessionId: string) {
       this.activeSessionId = sessionId
@@ -116,11 +116,10 @@ export const useWorkbenchStore = defineStore('workbench', {
         }
         persistViewedSessionUpdates(this.viewedSessionUpdates)
       }
-      this.touchNavigation('session', sessionId)
     },
-    touchNavigation(kind: 'workspace' | 'session', id: string) {
-      if (id.length === 0) return
-      this.navigationActivity[`${kind}:${id}`] = new Date().toISOString()
+    markConversationActivity(sessionId: string) {
+      if (sessionId.length === 0) return
+      this.navigationActivity[`session:${sessionId}`] = new Date().toISOString()
       persistNavigationActivity(this.navigationActivity)
       sortProjectsByNavigationActivity(this.projects, this.navigationActivity, this.sessionUpdates)
     },

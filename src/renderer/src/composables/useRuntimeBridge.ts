@@ -471,15 +471,15 @@ export function useRuntimeBridge() {
     }
   }
 
-  const submitPrompt = async (sessionId: string, input: KimiPromptInput): Promise<void> => {
-    if (window.kimiAgent === undefined) return
+  const submitPrompt = async (sessionId: string, input: KimiPromptInput): Promise<boolean> => {
+    if (window.kimiAgent === undefined) return false
     const cloneableInput = toCloneablePromptInput(input)
     if (input.deliveryMode !== 'steer' && shouldQueueLocally(sessionId)) {
       enqueueLocalPrompt(sessionId, cloneableInput)
       if (!isSessionExecuting(sessionId)) void flushLocalPromptQueue(sessionId)
-      return
+      return true
     }
-    await sendPromptNow(sessionId, cloneableInput)
+    return await sendPromptNow(sessionId, cloneableInput)
   }
 
   const compactSession = async (sessionId: string, instruction?: string): Promise<boolean> => {
@@ -600,11 +600,12 @@ export function useRuntimeBridge() {
       // Vue deep refs wrap queued drafts again, so normalize at the IPC boundary as well.
       const cloneableInput = toCloneablePromptInput(input)
       const result = await window.kimiAgent.submitPrompt(sessionId, cloneableInput)
-      if (result.status === 'running' || result.status === 'queued') {
+      const accepted = result.status === 'running' || result.status === 'queued'
+      if (accepted) {
         awaitingPromptCycleAt.set(sessionId, Date.now())
       }
       if (cloneableInput.goalObjective !== undefined) goalMode.value = false
-      return true
+      return accepted
     } catch (error) {
       promptError.value = ipcErrorMessage(error)
       return false

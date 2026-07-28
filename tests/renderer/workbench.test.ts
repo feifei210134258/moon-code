@@ -49,11 +49,11 @@ function sessionState(): SessionViewState {
 describe('workbench transcript hydration', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    window.localStorage.removeItem('moon-code:navigation-activity')
+    window.localStorage.removeItem('moon-code:navigation-activity:v2')
   })
 
   afterEach(() => {
-    window.localStorage.removeItem('moon-code:navigation-activity')
+    window.localStorage.removeItem('moon-code:navigation-activity:v2')
   })
 
   it('maps the authoritative Kimi transcript into conversation turns without local mock activities', () => {
@@ -202,7 +202,7 @@ describe('workbench transcript hydration', () => {
     expect(store.activeSessionId).toBe('session-1')
   })
 
-  it('puts recently operated projects and sessions before older creation-order entries across reloads', () => {
+  it('does not reorder projects or sessions when they are only selected or expanded', () => {
     const tree = [
       {
         id: 'workspace-created-first', name: 'Created first', root: '/first', sessions: [{
@@ -224,7 +224,48 @@ describe('workbench transcript hydration', () => {
       'workspace-created-last', 'workspace-created-first'
     ])
     store.selectSession('session-created-first')
-    expect(store.projects[0]?.id).toBe('workspace-created-first')
+    expect(store.projects.map((project) => project.id)).toEqual([
+      'workspace-created-last', 'workspace-created-first'
+    ])
+    store.selectWorkspace('workspace-created-first')
+    expect(store.projects.map((project) => project.id)).toEqual([
+      'workspace-created-last', 'workspace-created-first'
+    ])
+    store.toggleProject('workspace-created-first')
+    expect(store.projects.map((project) => project.id)).toEqual([
+      'workspace-created-last', 'workspace-created-first'
+    ])
+
+    setActivePinia(createPinia())
+    const reloadedStore = useWorkbenchStore()
+    reloadedStore.hydrateProjects(tree)
+    expect(reloadedStore.projects.map((project) => project.id)).toEqual([
+      'workspace-created-last', 'workspace-created-first'
+    ])
+  })
+
+  it('moves a project and its conversation after an accepted conversation activity', () => {
+    const tree = [
+      {
+        id: 'workspace-created-first', name: 'Created first', root: '/first', sessions: [{
+          id: 'session-created-first', title: 'Created first session', updatedAt: '2026-07-20T10:00:00.000Z',
+          busy: false, pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      },
+      {
+        id: 'workspace-created-last', name: 'Created last', root: '/last', sessions: [{
+          id: 'session-created-last', title: 'Created last session', updatedAt: '2026-07-25T10:00:00.000Z',
+          busy: false, pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      }
+    ]
+    const store = useWorkbenchStore()
+    store.hydrateProjects(tree)
+    store.markConversationActivity('session-created-first')
+
+    expect(store.projects.map((project) => project.id)).toEqual([
+      'workspace-created-first', 'workspace-created-last'
+    ])
     expect(store.projects[0]?.sessions[0]?.id).toBe('session-created-first')
 
     setActivePinia(createPinia())
@@ -233,7 +274,6 @@ describe('workbench transcript hydration', () => {
     expect(reloadedStore.projects.map((project) => project.id)).toEqual([
       'workspace-created-first', 'workspace-created-last'
     ])
-    expect(reloadedStore.projects[0]?.sessions[0]?.id).toBe('session-created-first')
   })
 
   it('allows the right panel to grow to twice its previous maximum width', () => {

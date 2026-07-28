@@ -178,21 +178,23 @@ async function searchMentionFiles(query: string): Promise<WorkspaceFileSearchIte
     : mentionFixtureItems.filter((item) => `${item.name} ${item.path}`.toLowerCase().includes(normalized))
 }
 
-function submitPrompt(
+async function submitPrompt(
   text: string,
   attachments: KimiUploadedFile[],
   controls: KimiPromptControls,
   goalMode: boolean,
   deliveryMode: 'queue' | 'steer'
-): void {
-  if (activeSessionId.value.length === 0) return
-  void runtimeBridge.submitPrompt(activeSessionId.value, {
+): Promise<void> {
+  const sessionId = activeSessionId.value
+  if (sessionId.length === 0) return
+  const accepted = await runtimeBridge.submitPrompt(sessionId, {
     text,
     ...(attachments.length === 0 ? {} : { attachments }),
     controls,
     ...(goalMode ? { goalObjective: text.trim() } : {}),
     deliveryMode
   })
+  if (accepted) store.markConversationActivity(sessionId)
 }
 
 function submitBrowserAnnotation(input: BrowserAnnotationSubmitInput): void {
