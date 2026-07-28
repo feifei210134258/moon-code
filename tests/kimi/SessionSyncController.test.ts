@@ -308,6 +308,44 @@ describe('SessionSyncController', () => {
     controller.close()
   })
 
+  it('coalesces bursty live transcript updates before publishing renderer state', async () => {
+    vi.useFakeTimers()
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10, '')) },
+      socket
+    })
+    try {
+      await controller.openSession('session-1')
+      const listener = vi.fn()
+      controller.on('state-changed', listener)
+
+      for (let offset = 0; offset < 200; offset += 1) {
+        socket.emit('session-event', {
+          type: 'assistant.delta', seq: 10, epoch: 'epoch-1', volatile: true, offset,
+          session_id: 'session-1', timestamp: '2026-07-23T00:02:00.000Z',
+          payload: { delta: 'x' }
+        } satisfies SessionEventFrame)
+      }
+
+      expect(listener).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(16)
+      expect(listener).toHaveBeenCalledOnce()
+      expect(listener.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({ content: [{ type: 'text', text: 'x'.repeat(200) }] })
+        ])
+      }))
+      expect(controller.getState('session-1')?.messages.at(-1)?.content).toContainEqual({
+        type: 'text', text: 'x'.repeat(200)
+      })
+    } finally {
+      controller.close()
+      vi.useRealTimers()
+    }
+  })
+
   it('hydrates the user message only from the accepted Kimi prompt response', async () => {
     const socket = new FakeSocket()
     const rest = { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) }

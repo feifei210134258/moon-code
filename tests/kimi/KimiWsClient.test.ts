@@ -36,6 +36,19 @@ class FakeWebSocket implements WebSocketLike {
   }
 }
 
+class DeferredTextBlob extends Blob {
+  readonly #text: Promise<string>
+
+  constructor(text: Promise<string>) {
+    super([])
+    this.#text = text
+  }
+
+  override text(): Promise<string> {
+    return this.#text
+  }
+}
+
 describe('KimiWsClient', () => {
   it('uses the bearer subprotocol, performs hello, and answers ping', async () => {
     const socket = new FakeWebSocket()
@@ -142,6 +155,53 @@ describe('KimiWsClient', () => {
     client.close()
   })
 
+  it('preserves WebSocket frame order while asynchronous Blob payloads are decoded', async () => {
+    const socket = new FakeWebSocket()
+    const client = new KimiWsClient({
+      origin: 'http://127.0.0.1:54959',
+      token: 'secret-token',
+      clientId: 'test-client',
+      requestTimeoutMs: 1_000,
+      webSocketFactory: () => socket
+    })
+    const accepted: string[] = []
+    const resync = vi.fn()
+    client.on('session-event', (event) => accepted.push(event.type))
+    client.on('resync-required', resync)
+
+    const connecting = client.connect({
+      subscriptions: ['session-1'],
+      cursors: { 'session-1': { seq: 10, epoch: 'epoch-1' } }
+    })
+    socket.emit('open')
+    socket.message(serverHello())
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
+    acknowledgeLast(socket)
+    await connecting
+
+    let resolveFirst!: (value: string) => void
+    const firstText = new Promise<string>((resolve) => { resolveFirst = resolve })
+    const event = (seq: number, type: string) => JSON.stringify({
+      type, seq, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:00:01.000Z', payload: { type }
+    })
+    socket.emit('message', {
+      data: new DeferredTextBlob(firstText)
+    } satisfies WebSocketMessageEventLike)
+    socket.emit('message', {
+      data: new Blob([event(12, 'turn.step.started')])
+    } satisfies WebSocketMessageEventLike)
+
+    await Promise.resolve()
+    expect(accepted).toEqual([])
+    expect(resync).not.toHaveBeenCalled()
+
+    resolveFirst(event(11, 'turn.started'))
+    await vi.waitFor(() => expect(accepted).toEqual(['turn.started', 'turn.step.started']))
+    expect(resync).not.toHaveBeenCalled()
+    client.close()
+  })
+
   it('sends official fire-and-forget terminal frames and keeps Terminal seq outside Session cursors', async () => {
     const socket = new FakeWebSocket()
     const client = new KimiWsClient({
@@ -210,6 +270,8 @@ describe('KimiWsClient', () => {
       requestTimeoutMs: 1_000,
       webSocketFactory: factory
     })
+    const output = vi.fn()
+    client.on('terminal-output', output)
 
     await connectAndAck(client, first)
     sendTerminalFrame(first, () => client.attachTerminal('session-1', 'terminal-1'), {
@@ -220,6 +282,7 @@ describe('KimiWsClient', () => {
       type: 'terminal_output', session_id: 'session-1', terminal_id: 'terminal-1', seq: 9,
       payload: { data: 'output' }
     })
+    await vi.waitFor(() => expect(output).toHaveBeenCalledOnce())
     first.emit('close', { code: 1006, reason: 'network' })
 
     const reconnecting = client.connect()

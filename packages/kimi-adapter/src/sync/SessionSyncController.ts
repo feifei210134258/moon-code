@@ -163,12 +163,15 @@ export interface SessionSyncControllerOptions {
   reconnectBaseMs?: number
 }
 
+const LIVE_STATE_EMIT_INTERVAL_MS = 16
+
 export class SessionSyncController extends EventEmitter {
   readonly #rest: SyncRestClient
   readonly #socket: SyncSocket
   readonly #projector = new TranscriptProjector()
   readonly #agentProjector = new AgentProjector()
   readonly #states = new Map<string, SessionSyncView>()
+  readonly #pendingProjections = new Set<string>()
   readonly #reconnectBaseMs: number
   #sideChatProjector: { sessionId: string; agentId: string; projector: TranscriptProjector } | null = null
   #activeSessionId: string | null = null
@@ -179,6 +182,8 @@ export class SessionSyncController extends EventEmitter {
   #optimisticSkills = new Map<string, OptimisticSkillState>()
   #reconnectAttempts = 0
   #reconnectTimer: NodeJS.Timeout | null = null
+  #liveStateTimer: NodeJS.Timeout | null = null
+  #pendingLiveState: SessionSyncView | null = null
 
   readonly #onSessionEvent = (frame: SessionEventFrame): void => this.#handleSessionEvent(frame)
   readonly #onResyncRequired = (detail: unknown): void => {
@@ -210,6 +215,7 @@ export class SessionSyncController extends EventEmitter {
 
   getState(sessionId: string): SessionSyncView | null {
     const state = this.#states.get(sessionId)
+    if (state !== undefined) this.#applyPendingProjection(state)
     return state === undefined ? null : cloneView(state)
   }
 
@@ -228,6 +234,8 @@ export class SessionSyncController extends EventEmitter {
     const generation = ++this.#generation
     const previousSessionId = this.#activeSessionId
     this.#activeSessionId = sessionId
+    this.#cancelLiveStateEmission()
+    this.#pendingProjections.clear()
     if (this.#sideChatProjector?.sessionId !== sessionId) this.#sideChatProjector = null
     if (previousSessionId !== null && previousSessionId !== sessionId && this.#connected) {
       try {
@@ -312,6 +320,8 @@ export class SessionSyncController extends EventEmitter {
     this.#generation += 1
     if (this.#reconnectTimer !== null) clearTimeout(this.#reconnectTimer)
     this.#reconnectTimer = null
+    this.#cancelLiveStateEmission()
+    this.#pendingProjections.clear()
     this.#socket.off('session-event', this.#onSessionEvent)
     this.#socket.off('resync-required', this.#onResyncRequired)
     this.#socket.off('close', this.#onClose)
@@ -468,7 +478,7 @@ export class SessionSyncController extends EventEmitter {
     if (sideChat.matched) {
       const cursor = this.#socket.cursors[sessionId]
       if (cursor !== undefined) state.cursor = { ...cursor }
-      if (sideChat.changed) this.#emitState(state)
+      if (sideChat.changed) this.#scheduleLiveStateEmission(state)
       return
     }
     if (isAuthoritativeSkillWorkFrame(frame.type)) this.#optimisticSkills.delete(sessionId)
@@ -478,7 +488,7 @@ export class SessionSyncController extends EventEmitter {
     if (this.#applyInteractionEvent(state, frame)) {
       const cursor = this.#socket.cursors[sessionId]
       if (cursor !== undefined) state.cursor = { ...cursor }
-      this.#emitState(state)
+      this.#scheduleLiveStateEmission(state)
       return
     }
     const result = this.#projector.project(frame)
@@ -490,9 +500,9 @@ export class SessionSyncController extends EventEmitter {
     const cursor = this.#socket.cursors[sessionId]
     if (cursor !== undefined) state.cursor = { ...cursor }
     if (!result.changed && !agentsChanged && !workChanged && !usageChanged && !todosChanged) return
-    if (result.changed) this.#applyProjection(state, this.#projector.getProjection(sessionId))
+    if (result.changed) this.#pendingProjections.add(sessionId)
     if (agentsChanged) state.agents = this.#agentProjector.getRoster(sessionId)
-    this.#emitState(state)
+    this.#scheduleLiveStateEmission(state)
   }
 
   #applySessionWorkChanged(state: SessionSyncView, frame: SessionEventFrame): boolean {
@@ -746,7 +756,35 @@ export class SessionSyncController extends EventEmitter {
   }
 
   #emitState(state: SessionSyncView): void {
+    this.#applyPendingProjection(state)
+    if (this.#pendingLiveState?.sessionId === state.sessionId) this.#cancelLiveStateEmission()
     this.emit('state-changed', cloneView(state))
+  }
+
+  #applyPendingProjection(state: SessionSyncView): void {
+    if (!this.#pendingProjections.delete(state.sessionId)) return
+    this.#applyProjection(state, this.#projector.getProjection(state.sessionId))
+  }
+
+  #scheduleLiveStateEmission(state: SessionSyncView): void {
+    if (this.#closed || state.sessionId !== this.#activeSessionId) return
+    this.#pendingLiveState = state
+    if (this.#liveStateTimer !== null) return
+    this.#liveStateTimer = setTimeout(() => {
+      this.#liveStateTimer = null
+      const pending = this.#pendingLiveState
+      this.#pendingLiveState = null
+      if (pending !== null && !this.#closed && pending.sessionId === this.#activeSessionId) {
+        this.#emitState(pending)
+      }
+    }, LIVE_STATE_EMIT_INTERVAL_MS)
+    this.#liveStateTimer.unref()
+  }
+
+  #cancelLiveStateEmission(): void {
+    if (this.#liveStateTimer !== null) clearTimeout(this.#liveStateTimer)
+    this.#liveStateTimer = null
+    this.#pendingLiveState = null
   }
 
   #emitGlobalResync(): void {
