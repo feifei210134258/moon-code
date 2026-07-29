@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { KimiSettingsBridge } from '../../src/main/kimi/KimiSettingsBridge.js'
 import type { KimiRuntimeManager } from '../../src/main/runtime/KimiRuntimeManager.js'
+import type { ProviderDirectoryItem } from '../../packages/kimi-adapter/src/wire/schemas.js'
+
+const deepseekDirectory: ProviderDirectoryItem = {
+  id: 'deepseek', name: 'DeepSeek', wire_type: 'openai', guessed: false,
+  needs_base_url: false, rejected: false, reject_reason: null, env_key: 'DEEPSEEK_API_KEY',
+  models: [
+    { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', max_context_size: 1_048_576, reasoning: true },
+    { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', max_context_size: 1_002_000, reasoning: true }
+  ]
+}
 
 function createClient() {
   const config = {
@@ -67,12 +77,19 @@ function createClient() {
     supportsProviderManagement: vi.fn(async () => false),
     setDefaultModel: vi.fn(async () => ({})),
     setConfig: vi.fn(async () => config),
+    createProvider: vi.fn(async () => ({
+      id: 'third-party:openai', type: 'openai', has_api_key: true, status: 'connected' as const,
+      models: ['third-party:openai/local-coder']
+    })),
     refreshProvider: vi.fn(async () => ({ changed: [], unchanged: [], failed: [] })),
     replaceProvider: vi.fn(async () => ({
       id: 'local:openai', type: 'openai', has_api_key: true, status: 'connected' as const,
       models: ['local-coder']
     })),
     deleteProvider: vi.fn(async () => undefined),
+    getCatalogProvider: vi.fn(async (_catalogId: string): Promise<ProviderDirectoryItem> => {
+      throw new Error('catalog entry not found')
+    }),
     refreshAllProviders: vi.fn(async () => ({
       changed: [{ provider_id: 'managed:kimi-code', provider_name: 'Kimi Code', added: 1, removed: 0 }],
       unchanged: [], failed: []
@@ -211,6 +228,129 @@ describe('KimiSettingsBridge', () => {
       canEditProvider: true,
       canDeleteProvider: true,
       providerManagementUnavailableReason: null
+    }))
+  })
+
+  it('repairs a zero-model provider from the Kimi catalog before renaming it', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    client.listModels.mockResolvedValue([{
+      provider: 'managed:kimi-code', model: 'kimi-for-coding', display_name: 'Kimi for Coding',
+      max_context_size: 262_144, capabilities: ['thinking'], support_efforts: ['off', 'high'], default_effort: 'high'
+    }])
+    client.getCatalogProvider.mockImplementation(async (catalogId: string) => {
+      if (catalogId !== 'deepseek') throw new Error('catalog entry not found')
+      return deepseekDirectory
+    })
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+
+    await new KimiSettingsBridge(runtime).updateProvider({
+      id: 'local:openai', newId: 'deepseek', type: 'openai',
+      baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-v4-flash'
+    })
+
+    expect(client.getCatalogProvider).toHaveBeenCalledWith('deepseek')
+    expect(client.replaceProvider).toHaveBeenCalledWith('local:openai', expect.objectContaining({
+      new_id: 'deepseek',
+      default_model: 'deepseek-v4-flash',
+      models: [
+        expect.objectContaining({ model: 'deepseek-v4-flash', max_context_size: 1_048_576 }),
+        expect.objectContaining({ model: 'deepseek-v4-pro', max_context_size: 1_002_000 })
+      ]
+    }))
+  })
+
+  it('creates a catalog-backed provider through the official Runtime route', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    client.getCatalogProvider.mockImplementation(async (catalogId: string) => {
+      if (catalogId !== 'deepseek') throw new Error('catalog entry not found')
+      return deepseekDirectory
+    })
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+
+    await new KimiSettingsBridge(runtime).addProvider({
+      id: 'deepseek', type: 'openai', baseUrl: 'https://api.deepseek.com',
+      apiKey: 'test-key', defaultModel: 'deepseek-v4-flash'
+    })
+
+    expect(client.createProvider).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'deepseek',
+      type: 'openai',
+      base_url: 'https://api.deepseek.com',
+      api_key: 'test-key',
+      default_model: 'deepseek-v4-flash',
+      models: [
+        expect.objectContaining({ model: 'deepseek-v4-flash', max_context_size: 1_048_576 }),
+        expect.objectContaining({ model: 'deepseek-v4-pro', max_context_size: 1_002_000 })
+      ]
+    }))
+    expect(client.setConfig).not.toHaveBeenCalled()
+  })
+
+  it('uses manual context metadata for an unknown private provider', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    client.listModels.mockResolvedValue([{
+      provider: 'managed:kimi-code', model: 'kimi-for-coding', display_name: 'Kimi for Coding',
+      max_context_size: 262_144, capabilities: ['thinking'], support_efforts: ['off', 'high'], default_effort: 'high'
+    }])
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+
+    await new KimiSettingsBridge(runtime).updateProvider({
+      id: 'local:openai', newId: 'private-gateway', type: 'openai',
+      baseUrl: 'https://llm.example.com/v1', defaultModel: 'private-coder',
+      defaultModelContextSize: 65_536
+    })
+
+    expect(client.replaceProvider).toHaveBeenCalledWith('local:openai', expect.objectContaining({
+      new_id: 'private-gateway',
+      default_model: 'private-coder',
+      models: [{ model: 'private-coder', max_context_size: 65_536 }]
+    }))
+  })
+
+  it('strips provider-qualified aliases before replacing a provider', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    client.listModels.mockResolvedValue([{
+      provider: 'local:openai', model: 'local:openai/local-coder', display_name: 'Local Coder',
+      max_context_size: 131_072, capabilities: [], support_efforts: [], default_effort: null
+    }])
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+
+    await new KimiSettingsBridge(runtime).updateProvider({
+      id: 'local:openai', newId: 'local:renamed', type: 'openai',
+      defaultModel: 'local:openai/local-coder'
+    })
+
+    expect(client.replaceProvider).toHaveBeenCalledWith('local:openai', expect.objectContaining({
+      default_model: 'local-coder',
+      models: [expect.objectContaining({ model: 'local-coder' })]
     }))
   })
 

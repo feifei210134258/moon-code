@@ -69,18 +69,20 @@ export function validateAddProviderInput(value: unknown): AddKimiProviderInput {
   const defaultModel = value.defaultModel === undefined || value.defaultModel === ''
     ? undefined
     : validateModelId(value.defaultModel)
+  const defaultModelContextSize = validateOptionalContextSize(value.defaultModelContextSize)
   return {
     id: id!,
     type: type as KimiProviderType,
     ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(apiKey === undefined ? {} : { apiKey }),
-    ...(defaultModel === undefined ? {} : { defaultModel })
+    ...(defaultModel === undefined ? {} : { defaultModel }),
+    ...(defaultModelContextSize === undefined ? {} : { defaultModelContextSize })
   }
 }
 
 export function validateUpdateProviderInput(value: unknown): UpdateKimiProviderInput {
   if (!isRecord(value)) throw new TypeError('Invalid Kimi provider update input')
-  const allowed = new Set(['id', 'newId', 'type', 'baseUrl', 'apiKey', 'defaultModel'])
+  const allowed = new Set(['id', 'newId', 'type', 'baseUrl', 'apiKey', 'defaultModel', 'defaultModelContextSize'])
   if (Object.keys(value).some((key) => !allowed.has(key))) {
     throw new TypeError('Invalid Kimi provider update input')
   }
@@ -96,13 +98,15 @@ export function validateUpdateProviderInput(value: unknown): UpdateKimiProviderI
   const defaultModel = value.defaultModel === undefined || value.defaultModel === ''
     ? undefined
     : validateModelId(value.defaultModel)
+  const defaultModelContextSize = validateOptionalContextSize(value.defaultModelContextSize)
   return {
     id: id!,
     ...(newId === undefined ? {} : { newId }),
     type: type as KimiProviderType,
     ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(apiKey === undefined ? {} : { apiKey }),
-    ...(defaultModel === undefined ? {} : { defaultModel })
+    ...(defaultModel === undefined ? {} : { defaultModel }),
+    ...(defaultModelContextSize === undefined ? {} : { defaultModelContextSize })
   }
 }
 
@@ -160,6 +164,14 @@ function validateProviderUrl(value: string): void {
       url.username.length > 0 || url.password.length > 0 || url.search.length > 0 || url.hash.length > 0) {
     throw new TypeError('Invalid Kimi provider base URL')
   }
+}
+
+function validateOptionalContextSize(value: unknown): number | undefined {
+  if (value === undefined || value === '') return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 16_777_216) {
+    throw new TypeError('Invalid Kimi provider model context size')
+  }
+  return value
 }
 
 function optionalString(value: unknown, label: string, maxLength: number): string | undefined {

@@ -71,7 +71,8 @@ const secondaryProviderDraft = ref<{
   baseUrl: string
   apiKey: string
   defaultModel: string
-}>({ id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '' })
+  defaultModelContextSize: string
+}>({ id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '', defaultModelContextSize: '' })
 const editingProviderId = ref<string | null>(null)
 const secondaryProviderTypes: Array<{ value: KimiProviderType; label: string }> = [
   { value: 'openai', label: 'OpenAI Chat Completions' },
@@ -276,7 +277,9 @@ function selectSecondaryProvider(providerId: string): void {
 }
 
 function resetSecondaryProviderDraft(): void {
-  secondaryProviderDraft.value = { id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '' }
+  secondaryProviderDraft.value = {
+    id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '', defaultModelContextSize: ''
+  }
   editingProviderId.value = null
 }
 
@@ -300,7 +303,8 @@ function beginEditSecondaryProvider(): void {
     type: provider.type as KimiProviderType,
     baseUrl: provider.baseUrl ?? '',
     apiKey: '',
-    defaultModel: provider.defaultModel ?? ''
+    defaultModel: stripProviderPrefix(provider.defaultModel, provider.id),
+    defaultModelContextSize: ''
   }
   showSecondaryProviderForm.value = true
 }
@@ -312,6 +316,12 @@ function cancelProviderEditor(): void {
 
 function providerTitle(providerId: string): string {
   return providerId === managedProviderName.value ? 'Kimi' : providerId
+}
+
+function stripProviderPrefix(value: string | null, providerId: string): string {
+  if (value === null) return ''
+  const prefix = `${providerId}/`
+  return value.startsWith(prefix) ? value.slice(prefix.length) : value
 }
 
 function providerStatusLabel(status: KimiSettingsSnapshot['providers'][number]['status']): string {
@@ -591,13 +601,16 @@ async function saveSecondaryProvider(): Promise<void> {
     const baseUrl = secondaryProviderDraft.value.baseUrl.trim()
     const apiKey = secondaryProviderDraft.value.apiKey.trim()
     const defaultModel = secondaryProviderDraft.value.defaultModel.trim()
+    const defaultModelContextSize = Number(secondaryProviderDraft.value.defaultModelContextSize)
+    const hasDefaultModelContextSize = secondaryProviderDraft.value.defaultModelContextSize.trim().length > 0
     const next = oldId === null
       ? await api.addKimiProvider({
         id,
         type: secondaryProviderDraft.value.type,
         ...(baseUrl.length < 1 ? {} : { baseUrl }),
         ...(apiKey.length < 1 ? {} : { apiKey }),
-        ...(defaultModel.length < 1 ? {} : { defaultModel })
+        ...(defaultModel.length < 1 ? {} : { defaultModel }),
+        ...(hasDefaultModelContextSize ? { defaultModelContextSize } : {})
       })
       : await api.updateKimiProvider({
         id: oldId,
@@ -605,7 +618,8 @@ async function saveSecondaryProvider(): Promise<void> {
         type: secondaryProviderDraft.value.type,
         ...(baseUrl.length < 1 ? {} : { baseUrl }),
         ...(apiKey.length < 1 ? {} : { apiKey }),
-        ...(defaultModel.length < 1 ? {} : { defaultModel })
+        ...(defaultModel.length < 1 ? {} : { defaultModel }),
+        ...(hasDefaultModelContextSize ? { defaultModelContextSize } : {})
       })
     snapshot.value = next
     showSecondaryProviderForm.value = false
@@ -1134,8 +1148,12 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                             <input v-model="secondaryProviderDraft.apiKey" type="password" maxlength="8192" :placeholder="providerEditorIsEditing ? '留空以保留当前 API Key' : 'sk-…'" autocomplete="new-password" spellcheck="false" :disabled="actionPending !== null" />
                           </label>
                           <label class="provider-form-wide">
-                            <span>默认模型别名（可选）</span>
+                            <span>首个 / 默认模型别名</span>
                             <input v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="例如 gpt-5-mini" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
+                          </label>
+                          <label class="provider-form-wide">
+                            <span>模型上下文 Token（私有或未知服务时填写）</span>
+                            <input v-model="secondaryProviderDraft.defaultModelContextSize" type="number" min="1" max="16777216" placeholder="已知服务会从 Kimi 模型目录自动识别" autocomplete="off" :disabled="actionPending !== null" />
                           </label>
                         </div>
                         <p v-if="secondaryProviderIdExists" class="field-error">这个连接名称已存在。</p>
