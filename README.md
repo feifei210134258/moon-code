@@ -48,7 +48,7 @@ P0 功能已基本完成：主工作台、Electron + Vue 工程、托管 Kimi �
 - Thinking、Tool call、raw/durable progress、Tool result、step retry 与历史 Tool 合并已进入同一顺序化 Turn 视图；详情可以展开查看，流式进度不会打乱 `text → tool → text` 顺序。
 - Files/Changes/Diff 已接入官方 Session FS action：目录浏览、文本预览、Git 状态与单文件按需 Diff 均通过 typed IPC，二进制和大文件在 Renderer 前安全降级。
 - Session Terminal 已提供 xterm、多标签、创建/关闭、ANSI 输入输出、Resize、replay、Session 切换 Detach、`⌘J` 与 Composer 入口。Kimi 0.29.0 v2 的上游 Terminal WS 缺口由 [ADR 0004](./docs/adr/0004-kimi-v2-terminal-compatibility.md) 的限域兼容层处理，PTY 不参与 Agent 协议。
-- 设置页已使用真实 Kimi Model/Provider/Auth/Config：支持默认模型、目录刷新、Provider 添加、Kimi device-code 登录/登出及常用全局设置。锁定版 v2 缺少安全 Provider 删除路由，当前明确提示而不绕过 Kimi 改配置文件，详见 [ADR 0005](./docs/adr/0005-kimi-v2-provider-mutation-boundary.md)。
+- 设置页已使用真实 Kimi Model/Provider/Auth/Config：支持默认模型、目录刷新、Provider 添加/编辑/删除、Kimi device-code 登录/登出及常用全局设置。Provider 编辑和删除仅在当前 Runtime 的 OpenAPI 声明官方路由时开放；客户端仍不会绕过 Kimi 修改配置文件。子 Agent 模型可从任意已连接 Provider 的模型目录中选择。
 - Skills 已接入 Session/Workspace 目录和 Composer `/` 激活；设置页展示 Kimi 的有效 Tools、MCP Server 状态并通过官方 route 重连。Subagent roster 从 snapshot 与 lifecycle event 恢复状态、输出和 token usage，不混入 main Transcript，详见 [ADR 0006](./docs/adr/0006-kimi-skills-mcp-agent-projection.md)。
 - Browser 已接入 Main 管理的隔离 WebContentsView：HTML 文件通过受限发布根的 loopback Workspace Preview 打开，192-bit capability 只由 Main 注入请求头、不会进入页面 URL；同时支持地址栏、前进后退、刷新停止、localhost discovery、常用/自定义视口、Console、Network 安全预览和视口/整页截图，详见 [ADR 0007](./docs/adr/0007-browser-webcontentsview-preview-boundary.md)。
 - Usage 已使用官方 `/oauth/usage` 实现 Main single-flight 准实时轮询：顶部与 `⌘⇧U` 弹层分区展示套餐窗口、Extra Usage、Session token 和 Context；支持 30/60 秒调度、焦点/网络/Prompt 结束即时刷新、失败保留与退避，设置页可调整 50%/80%/95% 阈值和系统通知，详见 [ADR 0008](./docs/adr/0008-usage-authority-polling-boundary.md)。

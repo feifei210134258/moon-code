@@ -75,6 +75,8 @@ export const ipcChannels = {
   settingsSecondaryModelInherit: 'settings:secondary-model:inherit',
   settingsPreferencesUpdate: 'settings:preferences:update',
   providerAdd: 'provider:add',
+  providerUpdate: 'provider:update',
+  providerDelete: 'provider:delete',
   providersRefresh: 'providers:refresh',
   oauthLoginStart: 'oauth:login:start',
   oauthLoginPoll: 'oauth:login:poll',
@@ -803,7 +805,9 @@ export interface KimiSettingsSnapshot {
   secondaryModelControl: KimiSecondaryModelControlState
   capabilities: {
     canAddProvider: boolean
+    canEditProvider: boolean
     canDeleteProvider: boolean
+    providerManagementUnavailableReason: string | null
     providerDeleteUnavailableReason: string | null
     secondaryModel: {
       supported: boolean
@@ -835,6 +839,15 @@ export interface KimiPreferencesPatch {
 
 export interface AddKimiProviderInput {
   id: string
+  type: KimiProviderType
+  baseUrl?: string
+  apiKey?: string
+  defaultModel?: string
+}
+
+export interface UpdateKimiProviderInput {
+  id: string
+  newId?: string
   type: KimiProviderType
   baseUrl?: string
   apiKey?: string
@@ -1156,6 +1169,8 @@ export interface KimiAgentDesktopApi {
   inheritSecondaryModel(): Promise<KimiSettingsSnapshot>
   updateKimiPreferences(patch: KimiPreferencesPatch): Promise<KimiSettingsPreferences>
   addKimiProvider(input: AddKimiProviderInput): Promise<KimiSettingsSnapshot>
+  updateKimiProvider(input: UpdateKimiProviderInput): Promise<KimiSettingsSnapshot>
+  deleteKimiProvider(providerId: string): Promise<KimiSettingsSnapshot>
   refreshKimiProviders(input: { scope: 'all' | 'oauth' | 'provider'; providerId?: string }): Promise<KimiProviderRefreshResult>
   startOAuthLogin(provider?: string): Promise<KimiOAuthFlow>
   pollOAuthLogin(provider?: string): Promise<KimiOAuthFlow | null>

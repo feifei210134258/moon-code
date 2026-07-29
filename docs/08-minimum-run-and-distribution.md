@@ -63,7 +63,6 @@ KIMI_RUNTIME_CONVERSATION_INTEGRATION=1 pnpm vitest run tests/runtime/markdownIm
 ## 仍不属于此最小发布流程
 
 - Apple Developer ID 签名、Hardened Runtime、公证与自动更新。
-- Provider 删除：Kimi Code `0.29.0` 缺少安全的官方删除路由。
 - Theme：按当前产品决定维持 P2。
 
 这些项目不会阻止本机或受控内测运行，但公开 Beta 前必须重新评估。

@@ -64,9 +64,15 @@ function createClient() {
     ]),
     getConfig: vi.fn(async () => config),
     supportsSecondaryModelConfigWrite: vi.fn(async () => false),
+    supportsProviderManagement: vi.fn(async () => false),
     setDefaultModel: vi.fn(async () => ({})),
     setConfig: vi.fn(async () => config),
     refreshProvider: vi.fn(async () => ({ changed: [], unchanged: [], failed: [] })),
+    replaceProvider: vi.fn(async () => ({
+      id: 'local:openai', type: 'openai', has_api_key: true, status: 'connected' as const,
+      models: ['local-coder']
+    })),
+    deleteProvider: vi.fn(async () => undefined),
     refreshAllProviders: vi.fn(async () => ({
       changed: [{ provider_id: 'managed:kimi-code', provider_name: 'Kimi Code', added: 1, removed: 0 }],
       unchanged: [], failed: []
@@ -174,6 +180,37 @@ describe('KimiSettingsBridge', () => {
       supported: true,
       enabled: null,
       writable: false
+    }))
+  })
+
+  it('edits and deletes custom providers only through the Runtime provider routes', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+    const bridge = new KimiSettingsBridge(runtime)
+
+    await bridge.updateProvider({
+      id: 'local:openai', newId: 'local:openai-work', type: 'openai',
+      baseUrl: 'http://127.0.0.1:11434/v1'
+    })
+    expect(client.replaceProvider).toHaveBeenCalledWith('local:openai', expect.objectContaining({
+      new_id: 'local:openai-work', type: 'openai', base_url: 'http://127.0.0.1:11434/v1',
+      models: [expect.objectContaining({ model: 'local-coder', max_context_size: 131_072 })]
+    }))
+
+    await bridge.deleteProvider('local:openai')
+    expect(client.deleteProvider).toHaveBeenCalledWith('local:openai')
+    const snapshot = await bridge.getSnapshot()
+    expect(snapshot.capabilities).toEqual(expect.objectContaining({
+      canEditProvider: true,
+      canDeleteProvider: true,
+      providerManagementUnavailableReason: null
     }))
   })
 

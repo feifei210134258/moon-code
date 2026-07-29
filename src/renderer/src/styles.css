@@ -6247,6 +6247,13 @@ body.is-panel-resizing {
   font-size: 10.5px;
 }
 
+.provider-management-note {
+  margin: -4px 8px 9px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .provider-catalog-list {
   display: grid;
   gap: 4px;
@@ -6384,6 +6391,41 @@ body.is-panel-resizing {
 .provider-detail-header > div {
   min-width: 0;
   gap: 11px;
+}
+
+.provider-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.provider-icon-button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.provider-icon-button:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.provider-icon-button.is-danger:hover {
+  border-color: rgba(183, 62, 62, 0.32);
+  color: #a33f3f;
+  background: var(--red-soft);
+}
+
+.provider-icon-button:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring);
 }
 
 .provider-detail-icon {

@@ -2,7 +2,8 @@ import type {
   AddKimiProviderInput,
   KimiPreferencesPatch,
   KimiProviderType,
-  KimiSecondaryModelUpdateInput
+  KimiSecondaryModelUpdateInput,
+  UpdateKimiProviderInput
 } from '../../shared/contracts.js'
 
 const PROVIDER_TYPES = new Set<KimiProviderType>([
@@ -70,6 +71,34 @@ export function validateAddProviderInput(value: unknown): AddKimiProviderInput {
     : validateModelId(value.defaultModel)
   return {
     id: id!,
+    type: type as KimiProviderType,
+    ...(baseUrl === undefined ? {} : { baseUrl }),
+    ...(apiKey === undefined ? {} : { apiKey }),
+    ...(defaultModel === undefined ? {} : { defaultModel })
+  }
+}
+
+export function validateUpdateProviderInput(value: unknown): UpdateKimiProviderInput {
+  if (!isRecord(value)) throw new TypeError('Invalid Kimi provider update input')
+  const allowed = new Set(['id', 'newId', 'type', 'baseUrl', 'apiKey', 'defaultModel'])
+  if (Object.keys(value).some((key) => !allowed.has(key))) {
+    throw new TypeError('Invalid Kimi provider update input')
+  }
+  const id = validateProviderId(value.id)
+  const newId = value.newId === undefined ? undefined : validateProviderId(value.newId)
+  const type = value.type
+  if (typeof type !== 'string' || !PROVIDER_TYPES.has(type as KimiProviderType)) {
+    throw new TypeError('Invalid Kimi provider type')
+  }
+  const baseUrl = optionalString(value.baseUrl, 'base URL', 2_048)
+  if (baseUrl !== undefined) validateProviderUrl(baseUrl)
+  const apiKey = optionalString(value.apiKey, 'API key', 8_192)
+  const defaultModel = value.defaultModel === undefined || value.defaultModel === ''
+    ? undefined
+    : validateModelId(value.defaultModel)
+  return {
+    id: id!,
+    ...(newId === undefined ? {} : { newId }),
     type: type as KimiProviderType,
     ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(apiKey === undefined ? {} : { apiKey }),

@@ -76,7 +76,9 @@ const snapshot: KimiSettingsSnapshot = {
   },
   capabilities: {
     canAddProvider: true,
+    canEditProvider: true,
     canDeleteProvider: false,
+    providerManagementUnavailableReason: null,
     providerDeleteUnavailableReason:
       '当前 Kimi Runtime 没有安全的 Provider 删除 REST 接口；客户端不会绕过 Kimi 直接改配置文件。',
     secondaryModel: {

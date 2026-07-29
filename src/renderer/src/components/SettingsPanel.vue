@@ -10,8 +10,10 @@ import {
   PhGearSix,
   PhKey,
   PhMagicWand,
+  PhPencilSimple,
   PhPlus,
   PhPlugsConnected,
+  PhTrash,
   PhSignOut,
   PhSpinnerGap,
   PhX
@@ -68,7 +70,9 @@ const secondaryProviderDraft = ref<{
   type: KimiProviderType
   baseUrl: string
   apiKey: string
-}>({ id: '', type: 'openai', baseUrl: '', apiKey: '' })
+  defaultModel: string
+}>({ id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '' })
+const editingProviderId = ref<string | null>(null)
 const secondaryProviderTypes: Array<{ value: KimiProviderType; label: string }> = [
   { value: 'openai', label: 'OpenAI Chat Completions' },
   { value: 'openai_responses', label: 'OpenAI Responses' },
@@ -159,8 +163,13 @@ const secondaryProviderModels = computed(() =>
 )
 const secondaryProviderIdExists = computed(() => {
   const id = secondaryProviderDraft.value.id.trim()
-  return id.length > 0 && secondaryProviders.value.some((provider) => provider.id === id)
+  return id.length > 0 && secondaryProviders.value.some((provider) =>
+    provider.id === id && provider.id !== editingProviderId.value
+  )
 })
+const providerEditorIsEditing = computed(() => editingProviderId.value !== null)
+const providerEditorTitle = computed(() => providerEditorIsEditing.value ? '编辑模型服务' : '添加模型服务')
+const providerEditorSubmitLabel = computed(() => providerEditorIsEditing.value ? '保存模型服务' : '连接并读取模型')
 const selectedSecondaryProviderTitle = computed(() => {
   const provider = selectedSecondaryProvider.value
   if (provider === null) return '模型服务'
@@ -267,7 +276,38 @@ function selectSecondaryProvider(providerId: string): void {
 }
 
 function resetSecondaryProviderDraft(): void {
-  secondaryProviderDraft.value = { id: '', type: 'openai', baseUrl: '', apiKey: '' }
+  secondaryProviderDraft.value = { id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '' }
+  editingProviderId.value = null
+}
+
+function beginAddSecondaryProvider(): void {
+  resetSecondaryProviderDraft()
+  showSecondaryProviderForm.value = true
+}
+
+function beginEditSecondaryProvider(): void {
+  const provider = selectedSecondaryProvider.value
+  const settings = snapshot.value
+  if (
+    provider === null ||
+    settings === null ||
+    !settings.capabilities.canEditProvider ||
+    provider.id === managedProviderName.value
+  ) return
+  editingProviderId.value = provider.id
+  secondaryProviderDraft.value = {
+    id: provider.id,
+    type: provider.type as KimiProviderType,
+    baseUrl: provider.baseUrl ?? '',
+    apiKey: '',
+    defaultModel: provider.defaultModel ?? ''
+  }
+  showSecondaryProviderForm.value = true
+}
+
+function cancelProviderEditor(): void {
+  showSecondaryProviderForm.value = false
+  resetSecondaryProviderDraft()
 }
 
 function providerTitle(providerId: string): string {
@@ -531,40 +571,87 @@ async function refreshSecondaryProvider(): Promise<void> {
   }
 }
 
-async function addSecondaryProvider(): Promise<void> {
+async function saveSecondaryProvider(): Promise<void> {
   const api = window.kimiAgent
   const settings = snapshot.value
   const id = secondaryProviderDraft.value.id.trim()
+  const oldId = editingProviderId.value
   if (
     api === undefined ||
     settings === null ||
-    !settings.capabilities.canAddProvider ||
+    (oldId === null ? !settings.capabilities.canAddProvider : !settings.capabilities.canEditProvider) ||
     id.length < 1 ||
     secondaryProviderIdExists.value ||
     actionPending.value !== null
   ) return
-  actionPending.value = 'secondary-provider:add'
+  actionPending.value = oldId === null ? 'secondary-provider:add' : `secondary-provider:edit:${oldId}`
   error.value = null
   notice.value = null
   try {
     const baseUrl = secondaryProviderDraft.value.baseUrl.trim()
     const apiKey = secondaryProviderDraft.value.apiKey.trim()
-    const next = await api.addKimiProvider({
-      id,
-      type: secondaryProviderDraft.value.type,
-      ...(baseUrl.length < 1 ? {} : { baseUrl }),
-      ...(apiKey.length < 1 ? {} : { apiKey })
-    })
+    const defaultModel = secondaryProviderDraft.value.defaultModel.trim()
+    const next = oldId === null
+      ? await api.addKimiProvider({
+        id,
+        type: secondaryProviderDraft.value.type,
+        ...(baseUrl.length < 1 ? {} : { baseUrl }),
+        ...(apiKey.length < 1 ? {} : { apiKey }),
+        ...(defaultModel.length < 1 ? {} : { defaultModel })
+      })
+      : await api.updateKimiProvider({
+        id: oldId,
+        ...(id === oldId ? {} : { newId: id }),
+        type: secondaryProviderDraft.value.type,
+        ...(baseUrl.length < 1 ? {} : { baseUrl }),
+        ...(apiKey.length < 1 ? {} : { apiKey }),
+        ...(defaultModel.length < 1 ? {} : { defaultModel })
+      })
     snapshot.value = next
     showSecondaryProviderForm.value = false
     resetSecondaryProviderDraft()
     selectSecondaryProvider(id)
-    showNotice(secondaryProviderModels.value.length > 0
-      ? `${id} 已连接并读取到 ${secondaryProviderModels.value.length} 个模型。`
-      : `${id} 已连接，但暂未获取到模型；可检查凭据或 Base URL 后重试刷新。`)
+    showNotice(oldId === null
+      ? (secondaryProviderModels.value.length > 0
+        ? `${id} 已连接并读取到 ${secondaryProviderModels.value.length} 个模型。`
+        : `${id} 已连接，但暂未获取到模型；可检查凭据或 Base URL 后重试刷新。`)
+      : `${id} 的模型服务设置已保存。`)
   } catch (reason) {
     // Credentials must not remain in long-lived Renderer state after a submission.
     secondaryProviderDraft.value.apiKey = ''
+    error.value = errorMessage(reason)
+  } finally {
+    actionPending.value = null
+  }
+}
+
+async function deleteSecondaryProvider(): Promise<void> {
+  const api = window.kimiAgent
+  const settings = snapshot.value
+  const provider = selectedSecondaryProvider.value
+  if (
+    api === undefined ||
+    settings === null ||
+    provider === null ||
+    provider.id === managedProviderName.value ||
+    !settings.capabilities.canDeleteProvider ||
+    actionPending.value !== null
+  ) return
+  const modelWarning = secondaryProviderModels.value.length > 0
+    ? `这会同时移除 ${secondaryProviderModels.value.length} 个模型别名，已选择的子 Agent 模型也会失效。`
+    : '这会同时移除该服务的模型别名。'
+  if (!window.confirm(`确定删除模型服务“${providerTitle(provider.id)}”？${modelWarning}`)) return
+  const providerId = provider.id
+  actionPending.value = `secondary-provider:delete:${providerId}`
+  error.value = null
+  notice.value = null
+  try {
+    const next = await api.deleteKimiProvider(providerId)
+    snapshot.value = next
+    const fallback = secondaryProviders.value.find((item) => item.id !== providerId)?.id ?? ''
+    selectSecondaryProvider(fallback)
+    showNotice(`模型服务 ${providerTitle(providerId)} 已删除。`)
+  } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
     actionPending.value = null
@@ -981,6 +1068,9 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                         <strong>模型服务</strong>
                         <span>{{ secondaryProviders.length }} 个</span>
                       </header>
+                      <p v-if="snapshot.capabilities.providerManagementUnavailableReason" class="provider-management-note">
+                        {{ snapshot.capabilities.providerManagementUnavailableReason }}
+                      </p>
                       <div class="provider-catalog-list">
                         <button
                           v-for="provider in secondaryProviders"
@@ -989,7 +1079,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                           :class="{ 'is-selected': !showSecondaryProviderForm && secondaryProviderId === provider.id }"
                           type="button"
                           :disabled="actionPending !== null"
-                          @click="showSecondaryProviderForm = false; selectSecondaryProvider(provider.id)"
+                          @click="cancelProviderEditor(); selectSecondaryProvider(provider.id)"
                         >
                           <span class="provider-catalog-icon" :class="{ 'is-kimi': provider.id === managedProviderName }">
                             <PhCpu v-if="provider.id === managedProviderName" :size="18" />
@@ -1008,20 +1098,20 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                         :class="{ 'is-active': showSecondaryProviderForm }"
                         type="button"
                         :disabled="actionPending !== null"
-                        @click="showSecondaryProviderForm = true"
+                        @click="beginAddSecondaryProvider"
                       ><PhPlus :size="16" />添加模型服务</button>
                     </aside>
 
                     <div class="provider-detail">
                       <form
-                        v-if="showSecondaryProviderForm && snapshot.capabilities.canAddProvider"
+                        v-if="showSecondaryProviderForm && (snapshot.capabilities.canAddProvider || (providerEditorIsEditing && snapshot.capabilities.canEditProvider))"
                         class="secondary-provider-form"
-                        @submit.prevent="addSecondaryProvider"
+                        @submit.prevent="saveSecondaryProvider"
                       >
                         <header class="provider-detail-header">
                           <div>
                             <span class="provider-detail-icon"><PhPlus :size="20" /></span>
-                            <div><h3>添加模型服务</h3><p>连接 OpenAI、Anthropic、Google 或任何兼容接口，凭据由 Kimi 官方配置保存。</p></div>
+                            <div><h3>{{ providerEditorTitle }}</h3><p>{{ providerEditorIsEditing ? '更新连接名称、协议或地址；留空 API Key 将保留已保存凭据。' : '连接 OpenAI、Anthropic、Google 或任何兼容接口，凭据由 Kimi 官方配置保存。' }}</p></div>
                           </div>
                         </header>
                         <div class="provider-form-grid">
@@ -1041,14 +1131,18 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                           </label>
                           <label class="provider-form-wide">
                             <span>API Key</span>
-                            <input v-model="secondaryProviderDraft.apiKey" type="password" maxlength="8192" placeholder="sk-…" autocomplete="new-password" spellcheck="false" :disabled="actionPending !== null" />
+                            <input v-model="secondaryProviderDraft.apiKey" type="password" maxlength="8192" :placeholder="providerEditorIsEditing ? '留空以保留当前 API Key' : 'sk-…'" autocomplete="new-password" spellcheck="false" :disabled="actionPending !== null" />
+                          </label>
+                          <label class="provider-form-wide">
+                            <span>默认模型别名（可选）</span>
+                            <input v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="例如 gpt-5-mini" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
                           </label>
                         </div>
                         <p v-if="secondaryProviderIdExists" class="field-error">这个连接名称已存在。</p>
                         <p class="credential-note">API Key 交给 Kimi 官方配置保存，Moon Code 不会回读或另存。</p>
                         <div class="provider-form-actions">
-                          <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="showSecondaryProviderForm = false; resetSecondaryProviderDraft()">取消</button>
-                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists">连接并读取模型</button>
+                          <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="cancelProviderEditor">取消</button>
+                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists">{{ providerEditorSubmitLabel }}</button>
                         </div>
                       </form>
 
@@ -1064,15 +1158,35 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                               <p>{{ selectedSecondaryProviderProtocol }}</p>
                             </div>
                           </div>
-                          <span
-                            class="provider-enabled-badge"
-                            :class="{
-                              'is-error': selectedSecondaryProvider.status === 'error',
-                              'is-unconfigured': selectedSecondaryProvider.status !== 'connected' && selectedSecondaryProvider.status !== 'error'
-                            }"
-                          >
-                            {{ providerStatusLabel(selectedSecondaryProvider.status) }}
-                          </span>
+                          <div class="provider-detail-actions">
+                            <span
+                              class="provider-enabled-badge"
+                              :class="{
+                                'is-error': selectedSecondaryProvider.status === 'error',
+                                'is-unconfigured': selectedSecondaryProvider.status !== 'connected' && selectedSecondaryProvider.status !== 'error'
+                              }"
+                            >
+                              {{ providerStatusLabel(selectedSecondaryProvider.status) }}
+                            </span>
+                            <button
+                              v-if="snapshot.capabilities.canEditProvider && selectedSecondaryProvider.id !== managedProviderName"
+                              class="provider-icon-button"
+                              type="button"
+                              :disabled="actionPending !== null"
+                              :aria-label="`编辑 ${selectedSecondaryProviderTitle}`"
+                              title="编辑模型服务"
+                              @click="beginEditSecondaryProvider"
+                            ><PhPencilSimple :size="15" /></button>
+                            <button
+                              v-if="snapshot.capabilities.canDeleteProvider && selectedSecondaryProvider.id !== managedProviderName"
+                              class="provider-icon-button is-danger"
+                              type="button"
+                              :disabled="actionPending !== null"
+                              :aria-label="`删除 ${selectedSecondaryProviderTitle}`"
+                              title="删除模型服务"
+                              @click="deleteSecondaryProvider"
+                            ><PhTrash :size="15" /></button>
+                          </div>
                         </header>
 
                         <div class="provider-connection-summary">
