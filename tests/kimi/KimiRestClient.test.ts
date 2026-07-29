@@ -793,6 +793,26 @@ describe('KimiRestClient', () => {
       expect.objectContaining({ method: 'DELETE' }))
   })
 
+  it('reads one provider from the Kimi model directory', async () => {
+    const directory = {
+      id: 'deepseek', name: 'DeepSeek', wire_type: 'openai', guessed: false,
+      needs_base_url: false, rejected: false, reject_reason: null, env_key: 'DEEPSEEK_API_KEY',
+      models: [
+        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', max_context_size: 1_048_576, reasoning: true }
+      ]
+    }
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      code: 0, msg: 'ok', data: directory
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.getCatalogProvider('deepseek')).resolves.toEqual(directory)
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/catalog/providers/deepseek',
+      expect.any(Object)
+    )
+  })
+
   it('uses the pinned Skills, Tools and MCP management routes', async () => {
     const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
       status: 200,

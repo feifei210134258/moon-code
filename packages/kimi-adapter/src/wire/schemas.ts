@@ -487,6 +487,26 @@ export const providerCatalogListSchema = z.object({ items: z.array(providerCatal
 /** Response returned by the provider replace route in Kimi 0.29.2+. */
 export const providerMutationResultSchema = z.object({ provider: providerCatalogItemSchema })
 
+export const providerDirectoryModelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).optional(),
+  max_context_size: z.number().int().positive(),
+  capabilities: z.array(z.string()).optional(),
+  reasoning: z.boolean()
+})
+
+export const providerDirectoryItemSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  wire_type: z.enum(['kimi', 'openai', 'openai_responses', 'anthropic', 'google-genai', 'vertexai']).nullable(),
+  guessed: z.boolean(),
+  needs_base_url: z.boolean(),
+  rejected: z.boolean(),
+  reject_reason: z.string().nullable(),
+  env_key: z.string().nullable(),
+  models: z.array(providerDirectoryModelSchema)
+})
+
 export const setDefaultModelResultSchema = z.object({
   default_model: z.string().min(1),
   model: modelCatalogItemSchema
@@ -715,6 +735,7 @@ export type AuthSummary = z.infer<typeof authSummarySchema>
 export type ModelCatalogItem = z.infer<typeof modelCatalogItemSchema>
 export type ProviderCatalogItem = z.infer<typeof providerCatalogItemSchema>
 export type ProviderMutationResult = z.infer<typeof providerMutationResultSchema>
+export type ProviderDirectoryItem = z.infer<typeof providerDirectoryItemSchema>
 export type SetDefaultModelResult = z.infer<typeof setDefaultModelResultSchema>
 export type ProviderRefreshResult = z.infer<typeof providerRefreshResultSchema>
 export type KimiConfigSnapshot = z.infer<typeof kimiConfigSnapshotSchema>

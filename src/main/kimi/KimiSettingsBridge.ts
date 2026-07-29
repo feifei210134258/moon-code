@@ -35,6 +35,19 @@ const SECONDARY_MODEL_EXTERNAL_UNAVAILABLE =
 const SECONDARY_MODEL_MAX_OUTPUT_ENV_UNAVAILABLE =
   'Kimi 官方没有提供 secondary max_output_size 环境变量；当前 Runtime 的 /config 契约也不支持写入该字段。'
 
+interface ProviderWriteModel {
+  model: string
+  max_context_size: number
+  display_name?: string
+  capabilities?: string[]
+  support_efforts?: string[]
+}
+
+interface ProviderWriteCatalog {
+  models: ProviderWriteModel[]
+  defaultModel: string
+}
+
 export class KimiSettingsBridge {
   #secondaryModelWriteCapability: {
     serverId: string
@@ -256,6 +269,25 @@ export class KimiSettingsBridge {
     if (providers.some((provider) => provider.id === input.id)) {
       throw new Error(`Kimi provider already exists: ${input.id}`)
     }
+    if (await this.#getProviderManagementCapability(client)) {
+      const resolved = await this.#resolveProviderWriteCatalog(client, {
+        providerId: input.id,
+        type: input.type,
+        baseUrl: input.baseUrl,
+        defaultModel: input.defaultModel,
+        defaultModelContextSize: input.defaultModelContextSize,
+        configuredModels: []
+      })
+      await client.createProvider({
+        id: input.id,
+        type: input.type,
+        ...(input.baseUrl === undefined ? {} : { base_url: input.baseUrl }),
+        ...(input.apiKey === undefined ? {} : { api_key: input.apiKey }),
+        default_model: resolved.defaultModel,
+        models: resolved.models
+      })
+      return await this.getSnapshot()
+    }
     const provider: Record<string, unknown> = { type: input.type }
     if (input.baseUrl !== undefined) provider.base_url = input.baseUrl
     if (input.apiKey !== undefined) provider.api_key = input.apiKey
@@ -277,28 +309,96 @@ export class KimiSettingsBridge {
     if (input.id === managedProvider) {
       throw new Error('Kimi 内置 Provider 不能编辑，请通过账号设置管理登录状态。')
     }
-    const models = (await client.listModels())
-      .filter((model) => model.provider === input.id)
-      .map((model) => ({
-        model: model.model,
-        max_context_size: model.max_context_size,
-        ...(model.display_name === undefined ? {} : { display_name: model.display_name }),
-        ...(model.capabilities === undefined ? {} : { capabilities: model.capabilities }),
-        ...(model.support_efforts === undefined ? {} : { support_efforts: model.support_efforts }),
-        ...(model.default_effort === undefined ? {} : { default_effort: model.default_effort })
-      }))
-    if (models.length < 1) {
-      throw new Error(`Kimi provider ${input.id} has no model metadata to preserve during edit`)
-    }
+    const targetId = input.newId ?? input.id
+    const targetBaseUrl = input.baseUrl ?? current.base_url
+    const resolved = await this.#resolveProviderWriteCatalog(client, {
+      providerId: targetId,
+      previousProviderId: input.id,
+      type: input.type,
+      baseUrl: targetBaseUrl,
+      defaultModel: input.defaultModel ?? current.default_model,
+      defaultModelContextSize: input.defaultModelContextSize,
+      configuredModels: (await client.listModels()).filter((model) => model.provider === input.id)
+    })
     await client.replaceProvider(input.id, {
       ...(input.newId === undefined || input.newId === input.id ? {} : { new_id: input.newId }),
       type: input.type,
-      ...(input.baseUrl === undefined ? {} : { base_url: input.baseUrl }),
+      ...(targetBaseUrl === undefined ? {} : { base_url: targetBaseUrl }),
       ...(input.apiKey === undefined ? {} : { api_key: input.apiKey }),
-      ...(input.defaultModel === undefined ? {} : { default_model: input.defaultModel }),
-      models
+      default_model: resolved.defaultModel,
+      models: resolved.models
     })
     return await this.getSnapshot()
+  }
+
+  async #resolveProviderWriteCatalog(
+    client: ReturnType<KimiRuntimeManager['createRestClient']>,
+    input: {
+      providerId: string
+      previousProviderId?: string
+      type: string
+      baseUrl: string | undefined
+      defaultModel: string | null | undefined
+      defaultModelContextSize: number | undefined
+      configuredModels: ModelCatalogItem[]
+    }
+  ): Promise<ProviderWriteCatalog> {
+    const requestedDefault = stripProviderPrefix(
+      input.defaultModel ?? '',
+      input.previousProviderId ?? input.providerId,
+      input.providerId
+    )
+    const configured = input.configuredModels.map((model) => ({
+      model: stripProviderPrefix(model.model, input.previousProviderId ?? input.providerId, input.providerId),
+      max_context_size: model.max_context_size,
+      ...(model.display_name === undefined ? {} : { display_name: model.display_name }),
+      ...(model.capabilities === undefined ? {} : { capabilities: model.capabilities }),
+      ...(model.support_efforts === undefined ? {} : { support_efforts: model.support_efforts })
+    }))
+    const directory = await this.#findProviderDirectory(client, input.providerId, input.baseUrl)
+    const directoryModels = directory?.models.map((model) => ({
+      model: model.id,
+      max_context_size: model.max_context_size,
+      ...(model.name === undefined ? {} : { display_name: model.name }),
+      ...(model.capabilities === undefined ? {} : { capabilities: model.capabilities })
+    })) ?? []
+    const models = configured.length > 0 ? configured : directoryModels
+    if (requestedDefault.length > 0 && !models.some((model) => model.model === requestedDefault)) {
+      const directoryModel = directoryModels.find((model) => model.model === requestedDefault)
+      if (directoryModel !== undefined) models.push(directoryModel)
+      else if (input.defaultModelContextSize !== undefined) {
+        models.push({ model: requestedDefault, max_context_size: input.defaultModelContextSize })
+      }
+    }
+    const defaultModel = requestedDefault || models[0]?.model || ''
+    if (models.length < 1 || defaultModel.length < 1) {
+      throw new Error(
+        `模型服务 ${input.previousProviderId ?? input.providerId} 尚无模型元数据；请输入首个模型别名和上下文 Token 后再保存。`
+      )
+    }
+    if (!models.some((model) => model.model === defaultModel)) {
+      throw new Error(
+        `模型 ${defaultModel} 不在已知目录中；请填写该模型的上下文 Token 后再保存。`
+      )
+    }
+    return { models, defaultModel }
+  }
+
+  async #findProviderDirectory(
+    client: ReturnType<KimiRuntimeManager['createRestClient']>,
+    providerId: string,
+    baseUrl?: string
+  ): Promise<Awaited<ReturnType<typeof client.getCatalogProvider>> | null> {
+    const candidates = providerDirectoryCandidates(providerId, baseUrl)
+    for (const candidate of candidates) {
+      try {
+        const directory = await client.getCatalogProvider(candidate)
+        if (!directory.rejected && directory.models.length > 0) return directory
+      } catch {
+        // Unknown catalog ids are expected for private OpenAI-compatible endpoints.
+      }
+    }
+    return null
   }
 
   async deleteProvider(providerId: string): Promise<KimiSettingsSnapshot> {
@@ -496,4 +596,28 @@ function timestampString(value: unknown): string | null {
   if (typeof value === 'string') return value
   if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString()
   return null
+}
+
+function stripProviderPrefix(value: string, ...providerIds: string[]): string {
+  for (const providerId of providerIds) {
+    const prefix = `${providerId}/`
+    if (value.startsWith(prefix)) return value.slice(prefix.length)
+  }
+  return value
+}
+
+function providerDirectoryCandidates(providerId: string, baseUrl?: string): string[] {
+  const candidates = new Set<string>()
+  const normalizedId = providerId.trim().toLowerCase()
+  if (normalizedId.length > 0) candidates.add(normalizedId)
+  if (baseUrl !== undefined) {
+    try {
+      const labels = new URL(baseUrl).hostname.toLowerCase().split('.').filter(Boolean)
+      const registrableLabel = labels.at(-2)
+      if (registrableLabel !== undefined) candidates.add(registrableLabel)
+    } catch {
+      // The IPC validator owns URL validity; catalog resolution is best effort.
+    }
+  }
+  return [...candidates]
 }

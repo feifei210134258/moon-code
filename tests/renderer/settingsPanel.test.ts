@@ -565,6 +565,64 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
+  it('submits a zero-model Provider edit using catalog-resolvable DeepSeek metadata', async () => {
+    const zeroModelSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      providers: [
+        ...snapshot.providers,
+        {
+          id: 'pixel', type: 'openai', baseUrl: 'https://old.example.com/v1', defaultModel: null,
+          hasCredential: true, status: 'error', models: []
+        }
+      ],
+      capabilities: {
+        ...snapshot.capabilities,
+        canEditProvider: true,
+        canDeleteProvider: true,
+        providerManagementUnavailableReason: null,
+        providerDeleteUnavailableReason: null
+      }
+    }
+    const repaired: KimiSettingsSnapshot = {
+      ...zeroModelSnapshot,
+      providers: zeroModelSnapshot.providers.map((provider) => provider.id === 'pixel'
+        ? {
+          ...provider, id: 'deepseek', baseUrl: 'https://api.deepseek.com',
+          defaultModel: 'deepseek/deepseek-v4-flash', status: 'connected' as const,
+          models: ['deepseek/deepseek-v4-flash', 'deepseek/deepseek-v4-pro']
+        }
+        : provider)
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => zeroModelSnapshot),
+      updateKimiProvider: vi.fn(async () => repaired)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('pixel'))!.trigger('click')
+    await wrapper.get('.provider-icon-button[aria-label="编辑 pixel"]').trigger('click')
+
+    const form = wrapper.get('.secondary-provider-form')
+    const inputs = form.findAll('input')
+    await inputs[0]!.setValue('deepseek')
+    await inputs[1]!.setValue('https://api.deepseek.com')
+    await inputs[3]!.setValue('deepseek-v4-flash')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(api.updateKimiProvider).toHaveBeenCalledWith({
+      id: 'pixel', newId: 'deepseek', type: 'openai',
+      baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-v4-flash'
+    })
+    expect(wrapper.text()).toContain('deepseek 的模型服务设置已保存')
+    wrapper.unmount()
+  })
+
   it('selects a model from another Provider as the sub Agent model', async () => {
     const writableSnapshot: KimiSettingsSnapshot = {
       ...snapshot,

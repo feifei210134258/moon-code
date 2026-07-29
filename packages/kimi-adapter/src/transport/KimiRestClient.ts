@@ -29,6 +29,7 @@ import {
   mcpServerRestartResultSchema,
   providerCatalogItemSchema,
   providerCatalogListSchema,
+  providerDirectoryItemSchema,
   providerMutationResultSchema,
   providerRefreshResultSchema,
   questionDismissResultSchema,
@@ -83,6 +84,7 @@ import {
   type PromptSubmitResult,
   type QuestionDismissResult,
   type ProviderCatalogItem,
+  type ProviderDirectoryItem,
   type ProviderMutationResult,
   type ProviderRefreshResult,
   type SessionSnapshot,
@@ -287,6 +289,14 @@ export class KimiRestClient {
     return this.request<void>(
       `/api/v1/providers/${encodeURIComponent(providerId)}`,
       { method: 'DELETE' }
+    )
+  }
+
+  getCatalogProvider(catalogId: string): Promise<ProviderDirectoryItem> {
+    return this.request(
+      `/api/v1/catalog/providers/${encodeURIComponent(catalogId)}`,
+      {},
+      providerDirectoryItemSchema
     )
   }
 

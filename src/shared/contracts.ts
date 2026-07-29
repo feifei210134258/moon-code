@@ -843,6 +843,7 @@ export interface AddKimiProviderInput {
   baseUrl?: string
   apiKey?: string
   defaultModel?: string
+  defaultModelContextSize?: number
 }
 
 export interface UpdateKimiProviderInput {
@@ -852,6 +853,7 @@ export interface UpdateKimiProviderInput {
   baseUrl?: string
   apiKey?: string
   defaultModel?: string
+  defaultModelContextSize?: number
 }
 
 export interface KimiProviderRefreshResult {

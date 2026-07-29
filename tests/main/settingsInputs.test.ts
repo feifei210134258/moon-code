@@ -15,12 +15,16 @@ describe('settings IPC input validation', () => {
       id: 'local:openai',
       type: 'openai',
       baseUrl: 'http://127.0.0.1:11434/v1',
-      apiKey: 'local-key'
+      apiKey: 'local-key',
+      defaultModel: 'local-coder',
+      defaultModelContextSize: 131_072
     })).toEqual({
       id: 'local:openai',
       type: 'openai',
       baseUrl: 'http://127.0.0.1:11434/v1',
-      apiKey: 'local-key'
+      apiKey: 'local-key',
+      defaultModel: 'local-coder',
+      defaultModelContextSize: 131_072
     })
     expect(validateProviderId('managed:kimi-code')).toBe('managed:kimi-code')
     expect(validateModelId('kimi-for-coding')).toBe('kimi-for-coding')
@@ -42,6 +46,9 @@ describe('settings IPC input validation', () => {
     expect(() => validateAddProviderInput({
       id: 'bad', type: 'openai', apiKey: 'x'.repeat(8_193)
     })).toThrow('Invalid Kimi provider API key')
+    expect(() => validateAddProviderInput({
+      id: 'bad', type: 'openai', defaultModel: 'coder', defaultModelContextSize: 0
+    })).toThrow('Invalid Kimi provider model context size')
   })
 
   it('allows only the explicit safe preference and refresh fields', () => {
@@ -79,11 +86,16 @@ describe('settings IPC input validation', () => {
   it('accepts provider edits while keeping credentials optional', () => {
     expect(validateUpdateProviderInput({
       id: 'local:openai', newId: 'local:openai-work', type: 'openai',
-      baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder'
+      baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder',
+      defaultModelContextSize: 131_072
     })).toEqual({
       id: 'local:openai', newId: 'local:openai-work', type: 'openai',
-      baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder'
+      baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder',
+      defaultModelContextSize: 131_072
     })
+    expect(() => validateUpdateProviderInput({
+      id: 'local:openai', type: 'openai', defaultModelContextSize: 16_777_217
+    })).toThrow('Invalid Kimi provider model context size')
     expect(() => validateUpdateProviderInput({ id: 'local:openai', type: 'openai', raw: {} }))
       .toThrow('Invalid Kimi provider update input')
   })
