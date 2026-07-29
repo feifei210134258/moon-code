@@ -134,6 +134,7 @@ export function installSettingsApiFixture(): void {
     }),
     listFiles: async () => ({ path: '.', items: [], truncated: false }),
     getGitStatus: async () => ({
+      available: true,
       branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
     }),
     getKimiSettings: async () => structuredClone(snapshot),

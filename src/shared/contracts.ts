@@ -673,6 +673,7 @@ export interface WorkspaceGrepResult {
 export type WorkspaceOpenApp = 'finder' | 'cursor' | 'vscode' | 'iterm' | 'terminal'
 
 export interface WorkspaceGitStatus {
+  available: boolean
   branch: string
   ahead: number
   behind: number

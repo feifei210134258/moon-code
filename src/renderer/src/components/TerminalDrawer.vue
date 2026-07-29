@@ -130,8 +130,8 @@ function ensureXterm(): void {
     cursorBlink: !reduceMotion,
     cursorStyle: 'bar',
     fontFamily: '"SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace',
-    fontSize: 12,
-    lineHeight: 1.25,
+    fontSize: 13,
+    lineHeight: 1.3,
     scrollback: 5_000,
     allowProposedApi: false,
     theme: {

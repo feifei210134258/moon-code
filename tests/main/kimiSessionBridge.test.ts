@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { KimiApiError } from '../../packages/kimi-adapter/src/transport/KimiRestClient.js'
 import type { ConnectOptions, KimiWsClient } from '../../packages/kimi-adapter/src/transport/KimiWsClient.js'
 import type { KimiCursor } from '../../packages/kimi-adapter/src/wire/ws.js'
 import type { PromptSubmitResult } from '../../packages/kimi-adapter/src/wire/schemas.js'
@@ -71,6 +72,10 @@ class FakeRuntime extends EventEmitter {
     files: [{ path: 'src/App.vue', matches: [{ line: 8, col: 3, text: 'const ready = true', before: [], after: [] }] }],
     files_scanned: 1, truncated: false, elapsed_ms: 2
   }))
+  readonly getGitStatus = vi.fn(async () => ({
+    branch: 'main', ahead: 1, behind: 2, entries: { 'src/App.vue': 'modified' as const },
+    additions: 3, deletions: 1, pullRequest: null
+  }))
   readonly downloadWorkspaceFile = vi.fn(async () => new Uint8Array([1, 2]))
   readonly openFile = vi.fn(async () => ({ opened: true as const }))
   readonly openFileIn = vi.fn(async () => ({ opened: true as const }))
@@ -97,6 +102,7 @@ class FakeRuntime extends EventEmitter {
       readFile: this.readFile,
       searchFiles: this.searchFiles,
       grepFiles: this.grepFiles,
+      getGitStatus: this.getGitStatus,
       downloadWorkspaceFile: this.downloadWorkspaceFile,
       openFile: this.openFile,
       openFileIn: this.openFileIn,
@@ -337,6 +343,31 @@ describe('KimiSessionBridge terminals', () => {
     expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/App.vue', 8)
     expect(runtime.openFileIn).toHaveBeenCalledWith('session-1', 'vscode', 'src/App.vue', 8)
     expect(runtime.revealFile).toHaveBeenCalledWith('session-1', 'src/App.vue')
+    await bridge.close()
+  })
+
+  it('projects missing Git as an available=false state while preserving unexpected failures', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+
+    await expect(bridge.getGitStatus('session-1')).resolves.toEqual({
+      available: true,
+      branch: 'main', ahead: 1, behind: 2, entries: { 'src/App.vue': 'modified' },
+      additions: 3, deletions: 1, pullRequest: null
+    })
+
+    runtime.getGitStatus.mockRejectedValueOnce(new KimiApiError('Git unavailable', {
+      code: 40908, status: 409
+    }))
+    await expect(bridge.getGitStatus('session-1')).resolves.toEqual({
+      available: false,
+      branch: '', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+    })
+
+    const unexpected = new KimiApiError('Permission denied', { code: 40301, status: 403 })
+    runtime.getGitStatus.mockRejectedValueOnce(unexpected)
+    await expect(bridge.getGitStatus('session-1')).rejects.toBe(unexpected)
     await bridge.close()
   })
 

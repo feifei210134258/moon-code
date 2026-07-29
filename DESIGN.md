@@ -23,36 +23,41 @@ colors:
 typography:
   display:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
-    fontSize: "20px"
-    fontWeight: 680
+    fontSize: "1.4375rem"
+    fontWeight: 700
     lineHeight: 1.2
     letterSpacing: "-0.02em"
   headline:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
-    fontSize: "17px"
+    fontSize: "1.25rem"
     fontWeight: 650
-    lineHeight: 1.35
+    lineHeight: 1.3
+    letterSpacing: "-0.01em"
   title:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
-    fontSize: "14px"
+    fontSize: "1.125rem"
     fontWeight: 650
-    lineHeight: 1.45
+    lineHeight: 1.35
   body:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
-    fontSize: "13.5px"
+    fontSize: "1rem"
     fontWeight: 400
-    lineHeight: 1.68
+    lineHeight: 1.6
+  ui:
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 500
+    lineHeight: 1.45
   label:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
-    fontSize: "11px"
+    fontSize: "0.78125rem"
     fontWeight: 590
-    lineHeight: 1.35
-    letterSpacing: "0.01em"
+    lineHeight: 1.4
   mono:
     fontFamily: "SFMono-Regular, Consolas, Liberation Mono, monospace"
-    fontSize: "10.5px"
+    fontSize: "0.8125rem"
     fontWeight: 400
-    lineHeight: 1.55
+    lineHeight: 1.5
 rounded:
   xs: "5px"
   sm: "7px"
@@ -73,35 +78,35 @@ components:
     typography: "{typography.label}"
     rounded: "{rounded.md}"
     padding: "0 11px"
-    height: "31px"
+    height: "34px"
   button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
     typography: "{typography.label}"
     rounded: "{rounded.md}"
     padding: "0 11px"
-    height: "31px"
+    height: "34px"
   button-quiet:
     backgroundColor: "transparent"
     textColor: "{colors.muted}"
     typography: "{typography.label}"
     rounded: "{rounded.sm}"
     padding: "0 8px"
-    height: "31px"
+    height: "34px"
   input:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
     typography: "{typography.body}"
     rounded: "{rounded.sm}"
     padding: "0 9px"
-    height: "32px"
+    height: "36px"
   navigation-item:
     backgroundColor: "transparent"
     textColor: "{colors.text}"
-    typography: "{typography.title}"
+    typography: "{typography.ui}"
     rounded: "{rounded.md}"
     padding: "0 10px"
-    height: "38px"
+    height: "40px"
   composer:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
@@ -132,7 +137,7 @@ Moon Code is a focused developer workbench: calm enough for long sessions, dense
 
 The visual language serves the product personality captured in `packages/kimi-adapter/PRODUCT.md`: **高效、清晰、可靠**. Preserve the existing desktop-tool familiarity—Inter and system fallbacks, Phosphor icons, restrained borders, and small state pills—while tightening anything that competes with the task. The system explicitly rejects over-gamified UI, marketing-landing-page composition, and dense information without hierarchy.
 
-The following are captured optimizations rather than a new visual direction: raise the floor for persistent text to 11px, replace failing faint-gray text with a darker semantic muted ramp, collapse empty panels instead of reserving dashboard-sized space, and avoid pairing a strong border with a 16px+ soft shadow. A missing data value must never render as a full progress bar.
+The following are captured optimizations rather than a new visual direction: use a comfortable 16px reading size for transcript prose and composer input, keep persistent supporting text at 12px or larger, replace failing faint-gray text with a darker semantic muted ramp, collapse empty panels instead of reserving dashboard-sized space, and avoid pairing a strong border with a 16px+ soft shadow. A missing data value must never render as a full progress bar.
 
 **Key Characteristics:**
 
@@ -186,16 +191,17 @@ The palette is a restrained cool-neutral system: white content surfaces sit on a
 
 ### Hierarchy
 
-- **Display** (680, 20px, 1.2): Brand lockup and rare high-confidence headings.
-- **Headline** (650, 17px, 1.35): Markdown h2 and prominent panel headings.
-- **Title** (650, 14px, 1.45): Panel titles, transcript section labels, and important control text.
-- **Body** (400, 13.5px, 1.68): Transcript prose and user-facing explanatory copy. Keep prose lines near 65–75ch where the surface allows; compact task metadata may be denser.
-- **Label** (590, 11px, 1.35, slight tracking): Buttons, nav items, status labels, and metadata. 10px is the lower limit for transient badges only; persistent text should not use 8–9px.
-- **Mono** (400, 10.5px, 1.55): Code, paths, diffs, and terminal output. Do not use mono for ordinary UI labels.
+- **Display** (700, 1.4375rem / 23px, 1.2): Brand lockup and rare high-confidence headings.
+- **Headline** (650, 1.25rem / 20px, 1.3): Markdown h2 and prominent page headings.
+- **Title** (650, 1.125rem / 18px, 1.35): Panel titles, transcript section labels, and important control text.
+- **Body** (400, 1rem / 16px, 1.6): Transcript prose, composer input, and user-facing explanatory copy. Keep prose lines near 65–75ch where the surface allows; compact task metadata may be denser.
+- **UI** (500, 0.875rem / 14px, 1.45): Navigation, ordinary controls, file rows, and high-frequency product labels.
+- **Label** (590, 0.78125rem / 12.5px, 1.4): Supporting labels, status text, timestamps, and metadata. Persistent text should stay at or above 12px; 11px is reserved for very short, transient badges.
+- **Mono** (400, 0.8125rem / 13px, 1.5): Code, paths, diffs, and terminal output. Do not use mono for ordinary UI labels.
 
 ### Named Rules
 
-**The Readable Floor Rule.** Persistent interface copy is at least 11px and must meet a 4.5:1 contrast target where it carries meaning. Do not use wide tracking to compensate for text that is too small or too light.
+**The Readable Floor Rule.** Long-form reading and authoring use 16px; persistent interface copy is at least 12px and must meet a 4.5:1 contrast target where it carries meaning. Do not use wide tracking to compensate for text that is too small or too light.
 
 ## 4. Elevation
 
@@ -216,7 +222,7 @@ Depth is primarily tonal layering and hairline separation. The current implement
 ### Buttons
 
 - **Shape:** 7–9px radius for ordinary controls; 10px for the 35px send button. Full-pill is reserved for status chips and progress tracks.
-- **Primary:** Moon Blue background with white text, 31px minimum height, 11px horizontal padding, and a clear disabled opacity. The send action may use 35px square geometry because it is an icon-led composer control.
+- **Primary:** Moon Blue background with white text, 34px minimum height, 11px horizontal padding, and a clear disabled opacity. The send action may use 35px square geometry because it is an icon-led composer control.
 - **Hover / Focus:** Slightly darker or more opaque surface on hover; use the shared 3px focus ring on focus-visible. Avoid lift or glow as a default hover animation.
 - **Secondary / Quiet:** White surface + strong border for secondary actions; transparent muted text for quiet actions. Both retain the same height and label scale as primary buttons.
 
@@ -235,13 +241,13 @@ Depth is primarily tonal layering and hairline separation. The current implement
 
 ### Inputs / Fields
 
-- **Style:** 32px search and select fields with 7–8px radius, white or quiet-surface fill, and a transparent border until focused.
+- **Style:** 36px search and select fields with 7–8px radius, white or quiet-surface fill, and a transparent border until focused.
 - **Focus:** Shared Moon Blue focus ring and a stronger input border. The shell owns focus for compound controls such as search.
 - **Error / Disabled:** Error uses Failure Red plus an explanatory message; disabled states reduce opacity and interactivity without making the label unreadable.
 
 ### Navigation
 
-- **Style:** 56px top bar with macOS title-bar breathing room, then a 244–280px project sidebar that collapses below 920px. Project and session rows are 38px high with 9–10px radius.
+- **Style:** 56px top bar with macOS title-bar breathing room, then a 244–280px project sidebar that collapses below 920px. Project and session rows are 40px high with 9–10px radius.
 - **Default / Hover / Active:** Transparent at rest, low-opacity ink tint on hover, and a cool blue-gray selected surface (`#E7EEF7` / `#EAF1F8`) for the active workspace or session. Keep action buttons discoverable without shifting row text.
 - **Project icon semantics:** Project rows always use the familiar folder icon. Do not replace it with a disclosure caret; the full project row already owns expand/collapse behavior, while the icon identifies the object type.
 - **Responsive treatment:** At ≤1180px, right panels become overlay surfaces; at ≤920px the sidebar and top-bar context collapse so the transcript remains primary.
@@ -269,7 +275,7 @@ Changes, Plan, and Background Tasks remain three separate cards because they rep
 - **Do** use Moon Blue only for action, selection, focus, links, and information state.
 - **Do** preserve the cool light workbench field and white transcript/composer surfaces as the homepage baseline.
 - **Do** keep controls familiar: Phosphor icons, consistent 7–12px radii, shared button heights, and explicit hover/focus/disabled states.
-- **Do** keep persistent UI text at 11px or larger and verify 4.5:1 contrast for meaningful copy.
+- **Do** keep persistent UI text at 12px or larger, use 16px for reading and authoring surfaces, and verify 4.5:1 contrast for meaningful copy.
 - **Do** collapse empty plans, changes, tasks, and usage surfaces to a teaching empty state with a next action.
 - **Do** make runtime, usage, approval, and error state visible in both text and semantic color.
 - **Do** respect `prefers-reduced-motion` and keep all state transitions short (roughly 120–250ms).
@@ -279,7 +285,7 @@ Changes, Plan, and Background Tasks remain three separate cards because they rep
 
 - **Don't** make the product feel over-gamified or like a marketing landing page.
 - **Don't** stack information without hierarchy; empty panels should not look like broken dashboards.
-- **Don't** use 8–10px gray text for persistent labels, timestamps, or errors.
+- **Don't** use sub-12px gray text for persistent labels, timestamps, or errors.
 - **Don't** pair a 1px border with a 16px+ diffuse shadow on the same card or popover.
 - **Don't** use decorative glassmorphism as the default treatment for every surface.
 - **Don't** use a thick side-stripe border as a generic accent; markdown blockquotes are the only content-specific exception and should remain restrained.

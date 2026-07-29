@@ -266,6 +266,7 @@ const enUS: Record<string, string> = {
   '正在读取 Git 状态…': 'Loading Git status…',
   '选择一个 Kimi Session 后读取更改。': 'Select a Kimi Session to load changes.',
   '工作区没有未提交更改。': 'The Workspace has no uncommitted changes.',
+  '当前工作区未检测到可用的 Git 仓库。': 'No usable Git repository was detected in the current Workspace.',
   '选择文件查看 Diff': 'Select a file to view its Diff',
   '复制 Diff': 'Copy Diff',
   '正在读取 Diff…': 'Loading Diff…',

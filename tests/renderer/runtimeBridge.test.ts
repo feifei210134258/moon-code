@@ -165,6 +165,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       getSessionRuntimeStatus: vi.fn(async () => ({
@@ -237,6 +238,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async () => active),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       submitPrompt: vi.fn(async (_sessionId: string, input: KimiPromptInput) => {
@@ -365,6 +367,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn((sessionId: string) => sessionId === 'session-a' ? openA : openB),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       readFile: vi.fn(),
@@ -422,6 +425,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async () => sessionState('session-agent')),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       getAgentTranscript: vi.fn((_sessionId: string, agentId: string) => agentId === 'agent-a' ? agentA : agentB)
@@ -475,6 +479,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
       listFiles: vi.fn((sessionId: string) => sessionId === 'session-a' ? listA : listB),
       getGitStatus: vi.fn(async (sessionId: string) => ({
+        available: true,
         branch: sessionId, ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       readFile: vi.fn(),
@@ -553,6 +558,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async () => sessionState('session-files')),
       listFiles,
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       openWorkspaceFileSystem,
@@ -603,6 +609,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       searchFiles: vi.fn(() => pendingSearch),
