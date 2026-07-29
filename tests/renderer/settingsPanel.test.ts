@@ -64,7 +64,9 @@ const snapshot: KimiSettingsSnapshot = {
   },
   capabilities: {
     canAddProvider: true,
+    canEditProvider: false,
     canDeleteProvider: false,
+    providerManagementUnavailableReason: 'Kimi v2 has no provider management routes.',
     providerDeleteUnavailableReason: 'Kimi v2 has no delete route.',
     secondaryModel: {
       supported: true,
@@ -500,6 +502,108 @@ describe('SettingsPanel', () => {
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
     expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('claude-sonnet-4-5')
     expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
+    wrapper.unmount()
+  })
+
+  it('edits and deletes a custom Provider from the model service detail', async () => {
+    const managementSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        canEditProvider: true,
+        canDeleteProvider: true,
+        providerManagementUnavailableReason: null,
+        providerDeleteUnavailableReason: null
+      }
+    }
+    const renamed: KimiSettingsSnapshot = {
+      ...managementSnapshot,
+      providers: managementSnapshot.providers.map((provider) => provider.id === 'openai-main'
+        ? { ...provider, id: 'openai-work' }
+        : provider),
+      secondaryModelOptions: managementSnapshot.secondaryModelOptions.map((model) => model.providerId === 'openai-main'
+        ? { ...model, providerId: 'openai-work' }
+        : model)
+    }
+    const afterDelete: KimiSettingsSnapshot = {
+      ...renamed,
+      providers: renamed.providers.filter((provider) => provider.id !== 'openai-work'),
+      secondaryModelOptions: renamed.secondaryModelOptions.filter((model) => model.providerId !== 'openai-work')
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => managementSnapshot),
+      updateKimiProvider: vi.fn(async () => renamed),
+      deleteKimiProvider: vi.fn(async () => afterDelete)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const confirm = vi.fn(() => true)
+    Object.defineProperty(window, 'confirm', { configurable: true, value: confirm })
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
+
+    await wrapper.get('.provider-icon-button[aria-label="编辑 openai-main"]').trigger('click')
+    const form = wrapper.get('.secondary-provider-form')
+    await form.find('input').setValue('openai-work')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(api.updateKimiProvider).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'openai-main', newId: 'openai-work', type: 'openai_responses'
+    }))
+    expect(wrapper.text()).toContain('openai-work 的模型服务设置已保存')
+
+    await wrapper.get('.provider-icon-button[aria-label="删除 openai-work"]').trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(api.deleteKimiProvider).toHaveBeenCalledWith('openai-work')
+    expect(wrapper.text()).toContain('模型服务 openai-work 已删除')
+    wrapper.unmount()
+  })
+
+  it('selects a model from another Provider as the sub Agent model', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const selected: KimiSettingsSnapshot = {
+      ...writableSnapshot,
+      secondaryModelControl: {
+        ...writableSnapshot.secondaryModelControl,
+        preference: { mode: 'configured', model: 'gpt-5-mini', defaultEffort: 'medium' },
+        requiresRestart: true
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      setSecondaryModel: vi.fn(async () => selected)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
+    await wrapper.get('.provider-model-item').trigger('click')
+    await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
+    await flushPromises()
+
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'medium' })
+    expect(wrapper.text()).toContain('子 Agent 模型已保存')
     wrapper.unmount()
   })
 

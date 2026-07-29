@@ -9,7 +9,8 @@ import type {
   KimiSecondaryModelPreference,
   KimiSecondaryModelUpdateInput,
   KimiSettingsPreferences,
-  KimiSettingsSnapshot
+  KimiSettingsSnapshot,
+  UpdateKimiProviderInput
 } from '../../shared/contracts.js'
 import type {
   KimiConfigSnapshot,
@@ -26,7 +27,7 @@ import {
 } from '../runtime/SecondaryModelPreferencesStore.js'
 
 const PROVIDER_DELETE_UNAVAILABLE =
-  '当前 Kimi Runtime 没有安全的 Provider 删除 REST 接口；客户端不会绕过 Kimi 直接改配置文件。'
+  '当前 Kimi Runtime 没有 Provider 管理 REST 接口；客户端不会绕过 Kimi 直接改配置文件。'
 const SECONDARY_MODEL_WRITE_UNAVAILABLE =
   '当前 Kimi Runtime 的公开 /config 契约尚未声明 secondary_model 写入；Moon Code 只展示有效配置，不会伪造保存或直接修改 config.toml。'
 const SECONDARY_MODEL_EXTERNAL_UNAVAILABLE =
@@ -39,6 +40,10 @@ export class KimiSettingsBridge {
     serverId: string
     value: Promise<boolean>
   } | null = null
+  #providerManagementCapability: {
+    serverId: string
+    value: Promise<boolean>
+  } | null = null
 
   constructor(
     private readonly runtime: KimiRuntimeManager,
@@ -47,12 +52,13 @@ export class KimiSettingsBridge {
 
   async getSnapshot(): Promise<KimiSettingsSnapshot> {
     const client = this.runtime.createRestClient()
-    const [auth, models, providers, config, secondaryModelRestWritable, secondaryPreference] = await Promise.all([
+    const [auth, models, providers, config, secondaryModelRestWritable, providerManagementWritable, secondaryPreference] = await Promise.all([
       client.getAuth(),
       client.listModels(),
       client.listProviders(),
       client.getConfig(),
       this.#getSecondaryModelWriteCapability(client),
+      this.#getProviderManagementCapability(client),
       this.#loadSecondaryModelPreference()
     ])
     const kimiProviders = providers.filter((provider) => (
@@ -85,8 +91,10 @@ export class KimiSettingsBridge {
       ),
       capabilities: {
         canAddProvider: true,
-        canDeleteProvider: false,
-        providerDeleteUnavailableReason: PROVIDER_DELETE_UNAVAILABLE,
+        canEditProvider: providerManagementWritable,
+        canDeleteProvider: providerManagementWritable,
+        providerManagementUnavailableReason: providerManagementWritable ? null : PROVIDER_DELETE_UNAVAILABLE,
+        providerDeleteUnavailableReason: providerManagementWritable ? null : PROVIDER_DELETE_UNAVAILABLE,
         secondaryModel: mapSecondaryModelCapability(
           this.runtime,
           this.secondaryModelPreferencesStore !== null,
@@ -211,6 +219,23 @@ export class KimiSettingsBridge {
     return value
   }
 
+  #getProviderManagementCapability(
+    client: ReturnType<KimiRuntimeManager['createRestClient']>
+  ): Promise<boolean> {
+    const serverId = this.runtime.state.serverId ?? 'unidentified-runtime'
+    if (this.#providerManagementCapability?.serverId === serverId) {
+      return this.#providerManagementCapability.value
+    }
+    const supportsProviderManagement = (client as typeof client & {
+      supportsProviderManagement?: () => Promise<boolean>
+    }).supportsProviderManagement
+    const value = typeof supportsProviderManagement === 'function'
+      ? supportsProviderManagement.call(client)
+      : Promise.resolve(false)
+    this.#providerManagementCapability = { serverId, value }
+    return value
+  }
+
   async updatePreferences(patch: KimiPreferencesPatch): Promise<KimiSettingsPreferences> {
     const wirePatch: Record<string, unknown> = {}
     if (patch.telemetry !== undefined) wirePatch.telemetry = patch.telemetry
@@ -237,6 +262,58 @@ export class KimiSettingsBridge {
     if (input.defaultModel !== undefined) provider.default_model = input.defaultModel
     await client.setConfig({ providers: { [input.id]: provider } })
     await client.refreshProvider(input.id)
+    return await this.getSnapshot()
+  }
+
+  async updateProvider(input: UpdateKimiProviderInput): Promise<KimiSettingsSnapshot> {
+    const client = this.runtime.createRestClient()
+    if (!await this.#getProviderManagementCapability(client)) {
+      throw new Error(PROVIDER_DELETE_UNAVAILABLE)
+    }
+    const providers = await client.listProviders()
+    const current = providers.find((provider) => provider.id === input.id)
+    if (current === undefined) throw new Error(`Kimi provider not found: ${input.id}`)
+    const managedProvider = (await client.getAuth()).managed_provider?.name
+    if (input.id === managedProvider) {
+      throw new Error('Kimi 内置 Provider 不能编辑，请通过账号设置管理登录状态。')
+    }
+    const models = (await client.listModels())
+      .filter((model) => model.provider === input.id)
+      .map((model) => ({
+        model: model.model,
+        max_context_size: model.max_context_size,
+        ...(model.display_name === undefined ? {} : { display_name: model.display_name }),
+        ...(model.capabilities === undefined ? {} : { capabilities: model.capabilities }),
+        ...(model.support_efforts === undefined ? {} : { support_efforts: model.support_efforts }),
+        ...(model.default_effort === undefined ? {} : { default_effort: model.default_effort })
+      }))
+    if (models.length < 1) {
+      throw new Error(`Kimi provider ${input.id} has no model metadata to preserve during edit`)
+    }
+    await client.replaceProvider(input.id, {
+      ...(input.newId === undefined || input.newId === input.id ? {} : { new_id: input.newId }),
+      type: input.type,
+      ...(input.baseUrl === undefined ? {} : { base_url: input.baseUrl }),
+      ...(input.apiKey === undefined ? {} : { api_key: input.apiKey }),
+      ...(input.defaultModel === undefined ? {} : { default_model: input.defaultModel }),
+      models
+    })
+    return await this.getSnapshot()
+  }
+
+  async deleteProvider(providerId: string): Promise<KimiSettingsSnapshot> {
+    const client = this.runtime.createRestClient()
+    if (!await this.#getProviderManagementCapability(client)) {
+      throw new Error(PROVIDER_DELETE_UNAVAILABLE)
+    }
+    const providers = await client.listProviders()
+    const provider = providers.find((item) => item.id === providerId)
+    if (provider === undefined) throw new Error(`Kimi provider not found: ${providerId}`)
+    const managedProvider = (await client.getAuth()).managed_provider?.name
+    if (providerId === managedProvider) {
+      throw new Error('Kimi 内置 Provider 不能删除，请通过账号设置退出登录。')
+    }
+    await client.deleteProvider(providerId)
     return await this.getSnapshot()
   }
 

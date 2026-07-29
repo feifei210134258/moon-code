@@ -5,7 +5,8 @@ import {
   validatePreferencesPatch,
   validateProviderId,
   validateProviderRefreshInput,
-  validateSecondaryModelInput
+  validateSecondaryModelInput,
+  validateUpdateProviderInput
 } from '../../src/main/security/settingsInputs.js'
 
 describe('settings IPC input validation', () => {
@@ -73,5 +74,17 @@ describe('settings IPC input validation', () => {
     expect(() => validateSecondaryModelInput({ model: 'coder', raw: {} })).toThrow(
       'Invalid Kimi secondary model input'
     )
+  })
+
+  it('accepts provider edits while keeping credentials optional', () => {
+    expect(validateUpdateProviderInput({
+      id: 'local:openai', newId: 'local:openai-work', type: 'openai',
+      baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder'
+    })).toEqual({
+      id: 'local:openai', newId: 'local:openai-work', type: 'openai',
+      baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder'
+    })
+    expect(() => validateUpdateProviderInput({ id: 'local:openai', type: 'openai', raw: {} }))
+      .toThrow('Invalid Kimi provider update input')
   })
 })

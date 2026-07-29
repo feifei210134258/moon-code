@@ -29,6 +29,7 @@ import {
   mcpServerRestartResultSchema,
   providerCatalogItemSchema,
   providerCatalogListSchema,
+  providerMutationResultSchema,
   providerRefreshResultSchema,
   questionDismissResultSchema,
   sessionSnapshotSchema,
@@ -82,6 +83,7 @@ import {
   type PromptSubmitResult,
   type QuestionDismissResult,
   type ProviderCatalogItem,
+  type ProviderMutationResult,
   type ProviderRefreshResult,
   type SessionSnapshot,
   type SessionRuntimeStatus,
@@ -177,6 +179,10 @@ export class KimiRestClient {
       headers
     })
 
+    // DELETE routes in the Runtime contract may answer with an empty 204.
+    // Treat that as a successful no-content response before attempting JSON.
+    if (response.status === 204) return undefined as T
+
     const payload = (await response.json()) as Partial<KimiEnvelope<unknown>>
     const code = typeof payload.code === 'number' ? payload.code : -1
     const codeAllowed = code === 0 || options.allowCodes?.includes(code) === true
@@ -259,6 +265,48 @@ export class KimiRestClient {
   async listProviders(): Promise<ProviderCatalogItem[]> {
     const data = await this.request('/api/v1/providers', {}, providerCatalogListSchema)
     return data.items
+  }
+
+  createProvider(input: Record<string, unknown>): Promise<ProviderCatalogItem> {
+    return this.request(
+      '/api/v1/providers',
+      { method: 'POST', body: JSON.stringify(input) },
+      providerCatalogItemSchema
+    )
+  }
+
+  replaceProvider(providerId: string, input: Record<string, unknown>): Promise<ProviderCatalogItem> {
+    return this.request<ProviderMutationResult>(
+      `/api/v1/providers/${encodeURIComponent(providerId)}`,
+      { method: 'PUT', body: JSON.stringify(input) },
+      providerMutationResultSchema
+    ).then((result) => result.provider)
+  }
+
+  deleteProvider(providerId: string): Promise<void> {
+    return this.request<void>(
+      `/api/v1/providers/${encodeURIComponent(providerId)}`,
+      { method: 'DELETE' }
+    )
+  }
+
+  async supportsProviderManagement(): Promise<boolean> {
+    try {
+      const response = await this.#fetch(`${this.#origin}/openapi.json`, {
+        headers: this.#identifiedHeaders({
+          authorization: `Bearer ${this.#token}`,
+          accept: 'application/json'
+        })
+      })
+      if (!response.ok) return false
+      const document = await response.json() as {
+        paths?: Record<string, Record<string, unknown>>
+      }
+      const providerPath = document.paths?.['/api/v1/providers/{provider_id}']
+      return providerPath?.put !== undefined && providerPath?.delete !== undefined
+    } catch {
+      return false
+    }
   }
 
   getProvider(providerId: string): Promise<ProviderCatalogItem> {

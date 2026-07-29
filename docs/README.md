@@ -29,6 +29,7 @@
 9. [最小运行与未签名分发](./08-minimum-run-and-distribution.md)
 10. [0.2.0 PRD：次主力模型](./09-v0.2.0-secondary-model-prd.md)
 11. [0.2.0 发布说明](./10-v0.2.0-release-notes.md)
+12. [0.2.1 发布说明](./11-v0.2.1-release-notes.md)
 12. [ADR-0001：使用 Kimi 官方 Server API](./adr/0001-use-kimi-server-api.md)
 13. [ADR-0002：Electron + Vue 桌面架构](./adr/0002-electron-vue-desktop.md)
 14. [ADR-0003：Kimi 数据为唯一事实源](./adr/0003-kimi-data-source-of-truth.md)

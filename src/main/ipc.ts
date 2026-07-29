@@ -93,7 +93,8 @@ import {
   validatePreferencesPatch,
   validateProviderId,
   validateProviderRefreshInput,
-  validateSecondaryModelInput
+  validateSecondaryModelInput,
+  validateUpdateProviderInput
 } from './security/settingsInputs.js'
 import { validateWorkspacePath } from './security/workspaceInputs.js'
 import {
@@ -776,6 +777,20 @@ export function registerIpc(
     async (event, input?: unknown): Promise<KimiSettingsSnapshot> => {
       assertTrustedSender(event)
       return await settings.addProvider(validateAddProviderInput(input))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.providerUpdate,
+    async (event, input?: unknown): Promise<KimiSettingsSnapshot> => {
+      assertTrustedSender(event)
+      return await settings.updateProvider(validateUpdateProviderInput(input))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.providerDelete,
+    async (event, providerId?: unknown): Promise<KimiSettingsSnapshot> => {
+      assertTrustedSender(event)
+      return await settings.deleteProvider(validateProviderId(providerId)!)
     }
   )
   ipcMain.handle(

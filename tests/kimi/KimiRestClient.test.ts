@@ -758,6 +758,41 @@ describe('KimiRestClient', () => {
     await expect(unsupported.supportsSecondaryModelConfigWrite()).resolves.toBe(false)
   })
 
+  it('uses the official provider create, replace and delete routes', async () => {
+    const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })
+    const provider = {
+      id: 'openai-main', type: 'openai', base_url: 'https://api.openai.com/v1',
+      default_model: 'gpt-5-mini', has_api_key: true, status: 'connected', models: ['gpt-5-mini']
+    }
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(envelope(provider))
+      .mockResolvedValueOnce(envelope({ provider: { ...provider, id: 'openai-work' } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        paths: { '/api/v1/providers/{provider_id}': { put: {}, delete: {} } }
+      }), { status: 200 }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.createProvider({ id: 'openai-main', type: 'openai', models: [] })).resolves.toEqual(provider)
+    await expect(client.replaceProvider('openai-main', { new_id: 'openai-work', type: 'openai', models: [] }))
+      .resolves.toEqual({ ...provider, id: 'openai-work' })
+    await expect(client.deleteProvider('openai-work')).resolves.toBeUndefined()
+    await expect(client.supportsProviderManagement()).resolves.toBe(true)
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(1,
+      'http://127.0.0.1:1234/api/v1/providers',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ id: 'openai-main', type: 'openai', models: [] }) }))
+    expect(fetchImpl).toHaveBeenNthCalledWith(2,
+      'http://127.0.0.1:1234/api/v1/providers/openai-main',
+      expect.objectContaining({ method: 'PUT' }))
+    expect(fetchImpl).toHaveBeenNthCalledWith(3,
+      'http://127.0.0.1:1234/api/v1/providers/openai-work',
+      expect.objectContaining({ method: 'DELETE' }))
+  })
+
   it('uses the pinned Skills, Tools and MCP management routes', async () => {
     const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
       status: 200,

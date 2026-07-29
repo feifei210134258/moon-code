@@ -484,6 +484,9 @@ export const providerCatalogItemSchema = z.object({
 
 export const providerCatalogListSchema = z.object({ items: z.array(providerCatalogItemSchema) })
 
+/** Response returned by the provider replace route in Kimi 0.29.2+. */
+export const providerMutationResultSchema = z.object({ provider: providerCatalogItemSchema })
+
 export const setDefaultModelResultSchema = z.object({
   default_model: z.string().min(1),
   model: modelCatalogItemSchema
@@ -711,6 +714,7 @@ export type TerminalCloseResult = z.infer<typeof terminalCloseResultSchema>
 export type AuthSummary = z.infer<typeof authSummarySchema>
 export type ModelCatalogItem = z.infer<typeof modelCatalogItemSchema>
 export type ProviderCatalogItem = z.infer<typeof providerCatalogItemSchema>
+export type ProviderMutationResult = z.infer<typeof providerMutationResultSchema>
 export type SetDefaultModelResult = z.infer<typeof setDefaultModelResultSchema>
 export type ProviderRefreshResult = z.infer<typeof providerRefreshResultSchema>
 export type KimiConfigSnapshot = z.infer<typeof kimiConfigSnapshotSchema>
