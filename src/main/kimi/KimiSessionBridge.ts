@@ -6,6 +6,7 @@ import {
   type SessionSyncView
 } from '../../../packages/kimi-adapter/src/sync/SessionSyncController.js'
 import type { KimiWsClient } from '../../../packages/kimi-adapter/src/transport/KimiWsClient.js'
+import { KimiApiError } from '../../../packages/kimi-adapter/src/transport/KimiRestClient.js'
 import type { MessageContentPart, PromptSubmitResult } from '../../../packages/kimi-adapter/src/wire/schemas.js'
 import type { KimiRuntimeManager } from '../runtime/KimiRuntimeManager.js'
 import { KimiTerminalCompatibility } from './KimiTerminalCompatibility.js'
@@ -42,6 +43,8 @@ import type {
   WorkspaceOpenApp,
   WorkspaceGitStatus
 } from '../../shared/contracts.js'
+
+const KIMI_FS_GIT_UNAVAILABLE = 40908
 
 export class KimiSessionBridge extends EventEmitter {
   readonly #runtime: KimiRuntimeManager
@@ -494,15 +497,30 @@ export class KimiSessionBridge extends EventEmitter {
 
   async getGitStatus(sessionId: string): Promise<WorkspaceGitStatus> {
     this.#assertActiveSession(sessionId)
-    const result = await this.#runtime.createRestClient().getGitStatus(sessionId)
-    return {
-      branch: result.branch,
-      ahead: result.ahead,
-      behind: result.behind,
-      entries: result.entries,
-      additions: result.additions,
-      deletions: result.deletions,
-      pullRequest: result.pullRequest
+    try {
+      const result = await this.#runtime.createRestClient().getGitStatus(sessionId)
+      return {
+        available: true,
+        branch: result.branch,
+        ahead: result.ahead,
+        behind: result.behind,
+        entries: result.entries,
+        additions: result.additions,
+        deletions: result.deletions,
+        pullRequest: result.pullRequest
+      }
+    } catch (error) {
+      if (!(error instanceof KimiApiError) || error.code !== KIMI_FS_GIT_UNAVAILABLE) throw error
+      return {
+        available: false,
+        branch: '',
+        ahead: 0,
+        behind: 0,
+        entries: {},
+        additions: 0,
+        deletions: 0,
+        pullRequest: null
+      }
     }
   }
 

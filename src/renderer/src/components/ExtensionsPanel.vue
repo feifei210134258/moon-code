@@ -261,12 +261,13 @@ onBeforeUnmount(() => {
     >
       <section class="changed-files-panel">
         <h2>
-          {{ gitStatus ? `${changedFiles.length} 个文件已更改` : '更改' }}
-          <span v-if="gitStatus" class="git-summary">{{ gitStatus.branch || 'detached' }} · <b class="diff-add">+{{ gitStatus.additions }}</b> <b class="diff-remove">-{{ gitStatus.deletions }}</b></span>
+          {{ gitStatus?.available ? `${changedFiles.length} 个文件已更改` : '更改' }}
+          <span v-if="gitStatus?.available" class="git-summary">{{ gitStatus.branch || 'detached' }} · <b class="diff-add">+{{ gitStatus.additions }}</b> <b class="diff-remove">-{{ gitStatus.deletions }}</b></span>
         </h2>
         <div v-if="!gitStatus && gitStatusPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Git 状态…</div>
         <div v-else-if="!gitStatus && gitStatusError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ gitStatusError }}</div>
         <div v-else-if="!gitStatus" class="extension-state">选择一个 Kimi Session 后读取更改。</div>
+        <div v-else-if="!gitStatus.available" class="extension-state">当前工作区未检测到可用的 Git 仓库。</div>
         <div v-if="changedFiles.length > 0" class="changed-files-list" aria-label="已更改文件">
           <div v-for="file in changedFiles" :key="file.path" class="changed-file-row">
             <PhFile :size="16" />
@@ -274,7 +275,7 @@ onBeforeUnmount(() => {
             <strong :class="`git-${file.status}`">{{ statusLabel(file.status) }}</strong>
           </div>
         </div>
-        <div v-if="gitStatus && changedFiles.length === 0" class="extension-state">工作区没有未提交更改。</div>
+        <div v-if="gitStatus?.available && changedFiles.length === 0" class="extension-state">工作区没有未提交更改。</div>
       </section>
 
       <section class="todo-panel">

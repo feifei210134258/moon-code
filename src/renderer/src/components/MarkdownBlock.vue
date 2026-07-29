@@ -77,7 +77,7 @@ async function renderMermaid(): Promise<void> {
       startOnLoad: false,
       securityLevel: 'strict',
       theme: 'neutral',
-      fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+      fontFamily: 'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif',
       htmlLabels: false,
       flowchart: { htmlLabels: false }
     })

@@ -416,6 +416,15 @@ watch(
             <span v-if="turn.queued" class="queued-chip">已排队</span>
           </header>
           <div class="turn-content">
+            <div
+              v-if="turn.role === 'assistant' && turn.pending === true && turn.blocks.length === 0"
+              class="turn-pending-response"
+              role="status"
+              aria-live="polite"
+            >
+              <span class="turn-pending-dots" aria-hidden="true"><i /><i /><i /></span>
+              <span>Kimi 已接收任务，正在生成回复…</span>
+            </div>
             <template v-for="block in turn.blocks" :key="block.id">
               <MarkdownBlock
                 v-if="block.type === 'text'"

@@ -187,14 +187,14 @@ onBeforeUnmount(() => {
 .pet-root:hover .pet-tooltip,
 .pet-root:focus-within .pet-tooltip { opacity: 1; transform: translateY(0); }
 .pet-tooltip strong, .pet-tooltip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pet-tooltip strong { font-size: 10px; font-weight: 700; }
-.pet-tooltip span { color: #687386; font-size: 9px; }
-.pet-tooltip small { color: var(--pet-accent); font-size: 9px; font-weight: 650; }
+.pet-tooltip strong { font-size: var(--type-caption-size); font-weight: 700; }
+.pet-tooltip span { color: #687386; font-size: var(--type-micro-size); }
+.pet-tooltip small { color: var(--pet-accent); font-size: var(--type-micro-size); font-weight: 650; }
 
 .pet-character {
   position: relative;
   width: 96px;
   height: 104px;
 }
-.pet-overflow { position: absolute; left: -1px; bottom: 1px; display: grid; min-width: 17px; height: 14px; padding: 0 3px; place-items: center; border: 1px solid rgba(255,255,255,0.92); border-radius: 999px; color: #536273; background: rgba(247,250,252,0.96); font-size: 7px; font-weight: 760; }
+.pet-overflow { position: absolute; left: -1px; bottom: 1px; display: grid; min-width: 20px; height: 17px; padding: 0 3px; place-items: center; border: 1px solid rgba(255,255,255,0.92); border-radius: 999px; color: #536273; background: rgba(247,250,252,0.96); font-size: var(--type-micro-size); font-weight: 760; }
 </style>

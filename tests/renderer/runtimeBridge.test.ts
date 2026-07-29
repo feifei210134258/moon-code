@@ -41,6 +41,7 @@ function sessionState(sessionId: string): SessionViewState {
 
 afterEach(() => {
   delete window.kimiAgent
+  window.localStorage.removeItem('moon-code:last-thinking-effort:v1')
 })
 
 describe('useRuntimeBridge session races', () => {
@@ -139,6 +140,79 @@ describe('useRuntimeBridge session races', () => {
     vi.useRealTimers()
   })
 
+  it('uses a valid model default instead of off and persists the user thinking choice for new tasks', async () => {
+    const model = {
+      id: 'kimi-for-coding', providerId: 'managed:kimi-code', displayName: 'Kimi for Coding',
+      maxContextSize: 262_144, capabilities: ['thinking'],
+      supportEfforts: ['off', 'low', 'high'], defaultEffort: 'high'
+    }
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.2.2', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.2', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        available: true,
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      getSessionRuntimeStatus: vi.fn(async () => ({
+        busy: false, model: model.id, thinking: 'off', permissionMode: 'manual' as const,
+        planMode: false, swarmMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
+      })),
+      getKimiSettings: vi.fn(async () => ({
+        models: [model],
+        preferences: { defaultModel: model.id }
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let firstBridge!: ReturnType<typeof useRuntimeBridge>
+    const firstWrapper = mount(defineComponent({
+      setup() {
+        firstBridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await firstBridge.openSession('session-first')
+    await flushPromises()
+    expect(firstBridge.promptControls.value?.thinking).toBe('high')
+
+    firstBridge.setPromptControls({
+      ...firstBridge.promptControls.value!,
+      thinking: 'low'
+    })
+    firstWrapper.unmount()
+
+    let secondBridge!: ReturnType<typeof useRuntimeBridge>
+    const secondWrapper = mount(defineComponent({
+      setup() {
+        secondBridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await secondBridge.openSession('session-new')
+    await flushPromises()
+
+    expect(secondBridge.promptControls.value?.thinking).toBe('low')
+    expect(window.localStorage.getItem('moon-code:last-thinking-effort:v1')).toBe('low')
+    secondWrapper.unmount()
+  })
+
   it('matches Kimi Web by keeping active-turn follow-ups local, reorderable, and flushing one at a time', async () => {
     let stateListener!: (state: SessionViewState) => void
     const active = { ...sessionState('session-queue'), busy: true, mainTurnActive: true, activePromptStatus: 'running' as const }
@@ -164,6 +238,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async () => active),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       submitPrompt: vi.fn(async (_sessionId: string, input: KimiPromptInput) => {
@@ -292,6 +367,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn((sessionId: string) => sessionId === 'session-a' ? openA : openB),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       readFile: vi.fn(),
@@ -349,6 +425,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async () => sessionState('session-agent')),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       getAgentTranscript: vi.fn((_sessionId: string, agentId: string) => agentId === 'agent-a' ? agentA : agentB)
@@ -402,6 +479,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
       listFiles: vi.fn((sessionId: string) => sessionId === 'session-a' ? listA : listB),
       getGitStatus: vi.fn(async (sessionId: string) => ({
+        available: true,
         branch: sessionId, ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       readFile: vi.fn(),
@@ -480,6 +558,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async () => sessionState('session-files')),
       listFiles,
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       openWorkspaceFileSystem,
@@ -530,6 +609,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
       listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
       getGitStatus: vi.fn(async () => ({
+        available: true,
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       searchFiles: vi.fn(() => pendingSearch),

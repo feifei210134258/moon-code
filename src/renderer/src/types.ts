@@ -57,4 +57,5 @@ export interface ChatTurn {
   time: string
   blocks: ChatBlock[]
   queued?: boolean
+  pending?: boolean
 }

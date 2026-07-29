@@ -125,6 +125,27 @@ describe('workbench transcript hydration', () => {
     expect(store.turns[0]).toEqual(expect.objectContaining({ queued: true }))
   })
 
+  it('marks an empty pending assistant message as a response placeholder', () => {
+    const store = useWorkbenchStore()
+    store.activeSessionId = 'session-1'
+    const state = sessionState()
+    state.messages = [{
+      id: 'assistant-pending',
+      sessionId: 'session-1',
+      role: 'assistant',
+      content: [],
+      createdAt: '2026-07-23T01:03:01.000Z',
+      promptId: 'prompt-running',
+      status: 'pending'
+    }]
+
+    store.hydrateTranscript(state)
+
+    expect(store.turns[0]).toEqual(expect.objectContaining({
+      role: 'assistant', pending: true, blocks: []
+    }))
+  })
+
   it('marks only a trailing pending Thinking block as running', () => {
     const store = useWorkbenchStore()
     store.activeSessionId = 'session-1'

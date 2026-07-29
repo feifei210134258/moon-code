@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
   border-radius: 42px 42px 34px 34px;
   color: #5f7892;
   background: linear-gradient(155deg, rgba(255, 255, 255, 0.98), rgba(226, 238, 247, 0.96));
-  font-size: 14px;
+  font-size: var(--type-ui-size);
   font-weight: 760;
 }
 
@@ -159,4 +159,3 @@ onBeforeUnmount(() => {
 .mimo-sprite__ear.is-left { left: 8px; transform: rotate(-23deg); }
 .mimo-sprite__ear.is-right { right: 8px; transform: scaleX(-1) rotate(-23deg); }
 </style>
-

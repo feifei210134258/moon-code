@@ -29,6 +29,7 @@ const baseProps = {
     truncated: false, mime: 'text/markdown', languageId: 'markdown', lineCount: 1, isBinary: false
   },
   gitStatus: {
+    available: true,
     branch: 'main', ahead: 0, behind: 0, entries: { 'src/app.ts': 'modified' as const },
     additions: 2, deletions: 1, pullRequest: null
   },
@@ -64,6 +65,37 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.get('.changed-file-row').element.tagName).toBe('DIV')
     expect(wrapper.find('.diff-panel').exists()).toBe(false)
     expect(wrapper.emitted('selectDiff')).toBeUndefined()
+  })
+
+  it('uses neutral guidance for a clean Workspace and a missing Git repository', async () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: {
+        ...baseProps,
+        gitStatus: { ...baseProps.gitStatus, entries: {}, additions: 0, deletions: 0 }
+      }
+    })
+
+    expect(wrapper.get('.changed-files-panel').text()).toContain('工作区没有未提交更改。')
+    expect(wrapper.find('.changed-files-panel .is-error').exists()).toBe(false)
+
+    await wrapper.setProps({
+      gitStatus: {
+        available: false, branch: '', ahead: 0, behind: 0, entries: {},
+        additions: 0, deletions: 0, pullRequest: null
+      }
+    })
+    expect(wrapper.get('.changed-files-panel').text()).toContain('当前工作区未检测到可用的 Git 仓库。')
+    expect(wrapper.find('.changed-files-panel .is-error').exists()).toBe(false)
+    expect(wrapper.find('.git-summary').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps unexpected Git failures in the real error state', () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: { ...baseProps, gitStatus: null, gitStatusError: '无法读取 Git 状态' }
+    })
+    expect(wrapper.get('.changed-files-panel .extension-state.is-error').text()).toContain('无法读取 Git 状态')
+    wrapper.unmount()
   })
 
   it('keeps the plan expanded without exposing the unfinished Diff viewer', () => {

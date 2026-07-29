@@ -108,6 +108,22 @@ describe('Conversation controls', () => {
     wrapper.unmount()
   })
 
+  it('explains that an empty pending Kimi turn is still generating', async () => {
+    const wrapper = mountConversation()
+    await wrapper.setProps({
+      turns: [{
+        id: 'turn-pending', role: 'assistant', author: 'Kimi', time: '10:26',
+        blocks: [], pending: true
+      }]
+    })
+
+    const pending = wrapper.get('.turn-pending-response')
+    expect(pending.attributes('role')).toBe('status')
+    expect(pending.text()).toContain('Kimi 已接收任务，正在生成回复…')
+    expect(pending.findAll('.turn-pending-dots i')).toHaveLength(3)
+    wrapper.unmount()
+  })
+
   it('offers the same system-open and delete menu for files in assistant output', async () => {
     const confirm = vi.fn(() => true)
     Object.defineProperty(window, 'confirm', { configurable: true, value: confirm })
