@@ -51,6 +51,8 @@ const stoppedState: RuntimePublicState = {
   error: null
 }
 
+const LAST_THINKING_EFFORT_KEY = 'moon-code:last-thinking-effort:v1'
+
 export function useRuntimeBridge() {
   const runtime = ref<RuntimePublicState>({ ...stoppedState })
   const discovery = ref<RuntimeDiscovery | null>(null)
@@ -142,6 +144,7 @@ export function useRuntimeBridge() {
   let operationalTimer: number | undefined
   let workspaceRefreshTimer: number | undefined
   let requestedSessionId: string | null = null
+  let lastThinkingEffort = loadLastThinkingEffort()
   const awaitingPromptCycleAt = new Map<string, number>()
   const localPromptQueue = computed(() => {
     const sessionId = activeQueueSessionId.value
@@ -1140,7 +1143,7 @@ export function useRuntimeBridge() {
       const model = status.model ?? settings.preferences.defaultModel ?? settings.models[0]?.id ?? null
       if (model === null) throw new Error('Kimi 没有可用模型，请先在设置中配置 Provider 与默认模型')
       const descriptor = settings.models.find((item) => item.id === model)
-      const thinking = status.thinking.trim() || descriptor?.defaultEffort || descriptor?.supportEfforts[0] || 'off'
+      const thinking = resolveSessionThinkingEffort(status.thinking, descriptor, lastThinkingEffort)
       sessionRuntimeStatus.value = status
       sessionModels.value = settings.models
       promptControls.value = {
@@ -1164,6 +1167,11 @@ export function useRuntimeBridge() {
 
   const setPromptControls = (controls: KimiPromptControls): void => {
     promptControls.value = { ...controls }
+    const selectedThinking = selectableThinkingEffort(controls.thinking)
+    if (selectedThinking !== null) {
+      lastThinkingEffort = selectedThinking
+      persistLastThinkingEffort(selectedThinking)
+    }
   }
 
   const refreshSessionRuntimeStatus = async (sessionId: string): Promise<void> => {
@@ -1440,6 +1448,47 @@ export function useRuntimeBridge() {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function resolveSessionThinkingEffort(
+  runtimeEffort: string,
+  model: KimiModelCatalogItem | undefined,
+  inheritedEffort: string | null
+): string {
+  const supported = (model?.supportEfforts ?? []).filter((effort) => selectableThinkingEffort(effort) !== null)
+  const matchSupported = (candidate: string | null): string | null => {
+    if (candidate === null) return null
+    if (supported.length < 1) return candidate
+    return supported.find((effort) => effort.toLocaleLowerCase() === candidate.toLocaleLowerCase()) ?? null
+  }
+  const runtime = matchSupported(selectableThinkingEffort(runtimeEffort))
+  if (runtime !== null) return runtime
+  const inherited = matchSupported(selectableThinkingEffort(inheritedEffort))
+  if (inherited !== null) return inherited
+  const modelDefault = matchSupported(selectableThinkingEffort(model?.defaultEffort))
+  if (modelDefault !== null) return modelDefault
+  return supported[0] ?? (runtimeEffort.trim() || 'off')
+}
+
+function selectableThinkingEffort(value: string | null | undefined): string | null {
+  const effort = value?.trim() ?? ''
+  return effort.length < 1 || effort.toLocaleLowerCase() === 'off' ? null : effort
+}
+
+function loadLastThinkingEffort(): string | null {
+  try {
+    return selectableThinkingEffort(window.localStorage.getItem(LAST_THINKING_EFFORT_KEY))
+  } catch {
+    return null
+  }
+}
+
+function persistLastThinkingEffort(effort: string): void {
+  try {
+    window.localStorage.setItem(LAST_THINKING_EFFORT_KEY, effort)
+  } catch {
+    // A blocked or full local store must not prevent the session control from changing.
+  }
 }
 
 function mergeWorkspacePages(

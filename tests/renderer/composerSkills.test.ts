@@ -147,6 +147,19 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.emitted('updateGoalMode')).toEqual([[true]])
   })
 
+  it('never presents the Runtime wire value off as a user-facing thinking option', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: { skills: [], models, controls: { ...controls, thinking: 'off' } }
+    })
+
+    expect(wrapper.get('.model-summary').text()).not.toContain('关闭')
+    expect(wrapper.get('.model-summary').text()).not.toContain('off')
+    await wrapper.get('.model-summary').trigger('click')
+    const options = wrapper.findAll('[aria-label="思考强度"] button')
+    expect(options.map((option) => option.text())).toEqual(['高'])
+    wrapper.unmount()
+  })
+
   it('shows active Plan, Goal, and Swarm modes before the model and closes each from its chip', async () => {
     const activeControls = { ...controls, planMode: true, swarmMode: true }
     const wrapper = mount(ComposerBar, {

@@ -70,6 +70,7 @@ const enUS: Record<string, string> = {
   '这个会话还没有消息': 'This session has no messages yet',
   '从下方输入框开始一个新任务。': 'Start a new task from the composer below.',
   '已排队': 'Queued',
+  'Kimi 已接收任务，正在生成回复…': 'Kimi received the task and is preparing a response…',
   'Kimi 等待你的操作': 'Kimi is waiting for your action',
   '正在读取 Kimi 会话控制…': 'Loading Kimi session controls…',
   '连接 Kimi 并选择一个会话后即可输入': 'Connect Kimi and select a session to start typing',

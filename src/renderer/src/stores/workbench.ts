@@ -337,6 +337,8 @@ function groupTranscriptTurns(messages: SessionTranscriptMessage[]): ChatTurn[] 
     if (turn.role === 'assistant' && last?.role === 'assistant' && message.originKind === undefined) {
       last.blocks.push(...turn.blocks)
       if (last.author !== 'Kimi' && turn.author === 'Kimi') last.author = 'Kimi'
+      if (turn.pending === true) last.pending = true
+      else delete last.pending
     } else {
       turns.push(turn)
     }
@@ -382,7 +384,8 @@ function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
     author: message.role === 'user' ? 'You' : message.role === 'tool' ? 'Tool' : 'Kimi',
     time: formatMessageTime(message.createdAt),
     blocks,
-    ...(message.role === 'user' && message.status === 'pending' ? { queued: true } : {})
+    ...(message.role === 'user' && message.status === 'pending' ? { queued: true } : {}),
+    ...(message.role === 'assistant' && message.status === 'pending' ? { pending: true } : {})
   }
 }
 

@@ -84,15 +84,20 @@ let mentionTimer: ReturnType<typeof setTimeout> | null = null
 let mentionGeneration = 0
 const selectedModel = computed(() => props.models.find((model) => model.id === props.controls?.model) ?? null)
 const thinkingOptions = computed(() => {
-  const efforts = selectedModel.value?.supportEfforts ?? []
+  const efforts = (selectedModel.value?.supportEfforts ?? []).filter(isSelectableThinkingEffort)
   if (efforts.length > 0) return efforts
-  return [props.controls?.thinking || 'off']
+  const fallback = selectableThinkingEffort(props.controls?.thinking)
+    ?? selectableThinkingEffort(selectedModel.value?.defaultEffort)
+  return fallback === null ? [] : [fallback]
 })
 const visibleThinkingOptions = computed(() => {
-  const available = thinkingOptions.value.filter((effort) => effort.trim().toLocaleLowerCase() !== 'off')
-  const candidates = available.length > 0 ? available : thinkingOptions.value
+  const candidates = thinkingOptions.value
   if (candidates.length <= 3) return candidates
   return [candidates[0]!, candidates[Math.floor((candidates.length - 1) / 2)]!, candidates.at(-1)!]
+})
+const selectedThinkingLabel = computed(() => {
+  const effort = selectableThinkingEffort(props.controls?.thinking)
+  return effort === null ? null : thinkingLabel(effort)
 })
 const slashQuery = computed(() => {
   const match = /^\/([^\s]*)$/.exec(value.value)
@@ -159,10 +164,19 @@ function updateModel(event: Event): void {
   if (props.controls === null) return
   const model = (event.target as HTMLSelectElement).value
   const descriptor = props.models.find((item) => item.id === model)
-  const efforts = descriptor?.supportEfforts ?? []
-  const thinking = efforts.includes(props.controls.thinking)
-    ? props.controls.thinking
-    : descriptor?.defaultEffort ?? efforts[0] ?? 'off'
+  const rawEfforts = descriptor?.supportEfforts ?? []
+  const efforts = rawEfforts.filter(isSelectableThinkingEffort)
+  const current = selectableThinkingEffort(props.controls.thinking)
+  const preferred = current === null
+    ? null
+    : efforts.find((effort) => effort.toLocaleLowerCase() === current.toLocaleLowerCase()) ?? null
+  const defaultEffort = selectableThinkingEffort(descriptor?.defaultEffort)
+  const thinking = preferred
+    ?? (defaultEffort === null
+      ? null
+      : efforts.find((effort) => effort.toLocaleLowerCase() === defaultEffort.toLocaleLowerCase()) ?? defaultEffort)
+    ?? efforts[0]
+    ?? (rawEfforts.length > 0 ? rawEfforts[0]! : props.controls.thinking)
   emit('updateControls', { ...props.controls, model, thinking })
 }
 
@@ -430,13 +444,21 @@ function mentionIcon(item: WorkspaceFileSearchItem) {
 
 function thinkingLabel(effort: string): string {
   return {
-    off: '关闭',
     low: '低',
     medium: '中',
     high: '高',
     xhigh: '超高',
     max: '最高'
   }[effort.trim().toLocaleLowerCase()] ?? effort
+}
+
+function isSelectableThinkingEffort(effort: string): boolean {
+  return selectableThinkingEffort(effort) !== null
+}
+
+function selectableThinkingEffort(effort: string | null | undefined): string | null {
+  const normalized = effort?.trim() ?? ''
+  return normalized.length < 1 || normalized.toLocaleLowerCase() === 'off' ? null : normalized
 }
 
 function skillSourceLabel(source: KimiSkill['source']): string {
@@ -685,7 +707,7 @@ watch(() => props.running, (running) => {
           @click="toggleSessionControls"
         >
           <span>{{ selectedModel?.displayName ?? controls?.model ?? (controlsPending ? '读取模型…' : '未配置模型') }}</span>
-          <span v-if="controls?.thinking" class="model-effort-chip">{{ thinkingLabel(controls.thinking) }}</span>
+          <span v-if="selectedThinkingLabel !== null" class="model-effort-chip">{{ selectedThinkingLabel }}</span>
           <PhCaretDown :size="12" />
         </button>
         <button
@@ -771,7 +793,7 @@ watch(() => props.running, (running) => {
             <option v-for="model in models" :key="model.id" :value="model.id">{{ model.displayName }}</option>
           </select>
         </label>
-        <div class="composer-control-block">
+        <div v-if="visibleThinkingOptions.length > 0" class="composer-control-block">
           <div class="composer-control-heading"><strong>思考强度</strong><small>更高强度适合复杂任务</small></div>
           <div class="composer-segments" role="radiogroup" aria-label="思考强度">
             <button
