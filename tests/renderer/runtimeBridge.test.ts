@@ -86,6 +86,111 @@ describe('useRuntimeBridge session races', () => {
     wrapper.unmount()
   })
 
+  it('reattaches the active session when the runtime bounces within a single flush', async () => {
+    let runtimeListener!: (state: { status: string; mode: string | null; version: string | null; serverId: string | null; origin: string | null; error: string | null }) => void
+    const openSession = vi.fn(async (sessionId: string) => sessionState(sessionId))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.30.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.30.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn((listener: typeof runtimeListener) => {
+        runtimeListener = listener
+        return () => {}
+      }),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession,
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        available: false, branch: null, ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-live')
+    await flushPromises()
+    expect(openSession).toHaveBeenCalledTimes(1)
+
+    /* 重启时 stopped → running 落在同一 Vue flush：App.vue 的 watcher 被合并，
+       会话永远不重连（重启后发消息无回复，切会话才恢复）；桥接层必须自己恢复 */
+    const stopped = { status: 'stopped', mode: null, version: null, serverId: null, origin: null, error: null }
+    const running = { status: 'running', mode: 'managed', version: '0.30.0', serverId: 'server-2', origin: 'http://127.0.0.1:1235', error: null }
+    runtimeListener(stopped)
+    runtimeListener(running)
+    await flushPromises()
+
+    expect(openSession).toHaveBeenCalledTimes(2)
+    expect(openSession).toHaveBeenLastCalledWith('session-live')
+    expect(bridge.sessionView.value?.sessionId).toBe('session-live')
+    wrapper.unmount()
+  })
+
+  it('does not reattach the detached session when connecting to an external runtime', async () => {
+    let runtimeListener!: (state: { status: string; mode: string | null; version: string | null; serverId: string | null; origin: string | null; error: string | null }) => void
+    const openSession = vi.fn(async (sessionId: string) => sessionState(sessionId))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.30.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.30.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn((listener: typeof runtimeListener) => {
+        runtimeListener = listener
+        return () => {}
+      }),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession,
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        available: false, branch: null, ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-live')
+    await flushPromises()
+    expect(openSession).toHaveBeenCalledTimes(1)
+
+    runtimeListener({ status: 'stopped', mode: null, version: null, serverId: null, origin: null, error: null })
+    runtimeListener({ status: 'running', mode: 'external', version: '0.30.0', serverId: 'server-9', origin: 'http://elsewhere:9000', error: null })
+    await flushPromises()
+
+    /* 外部 runtime 上旧会话可能不存在，不重连 */
+    expect(openSession).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('coalesces cross-client navigation refreshes and exposes a Config revision without receiving config data', async () => {
     vi.useFakeTimers()
     let globalListener!: (event: { scope: 'navigation' | 'config'; eventType: string }) => void

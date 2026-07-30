@@ -148,6 +148,10 @@ export function useRuntimeBridge() {
   let operationalTimer: number | undefined
   let workspaceRefreshTimer: number | undefined
   let requestedSessionId: string | null = null
+  /* 运行时掉线（如重启）前打开的会话：恢复 running 后由桥接层直接重连。
+     App.vue 的 [activeSessionId, status] watcher 在 stopped→running 落入同一
+     Vue flush 时会被合并掉，不能依赖它完成重连。 */
+  let detachedSessionId: string | null = null
   let lastThinkingEffort = loadLastThinkingEffort()
   const awaitingPromptCycleAt = new Map<string, number>()
   const localPromptQueue = computed(() => {
@@ -169,25 +173,34 @@ export function useRuntimeBridge() {
     discovery.value = bootstrap.discovery
     unsubscribeRuntime = window.kimiAgent.onRuntimeStateChanged((state) => {
       runtime.value = state
-      if (state.status === 'running') void refreshWorkspaceTree()
-      else {
-        sessionView.value = null
-        requestedSessionId = null
-        activeQueueSessionId.value = null
-        localPromptDraftsBySession.value = {}
-        awaitingPromptCycleAt.clear()
-        sessionOpenGeneration += 1
-        interactionGeneration += 1
-        interactionPendingKey.value = null
-        interactionError.value = null
-        resetSessionSkills()
-        resetSessionControls()
-        resetSessionOperational()
-        warningsGeneration += 1
-        sessionWarnings.value = []
-        sessionWarningsError.value = null
-        resetWorkspaceContext()
+      if (state.status === 'running') {
+        void refreshWorkspaceTree()
+        const resumeSessionId = detachedSessionId
+        detachedSessionId = null
+        /* 只在 Moon Code 自有的 runtime（重启/手动启停）上恢复会话；
+           接入外部 runtime 时旧会话可能不存在，不重连。 */
+        if (resumeSessionId !== null && (state.mode === 'managed' || state.mode === 'system')) {
+          void openSession(resumeSessionId)
+        }
+        return
       }
+      if (requestedSessionId !== null) detachedSessionId = requestedSessionId
+      sessionView.value = null
+      requestedSessionId = null
+      activeQueueSessionId.value = null
+      localPromptDraftsBySession.value = {}
+      awaitingPromptCycleAt.clear()
+      sessionOpenGeneration += 1
+      interactionGeneration += 1
+      interactionPendingKey.value = null
+      interactionError.value = null
+      resetSessionSkills()
+      resetSessionControls()
+      resetSessionOperational()
+      warningsGeneration += 1
+      sessionWarnings.value = []
+      sessionWarningsError.value = null
+      resetWorkspaceContext()
     })
     unsubscribeSession = window.kimiAgent.onSessionStateChanged((state) => {
       if (requestedSessionId !== null && state.sessionId !== requestedSessionId) return
@@ -1305,6 +1318,7 @@ export function useRuntimeBridge() {
   }
 
   const clearActiveSession = (): void => {
+    detachedSessionId = null
     requestedSessionId = null
     activeQueueSessionId.value = null
     sessionOpenGeneration += 1
