@@ -104,6 +104,13 @@ export class KimiSessionBridge extends EventEmitter {
     }
   }
 
+  async setSessionPlanMode(sessionId: string, enabled: boolean): Promise<void> {
+    this.#assertActiveSession(sessionId)
+    // Per-prompt plan_mode is ignored by recent runtimes; plan mode is
+    // session-level config applied through the profile endpoint.
+    await this.#runtime.createRestClient().setSessionPlanMode(sessionId, enabled)
+  }
+
   async getOperationalState(sessionId: string): Promise<KimiSessionOperationalState> {
     this.#assertActiveSession(sessionId)
     const client = this.#runtime.createRestClient()

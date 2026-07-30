@@ -37,6 +37,8 @@ const api: KimiAgentDesktopApi = {
   getSessionWarnings: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionWarningsList, sessionId),
   openSession: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionOpen, sessionId),
   getSessionRuntimeStatus: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionRuntimeGet, sessionId),
+  setSessionPlanMode: (sessionId, enabled) =>
+    ipcRenderer.invoke(ipcChannels.sessionPlanModeSet, sessionId, enabled),
   getSessionOperationalState: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionOperationalGet, sessionId),
   compactSession: (sessionId, instruction) =>
     ipcRenderer.invoke(ipcChannels.sessionCompact, sessionId, instruction),

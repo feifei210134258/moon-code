@@ -296,6 +296,27 @@ describe('KimiRestClient', () => {
     }))
   })
 
+  it('sets session plan mode through the profile agent_config route', async () => {
+    const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
+      status: 200, headers: { 'content-type': 'application/json' }
+    })
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(envelope({
+      id: 'session-1', workspace_id: 'wd_project_123456789abc', title: 'Task',
+      created_at: null, updated_at: null, busy: false,
+      metadata: { cwd: '/tmp/project' }, agent_config: { model: 'kimi-for-coding' },
+      usage: { input_tokens: 0, output_tokens: 0, context_tokens: 0, context_limit: 262144 },
+      permission_rules: [], message_count: 0, last_seq: 0
+    }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await client.setSessionPlanMode('session-1', true)
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe('http://127.0.0.1:1234/api/v1/sessions/session-1/profile')
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ agent_config: { plan_mode: true } })
+    }))
+  })
+
   it('uses Kimi Workspace and Session lifecycle routes without a second registry', async () => {
     const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
       status: 200, headers: { 'content-type': 'application/json' }

@@ -25,6 +25,7 @@ export const ipcChannels = {
   sessionChildrenList: 'session:children:list',
   sessionWarningsList: 'session:warnings:list',
   sessionRuntimeGet: 'session:runtime:get',
+  sessionPlanModeSet: 'session:plan-mode:set',
   sessionOperationalGet: 'session:operational:get',
   sessionCompact: 'session:compact',
   sessionUndo: 'session:undo',
@@ -1122,6 +1123,7 @@ export interface KimiAgentDesktopApi {
   getSessionWarnings(sessionId: string): Promise<KimiSessionWarning[]>
   openSession(sessionId: string): Promise<SessionViewState>
   getSessionRuntimeStatus(sessionId: string): Promise<KimiSessionRuntimeStatus>
+  setSessionPlanMode(sessionId: string, enabled: boolean): Promise<void>
   getSessionOperationalState(sessionId: string): Promise<KimiSessionOperationalState>
   compactSession(sessionId: string, instruction?: string): Promise<void>
   undoSession(sessionId: string, count?: number): Promise<KimiUndoDraft | null>

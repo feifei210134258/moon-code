@@ -1208,11 +1208,30 @@ export function useRuntimeBridge() {
   }
 
   const setPromptControls = (controls: KimiPromptControls): void => {
+    const previous = promptControls.value
     promptControls.value = { ...controls }
     const selectedThinking = selectableThinkingEffort(controls.thinking)
     if (selectedThinking !== null) {
       lastThinkingEffort = selectedThinking
       persistLastThinkingEffort(selectedThinking)
+    }
+    // Plan mode is session-level config on the runtime; the per-prompt field is
+    // ignored by recent servers. Apply the toggle immediately so the next
+    // prompt actually runs in plan mode, and roll back if the write fails.
+    if (
+      previous !== null &&
+      previous.planMode !== controls.planMode &&
+      requestedSessionId !== null &&
+      window.kimiAgent !== undefined
+    ) {
+      const sessionId = requestedSessionId
+      const enabled = controls.planMode
+      void window.kimiAgent.setSessionPlanMode(sessionId, enabled).catch((error: unknown) => {
+        if (promptControls.value !== null && promptControls.value.planMode === enabled) {
+          promptControls.value = { ...promptControls.value, planMode: !enabled }
+        }
+        sessionControlsError.value = errorMessage(error)
+      })
     }
   }
 

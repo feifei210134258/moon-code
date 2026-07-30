@@ -315,6 +315,15 @@ export function registerIpc(
     }
   )
   ipcMain.handle(
+    ipcChannels.sessionPlanModeSet,
+    async (event, sessionId?: unknown, enabled?: unknown): Promise<void> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      if (typeof enabled !== 'boolean') throw new Error('Invalid plan mode value')
+      await sessions.setSessionPlanMode(sessionId, enabled)
+    }
+  )
+  ipcMain.handle(
     ipcChannels.sessionOperationalGet,
     async (event, sessionId?: unknown): Promise<KimiSessionOperationalState> => {
       assertTrustedSender(event)

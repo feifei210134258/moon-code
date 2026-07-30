@@ -327,6 +327,72 @@ describe('useRuntimeBridge session races', () => {
     secondWrapper.unmount()
   })
 
+  it('applies plan mode toggles immediately as session config and rolls back on failure', async () => {
+    const model = {
+      id: 'kimi-for-coding', providerId: 'managed:kimi-code', displayName: 'Kimi for Coding',
+      maxContextSize: 262_144, capabilities: ['thinking'],
+      supportEfforts: ['off', 'low', 'high'], defaultEffort: 'high'
+    }
+    const setSessionPlanMode = vi.fn(async (_sessionId: string, _enabled: boolean) => {})
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.2.2', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.2', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
+      listFiles: vi.fn(async (_sessionId: string, path = '.') => ({ path, items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        available: true,
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })),
+      getSessionRuntimeStatus: vi.fn(async () => ({
+        busy: false, model: model.id, thinking: 'off', permissionMode: 'manual' as const,
+        planMode: false, swarmMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
+      })),
+      setSessionPlanMode,
+      getKimiSettings: vi.fn(async () => ({
+        models: [model],
+        preferences: { defaultModel: model.id }
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-1')
+    await flushPromises()
+    expect(bridge.promptControls.value?.planMode).toBe(false)
+
+    bridge.setPromptControls({ ...bridge.promptControls.value!, planMode: true })
+    await flushPromises()
+    expect(setSessionPlanMode).toHaveBeenCalledWith('session-1', true)
+    expect(bridge.promptControls.value?.planMode).toBe(true)
+
+    setSessionPlanMode.mockRejectedValueOnce(new Error('runtime offline'))
+    bridge.setPromptControls({ ...bridge.promptControls.value!, planMode: false })
+    await flushPromises()
+    expect(bridge.promptControls.value?.planMode).toBe(true)
+    expect(bridge.sessionControlsError.value).toBe('runtime offline')
+    wrapper.unmount()
+  })
+
   it('matches Kimi Web by keeping active-turn follow-ups local, reorderable, and flushing one at a time', async () => {
     let stateListener!: (state: SessionViewState) => void
     const active = { ...sessionState('session-queue'), busy: true, mainTurnActive: true, activePromptStatus: 'running' as const }
