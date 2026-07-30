@@ -2,6 +2,7 @@
 import {
   PhAt,
   PhCaretDown,
+  PhCube,
   PhFile,
   PhFolderOpen,
   PhImage,
@@ -53,6 +54,7 @@ const emit = defineEmits<{
 }>()
 
 const value = ref('')
+const selectedSkill = ref<KimiSkill | null>(null)
 const attachments = ref<KimiUploadedFile[]>([])
 const attachmentPending = ref(false)
 const attachmentError = ref<string | null>(null)
@@ -100,6 +102,7 @@ const selectedThinkingLabel = computed(() => {
   return effort === null ? null : thinkingLabel(effort)
 })
 const slashQuery = computed(() => {
+  if (selectedSkill.value !== null) return null
   const match = /^\/([^\s]*)$/.exec(value.value)
   return match?.[1]?.toLocaleLowerCase() ?? null
 })
@@ -127,26 +130,32 @@ const permissionDescription = computed(() => ({
 }[props.controls?.permissionMode ?? 'manual']))
 
 function submit(): void {
+  const hasText = selectedSkill.value !== null || value.value.trim().length > 0
   if (
     props.disabled === true ||
     props.pending === true ||
     props.activationPending === true ||
     props.controls === null ||
-    (value.value.trim().length === 0 && attachments.value.length === 0) ||
-    (props.goalMode === true && value.value.trim().length === 0)
+    (!hasText && attachments.value.length === 0) ||
+    (props.goalMode === true && !hasText)
   ) return
-  const text = value.value.trim()
+  const selected = selectedSkill.value
+  const selectedArgs = value.value.trim()
+  const composedValue = selected === null
+    ? value.value
+    : `/${selected.name}${selectedArgs.length === 0 ? '' : ` ${selectedArgs}`}`
+  const text = composedValue.trim()
   const command = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text)
   const skill = command === null || attachments.value.length > 0
     ? undefined
-    : props.skills.find((item) => item.name === command[1])
+    : selected ?? props.skills.find((item) => item.name === command[1])
   if (skill !== undefined) {
-    const args = command?.[2]?.trim()
+    const args = selected === null ? command?.[2]?.trim() : selectedArgs
     emit('activateSkill', skill.name, args === undefined || args.length === 0 ? undefined : args)
   } else {
     emit(
       'submit',
-      value.value,
+      composedValue,
       [...attachments.value],
       props.controls,
       props.goalMode === true,
@@ -154,6 +163,7 @@ function submit(): void {
     )
   }
   value.value = ''
+  selectedSkill.value = null
   attachments.value = []
   commandOpen.value = false
   closeMention()
@@ -264,14 +274,19 @@ function onComposerInput(): void {
 }
 
 function chooseSkill(skill: KimiSkill): void {
-  value.value = `/${skill.name} `
+  const replacingSelection = selectedSkill.value !== null
+  selectedSkill.value = skill
+  if (!replacingSelection) value.value = ''
   commandOpen.value = false
   closeMention()
   void nextTick(() => input.value?.focus())
 }
 
 async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<void> {
-  value.value = text
+  const command = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trim())
+  const skill = command === null ? undefined : props.skills.find((item) => item.name === command[1])
+  selectedSkill.value = skill ?? null
+  value.value = skill === undefined ? text : command?.[2] ?? ''
   attachments.value = [...files]
   commandOpen.value = false
   optionsOpen.value = false
@@ -470,6 +485,20 @@ function skillSourceLabel(source: KimiSkill['source']): string {
   }[source]
 }
 
+function skillDisplayName(name: string): string {
+  return name.split(':').map((segment) => segment
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toLocaleUpperCase()}${word.slice(1)}`)
+    .join(' ')
+  ).join(' · ')
+}
+
+function clearSelectedSkill(): void {
+  selectedSkill.value = null
+  void nextTick(() => input.value?.focus())
+}
+
 function positionPopover(kind: PopoverKind): void {
   const trigger = kind === 'options'
     ? modelTrigger.value
@@ -530,6 +559,16 @@ function onDocumentFocusin(event: FocusEvent): void {
 defineExpose({ loadDraft })
 
 function onKeydown(event: KeyboardEvent): void {
+  if (
+    event.key === 'Backspace' &&
+    selectedSkill.value !== null &&
+    input.value?.selectionStart === 0 &&
+    input.value.selectionEnd === 0
+  ) {
+    event.preventDefault()
+    clearSelectedSkill()
+    return
+  }
   if (mentionOpen.value) {
     const count = mentionItems.value.length
     if (event.key === 'Escape') {
@@ -637,14 +676,25 @@ watch(() => props.running, (running) => {
       <div v-if="attachmentPending" class="composer-attachment-chip is-loading"><PhSpinnerGap class="spin" :size="15" /><span>正在上传到 Kimi…</span></div>
     </div>
     <div v-if="attachmentError" class="composer-attachment-error" role="alert">{{ attachmentError }}</div>
-    <div class="composer-input-area">
+    <div class="composer-input-area" :class="{ 'has-selected-skill': selectedSkill !== null }">
+      <button
+        v-if="selectedSkill !== null"
+        type="button"
+        class="composer-skill-token"
+        :aria-label="`移除已选技能 ${skillDisplayName(selectedSkill.name)}`"
+        :title="`已选择 /${selectedSkill.name}；点击移除`"
+        @click="clearSelectedSkill"
+      >
+        <PhCube :size="18" />
+        <span>{{ skillDisplayName(selectedSkill.name) }}</span>
+      </button>
       <textarea
         ref="input"
         v-model="value"
         rows="1"
-        :placeholder="disabled ? disabledReason : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
+        :placeholder="disabled ? disabledReason : selectedSkill !== null ? '输入技能参数（可选）…' : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
         :disabled="disabled"
-        aria-label="输入任务"
+        :aria-label="selectedSkill === null ? '输入任务' : `${skillDisplayName(selectedSkill.name)} 技能参数`"
         aria-autocomplete="list"
         :aria-expanded="commandOpen || mentionOpen"
         :aria-controls="activeListboxId"
@@ -739,7 +789,7 @@ watch(() => props.running, (running) => {
           class="send-button"
           type="button"
           :aria-label="running ? (deliveryMode === 'steer' ? '发送引导' : '加入队列') : '发送任务'"
-          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (value.trim().length === 0 && attachments.length === 0) || (goalMode && value.trim().length === 0)"
+          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (selectedSkill === null && value.trim().length === 0 && attachments.length === 0) || (goalMode && selectedSkill === null && value.trim().length === 0)"
           @click="submit"
         >
           <PhPaperPlaneTilt :size="19" weight="fill" />

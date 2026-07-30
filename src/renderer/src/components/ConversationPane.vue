@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PhArrowSquareOut, PhTrash } from '@phosphor-icons/vue'
+import { PhArrowCounterClockwise, PhArrowSquareOut, PhSpinnerGap, PhTrash } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ChatTurn } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
@@ -72,6 +72,7 @@ const props = withDefaults(defineProps<{
   markers: SessionTranscriptMarker[]
   conversationActionPending: 'compact' | 'undo' | null
   conversationActionError: string | null
+  recallableTurnId?: string | null
   sideChat?: KimiSideChatView | null
   sideChatPending?: boolean
   sideChatError?: string | null
@@ -87,7 +88,8 @@ const props = withDefaults(defineProps<{
   agentDetail: null,
   agentTranscript: null,
   agentTranscriptPending: false,
-  agentTranscriptError: null
+  agentTranscriptError: null,
+  recallableTurnId: null
 })
 
 const emit = defineEmits<{
@@ -120,6 +122,7 @@ const emit = defineEmits<{
   closeSideChat: [agentId: string]
   openAgent: [agent: SessionAgentView]
   closeAgent: []
+  undo: []
 }>()
 
 const transcriptScroll = ref<HTMLElement | null>(null)
@@ -456,6 +459,18 @@ watch(
                 :base64-data="block.base64Data"
               />
             </template>
+          </div>
+          <div v-if="turn.role === 'user' && turn.id === recallableTurnId" class="turn-recall-action">
+            <button
+              type="button"
+              aria-label="撤回最后一条消息并放回输入框"
+              :disabled="conversationActionPending !== null"
+              @click="emit('undo')"
+            >
+              <PhSpinnerGap v-if="conversationActionPending === 'undo'" class="spin" :size="13" />
+              <PhArrowCounterClockwise v-else :size="13" />
+              {{ conversationActionPending === 'undo' ? '正在撤回…' : '撤回并编辑' }}
+            </button>
           </div>
         </div>
       </article>

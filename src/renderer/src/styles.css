@@ -32,6 +32,7 @@
   --muted: #5d6673;
   --faint: #697386;
   --blue: #3085fa;
+  --blue-ink: #176cc5;
   --blue-soft: rgba(48, 133, 250, 0.08);
   --green: #43a047;
   --green-soft: rgba(67, 160, 71, 0.1);
@@ -1837,6 +1838,35 @@ select:focus-visible {
   margin-bottom: 0;
 }
 
+.turn-recall-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 7px;
+}
+
+.turn-recall-action > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: var(--type-caption-size);
+  cursor: pointer;
+}
+
+.turn-recall-action > button:hover {
+  color: #215f91;
+  background: rgba(64, 146, 199, 0.09);
+}
+
+.turn-recall-action > button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .turn-header {
   display: flex;
   align-items: center;
@@ -3048,6 +3078,50 @@ select:focus-visible {
 .composer-input-area {
   position: relative;
   min-width: 0;
+  display: flex;
+  align-items: flex-start;
+}
+
+.composer-skill-token {
+  flex: none;
+  max-width: min(46%, 280px);
+  min-height: 31px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 1px 0 -2px;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--blue-ink);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--type-conversation-size);
+  font-weight: 590;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.composer-skill-token > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-skill-token:hover,
+.composer-skill-token:focus-visible {
+  background: var(--blue-soft);
+}
+
+.composer-skill-token:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(48, 133, 250, 0.18);
+}
+
+.composer-input-area.has-selected-skill textarea {
+  min-width: 0;
+  flex: 1;
 }
 
 .composer-wrap textarea {

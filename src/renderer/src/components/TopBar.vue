@@ -102,7 +102,11 @@ const displayUsageNotice = computed(() => {
       ? '· 即将用尽'
       : '· 接近上限'
   }
-  return window?.resetHint ? `· ${window.resetHint}` : null
+  if (!window?.resetHint) return null
+  const hint = Number.isNaN(Date.parse(window.resetHint))
+    ? window.resetHint
+    : resetHintLabel(window.resetHint)
+  return `· ${hint}`
 })
 let usageDisplayTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -172,9 +176,9 @@ function updatedLabel(value: string | null): string {
 function usageWindowLabel(label: string): string {
   const normalized = label.trim().toLocaleLowerCase()
   if (normalized === 'plan' || normalized === 'plan usage') return '套餐总量'
-  const hourWindow = /^(\d+)\s*h(?:\s*window)?$/.exec(normalized)
+  const hourWindow = /^(\d+)\s*h(?:\s*(?:window|limit))?$/.exec(normalized)
   if (hourWindow !== null) return `${hourWindow[1]} 小时窗口`
-  const dayWindow = /^(\d+)\s*d(?:\s*window)?$/.exec(normalized)
+  const dayWindow = /^(\d+)\s*d(?:\s*(?:window|limit))?$/.exec(normalized)
   if (dayWindow !== null) return `${dayWindow[1]} 天窗口`
   if (/^daily/.test(normalized)) return '每日窗口'
   if (/^weekly/.test(normalized)) return '每周窗口'
@@ -184,12 +188,35 @@ function usageWindowLabel(label: string): string {
 
 /* 用量接口返回英文重置提示（如 "resets in 5d 20h 5m"），展示前转为中文。 */
 function resetHintLabel(hint: string): string {
+  const resetAt = Date.parse(hint)
+  if (!Number.isNaN(resetAt)) {
+    const remainingSeconds = Math.max(0, Math.floor((resetAt - Date.now()) / 1_000))
+    return remainingSeconds === 0 ? '即将重置' : `${resetDurationLabel(remainingSeconds)}后重置`
+  }
   const body = /^resets?\s+in\s+(.+)$/i.exec(hint.trim())?.[1]
   if (body === undefined) return hint
   const unitNames: Record<string, string> = { s: '秒', m: '分钟', h: '小时', d: '天', w: '周' }
   const parts = [...body.matchAll(/(\d+)\s*([smhdw])\b/gi)]
   if (parts.length === 0) return hint
   return `${parts.map((part) => `${part[1] ?? ''} ${unitNames[(part[2] ?? '').toLowerCase()] ?? ''}`).join(' ')}后重置`
+}
+
+function resetDurationLabel(totalSeconds: number): string {
+  const units = [
+    ['天', 86_400],
+    ['小时', 3_600],
+    ['分钟', 60],
+    ['秒', 1]
+  ] as const
+  let remaining = totalSeconds
+  const parts: string[] = []
+  for (const [label, seconds] of units) {
+    const value = Math.floor(remaining / seconds)
+    if (value > 0) parts.push(`${value} ${label}`)
+    remaining %= seconds
+    if (parts.length === 3) break
+  }
+  return parts.join(' ') || '不到 1 秒'
 }
 </script>
 

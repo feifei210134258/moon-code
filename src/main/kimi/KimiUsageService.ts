@@ -276,14 +276,31 @@ function mapUsageResult(
 function mapWindow(window: ManagedUsageWindow, fallbackKey: string): KimiPlanUsageWindow {
   const used = Math.max(0, window.used)
   const limit = Math.max(0, window.limit)
+  const label = managedWindowLabel(window, fallbackKey)
   return {
-    key: `${fallbackKey}:${window.label}`,
-    label: window.label,
+    key: `${fallbackKey}:${label}`,
+    label,
     used,
     limit,
     ratio: limit === 0 ? null : Math.max(0, Math.min(1, used / limit)),
-    resetHint: window.reset_hint?.trim() || null
+    resetHint: window.reset_hint?.trim() || window.reset_at?.trim() || null
   }
+}
+
+function managedWindowLabel(window: ManagedUsageWindow, fallbackKey: string): string {
+  const legacyLabel = window.label?.trim()
+  if (legacyLabel) return legacyLabel
+  if (window.window !== undefined) {
+    const { duration, unit } = window.window
+    if (unit === 'week' && duration === 1) return 'Weekly limit'
+    const abbreviation = { minute: 'm', hour: 'h', day: 'd', week: 'w' }[unit]
+    return `${duration}${abbreviation} limit`
+  }
+  const name = window.name?.trim()
+  if (name) return name
+  return fallbackKey === 'summary'
+    ? 'Plan usage'
+    : `Limit ${Number.parseInt(fallbackKey.replace(/^limit-/, ''), 10) + 1 || 1}`
 }
 
 function emptyUsageState(

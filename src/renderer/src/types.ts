@@ -56,6 +56,7 @@ export interface ChatTurn {
   author: string
   time: string
   blocks: ChatBlock[]
+  originKind?: string
   queued?: boolean
   pending?: boolean
 }
