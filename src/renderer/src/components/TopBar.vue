@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
-  PhCaretLeft,
-  PhCaretRight,
   PhCaretDown,
   PhFolderSimple,
   PhGitBranch,
@@ -336,8 +334,6 @@ function resetDurationLabel(totalSeconds: number): string {
         @click="$emit('toggleExtensions')"
       >
         <PhSidebarSimple :size="19" :weight="extensionsOpen ? 'fill' : 'regular'" />
-        <PhCaretRight v-if="extensionsOpen" class="extensions-toggle-direction is-collapse" :size="9" weight="bold" />
-        <PhCaretLeft v-else class="extensions-toggle-direction is-expand" :size="9" weight="bold" />
       </button>
       <section v-if="contextOpen" id="context-popover" class="context-popover" aria-label="当前会话上下文用量">
         <header class="usage-popover-header">

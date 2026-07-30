@@ -49,13 +49,11 @@ describe('TopBar usage', () => {
     expect(wrapper.emitted('chooseWorkspace')).toEqual([[]])
     const collapseExtensions = wrapper.get('[aria-label="收起扩展栏"]')
     expect(collapseExtensions.attributes('aria-pressed')).toBe('true')
-    expect(collapseExtensions.find('.is-collapse').exists()).toBe(true)
     await collapseExtensions.trigger('click')
     expect(wrapper.emitted('toggleExtensions')).toEqual([[]])
     await wrapper.setProps({ extensionsOpen: false })
     const expandExtensions = wrapper.get('[aria-label="展开扩展栏"]')
     expect(expandExtensions.attributes('aria-pressed')).toBe('false')
-    expect(expandExtensions.find('.is-expand').exists()).toBe(true)
     await wrapper.get('[aria-label="查看上下文窗口"]').trigger('click')
     expect(wrapper.emitted('toggleContext')).toEqual([[]])
 

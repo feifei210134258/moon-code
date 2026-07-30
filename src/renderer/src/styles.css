@@ -18,15 +18,14 @@
   font-kerning: normal;
   font-optical-sizing: auto;
   color: #1d1d1f;
-  background: #dedcd9;
+  background: #e0e0df;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --window-bg: #dedcd9;
-  --sidebar-bg: #f4f3f1;
+  --window-bg: #e0e0df;
+  --sidebar-bg: #ececec;
   --surface: #ffffff;
-  --glass: rgba(222, 220, 217, 0.85);
+  --glass: rgba(224, 224, 223, 0.85);
   --surface-quiet: rgba(236, 236, 236, 0.85);
-  --surface-panel: #ededed;
   --border: rgba(0, 0, 0, 0.07);
   --border-strong: rgba(0, 0, 0, 0.13);
   --card-border: rgba(0, 0, 0, 0.06);
@@ -673,16 +672,6 @@ select:focus-visible {
   background: var(--accent-soft);
 }
 
-.extensions-toggle-direction {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
-  padding: 1px;
-  border-radius: 4px;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.35);
-}
-
 .account-button {
   gap: 4px;
   padding: 0 4px 0 6px;
@@ -711,7 +700,7 @@ select:focus-visible {
   overflow: hidden;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(244, 243, 241, 0.92);
+  background: rgba(236, 236, 236, 0.92);
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -1177,8 +1166,9 @@ select:focus-visible {
   border-radius: 7px;
   flex: none;
   margin-top: auto;
+  margin-bottom: 10px;
   padding-top: 8px;
-  font-size: var(--type-ui-size);
+  font-size: var(--type-ui-small-size);
 }
 
 .conversation-pane {
@@ -4132,7 +4122,7 @@ body.is-panel-resizing {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-/* 右栏三类事项保持为独立卡片，使用中性面板色而非白底。
+/* 右栏三类事项保持为独立卡片，底色与左侧栏卡片底色一致而非白底。
    卡片只靠底色和细边界分组，不叠加阴影；内部列表保持线性，避免嵌套卡片。 */
 .changes-view {
   display: grid;
@@ -4147,7 +4137,7 @@ body.is-panel-resizing {
   padding: 11px 12px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface-panel);
+  background: var(--sidebar-bg);
 }
 
 .changes-view .extension-state {
@@ -5741,7 +5731,7 @@ body.is-panel-resizing {
   overflow: auto;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(244, 243, 241, 0.92);
+  background: rgba(236, 236, 236, 0.92);
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
