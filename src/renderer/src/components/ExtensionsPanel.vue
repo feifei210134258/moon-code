@@ -102,7 +102,7 @@ const emit = defineEmits<{
   openDirectory: [path: string]
   openSystem: [path: string]
   trashEntry: [path: string]
-  attachToSession: [path: string]
+  attachToSession: [entry: WorkspaceFileEntry]
   searchFiles: [query: string]
   grepFiles: [pattern: string]
   refresh: []
@@ -190,7 +190,7 @@ function closeEntryContextMenu(): void {
 function attachContextEntryToSession(): void {
   const entry = contextEntry.value
   closeEntryContextMenu()
-  if (entry !== null) emit('attachToSession', entry.path)
+  if (entry !== null) emit('attachToSession', entry)
 }
 
 function openContextEntryInSystem(): void {

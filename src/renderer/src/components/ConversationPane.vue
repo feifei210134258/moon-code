@@ -249,6 +249,10 @@ function insertFileMention(path: string): void {
   composer.value?.insertFileMention(path)
 }
 
+function attachFiles(files: KimiUploadedFile[]): void {
+  composer.value?.addAttachments(files)
+}
+
 function scrollToTurn(turnId: string): void {
   document.getElementById(turnDomId(turnId))?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 }
@@ -344,7 +348,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', closeOutputMenuOnEscape)
 })
 
-defineExpose({ focusFromPet, loadPromptDraft, insertFileMention })
+defineExpose({ focusFromPet, loadPromptDraft, insertFileMention, attachFiles })
 
 watch(
   () => props.phase,

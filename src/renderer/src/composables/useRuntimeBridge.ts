@@ -23,6 +23,7 @@ import type {
   KimiSessionOperationalState,
   KimiSessionWarning,
   KimiUndoDraft,
+  KimiUploadedFile,
   QuestionAnswerInput,
   KimiSkill,
   RuntimeDiscovery,
@@ -960,6 +961,7 @@ export function useRuntimeBridge() {
       else if (key.startsWith('reveal:')) fileActionNotice.value = '已在 Finder 中显示文件。'
       else if (key.startsWith('system-open:')) fileActionNotice.value = '已使用系统默认应用打开。'
       else if (key.startsWith('trash:')) fileActionNotice.value = '已移到废纸篓。'
+      else if (key.startsWith('attach:')) fileActionNotice.value = '已作为附件添加到当前会话。'
       else fileActionNotice.value = '已交给 Kimi 打开文件。'
       return true
     } catch (error) {
@@ -1011,6 +1013,14 @@ export function useRuntimeBridge() {
     if (!trashed || sessionId === null || sessionId !== requestedSessionId) return
     if (filePreview.value?.path === path || filePreview.value?.path.startsWith(`${path}/`)) closeFilePreview()
     await refreshWorkspaceContext(sessionId)
+  }
+
+  const attachWorkspaceFile = async (path: string): Promise<KimiUploadedFile | null> => {
+    let uploaded: KimiUploadedFile | null = null
+    const completed = await runFileAction(`attach:${path}`, async (sessionId) => {
+      uploaded = await window.kimiAgent!.attachWorkspaceFile(sessionId, path)
+    })
+    return completed ? uploaded : null
   }
 
   const loadFileDiff = async (path: string): Promise<void> => {
@@ -1504,6 +1514,7 @@ export function useRuntimeBridge() {
     openWorkspaceFileSystem,
     revealWorkspaceFile,
     trashWorkspaceEntry,
+    attachWorkspaceFile,
     loadFileDiff,
     refreshWorkspaceContext,
     toggle,

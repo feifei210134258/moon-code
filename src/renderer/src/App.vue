@@ -421,9 +421,13 @@ function trashWorkspaceEntry(reference: string): void {
   if (path.length > 0) void runtimeBridge.trashWorkspaceEntry(path)
 }
 
-function attachFileToSession(reference: string): void {
-  const { path } = normalizeWorkspaceFileReference(reference)
-  if (path.length > 0) conversationPane.value?.insertFileMention(path)
+async function attachFileToSession(entry: WorkspaceFileEntry): Promise<void> {
+  if (entry.kind === 'directory') {
+    conversationPane.value?.insertFileMention(entry.path)
+    return
+  }
+  const uploaded = await runtimeBridge.attachWorkspaceFile(entry.path)
+  if (uploaded !== null) conversationPane.value?.attachFiles([uploaded])
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {

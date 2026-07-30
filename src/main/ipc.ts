@@ -1,6 +1,6 @@
 import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { basename } from 'node:path'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, stat, writeFile } from 'node:fs/promises'
 import { lookup as lookupMediaType } from 'mime-types'
 import {
   ipcChannels,
@@ -528,6 +528,26 @@ export function registerIpc(
       size: uploaded.size
     }
   })
+  ipcMain.handle(
+    ipcChannels.attachmentsAddWorkspaceFile,
+    async (event, sessionId?: unknown, path?: unknown): Promise<KimiUploadedFile> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      const target = sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      const targetStat = await stat(target)
+      if (!targetStat.isFile()) throw new Error('只能将文件添加为会话附件，文件夹请以路径形式引用。')
+      const mediaType = lookupMediaType(target) || 'application/octet-stream'
+      const uploaded = await runtime
+        .createRestClient()
+        .uploadFile({ bytes: await readFile(target), name: basename(target), mediaType })
+      return {
+        fileId: uploaded.id,
+        name: uploaded.name,
+        mediaType: uploaded.media_type,
+        size: uploaded.size
+      }
+    }
+  )
   ipcMain.handle(
     ipcChannels.attachmentRead,
     async (event, fileId?: unknown, mediaType?: unknown): Promise<KimiAttachmentBlob> => {

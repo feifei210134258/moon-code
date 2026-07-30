@@ -191,7 +191,7 @@ describe('ExtensionsPanel', () => {
     await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
     expect(wrapper.get('.file-context-menu').text()).toContain('添加至会话')
     await wrapper.findAll('.file-context-menu button')[0]!.trigger('click')
-    expect(wrapper.emitted('attachToSession')).toEqual([['README.md']])
+    expect(wrapper.emitted('attachToSession')).toEqual([[baseProps.fileList.items[1]]])
 
     await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
     expect(wrapper.get('.file-context-menu').text()).toContain('系统打开')

@@ -473,6 +473,13 @@ function insertFileMention(path: string): void {
   })
 }
 
+function addAttachments(files: KimiUploadedFile[]): void {
+  if (files.length === 0 || props.disabled === true) return
+  const existing = new Set(attachments.value.map((file) => file.fileId))
+  attachments.value = [...attachments.value, ...files.filter((file) => !existing.has(file.fileId))]
+  void nextTick(() => input.value?.focus())
+}
+
 function mentionIcon(item: WorkspaceFileSearchItem) {
   return item.kind === 'directory' ? PhFolderOpen : PhFile
 }
@@ -576,7 +583,7 @@ function onDocumentFocusin(event: FocusEvent): void {
   if (optionsOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
-defineExpose({ loadDraft, insertFileMention })
+defineExpose({ loadDraft, insertFileMention, addAttachments })
 
 function onKeydown(event: KeyboardEvent): void {
   if (
