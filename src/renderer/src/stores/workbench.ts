@@ -78,7 +78,7 @@ export const useWorkbenchStore = defineStore('workbench', {
     activeSessionId: 'explore-client',
     activeExtension: 'changes' as ExtensionTab,
     rightPanelOpen: true,
-    leftPanelWidth: 280,
+    leftPanelWidth: 270,
     rightPanelWidth: 382,
     terminalOpen: false,
     turns: structuredClone(initialTurns),

@@ -3,7 +3,7 @@ name: Moon Code
 description: A clear, efficient Kimi Code-native desktop workbench for staying in project context.
 colors:
   window-bg: "#DEDCD9"
-  sidebar-bg: "#ECEBE9"
+  sidebar-bg: "#F4F3F1"
   surface: "#FFFFFF"
   glass: "#DEDCD9D9"
   surface-quiet: "#ECECECD9"
@@ -175,7 +175,7 @@ The palette is a restrained warm-neutral system: white content cards float on a 
 ### Neutral
 
 - **Window Field** (#DEDCD9): Main application background; the white content cards float on it.
-- **Sidebar Field** (#ECEBE9): The frosted sidebar card surface, one step lighter than the window field so navigation reads as a separate layer. The settings navigation reuses the same card treatment.
+- **Sidebar Field** (#F4F3F1): The frosted sidebar card surface, one step lighter than the window field so navigation reads as a separate layer. The settings navigation reuses the same card treatment.
 - **Surface White** (#FFFFFF): Transcript, composer, menus, dialogs, and content cards.
 - **Quiet Surface** (#ECECECD9): Secondary cells, token summaries, and low-emphasis grouping.
 - **Panel Surface** (#EDEDED): Non-white background for the three right-sidebar cards; it separates work categories without adding decorative shadows.

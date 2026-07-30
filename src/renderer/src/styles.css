@@ -22,7 +22,7 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --window-bg: #dedcd9;
-  --sidebar-bg: #ecebe9;
+  --sidebar-bg: #f4f3f1;
   --surface: #ffffff;
   --glass: rgba(222, 220, 217, 0.85);
   --surface-quiet: rgba(236, 236, 236, 0.85);
@@ -711,7 +711,7 @@ select:focus-visible {
   overflow: hidden;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(236, 235, 233, 0.92);
+  background: rgba(244, 243, 241, 0.92);
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -738,7 +738,7 @@ select:focus-visible {
   align-items: center;
   gap: 9px;
   padding: 0 10px;
-  font-size: var(--type-ui-size);
+  font-size: var(--type-ui-small-size);
   font-weight: 500;
 }
 
@@ -793,7 +793,7 @@ select:focus-visible {
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: var(--type-ui-size);
+  font-size: var(--type-ui-small-size);
 }
 
 .session-search input::placeholder {
@@ -858,7 +858,7 @@ select:focus-visible {
   height: 39px;
   padding: 0 10px;
   border-radius: 9px;
-  font-size: var(--type-ui-size);
+  font-size: var(--type-ui-small-size);
   font-weight: 510;
 }
 
@@ -909,8 +909,8 @@ select:focus-visible {
   width: 100%;
   padding: 0 34px 0 8px;
   border-radius: 7px;
-  font-size: var(--type-ui-size);
-  font-weight: 560;
+  font-size: var(--type-ui-small-size);
+  font-weight: 500;
 }
 
 .project-row > span:last-child {
@@ -924,9 +924,6 @@ select:focus-visible {
   background: rgba(0, 0, 0, 0.07);
 }
 
-.project-row-wrap.is-active .project-row {
-  font-weight: 650;
-}
 
 .session-list {
   display: grid;
@@ -942,7 +939,7 @@ select:focus-visible {
   align-items: center;
   padding: 7px 9px 7px 34px;
   border-radius: 7px;
-  font-size: var(--type-ui-size);
+  font-size: var(--type-ui-small-size);
 }
 
 .session-row-wrap:hover .session-row,
@@ -4091,7 +4088,7 @@ body.is-panel-resizing {
   justify-content: space-between;
   padding: 0 12px 0 17px;
   color: var(--muted);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   letter-spacing: 0.055em;
 }
 
@@ -4119,7 +4116,7 @@ body.is-panel-resizing {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
 }
 
 .extension-tabs button.is-active {
@@ -4187,7 +4184,7 @@ body.is-panel-resizing {
 .plan-panel h2 {
   margin: 0;
   color: var(--text);
-  font-size: var(--type-ui-size);
+  font-size: var(--type-ui-small-size);
   font-weight: 650;
   letter-spacing: 0.01em;
 }
@@ -4204,7 +4201,7 @@ body.is-panel-resizing {
 .git-summary {
   overflow: hidden;
   color: var(--muted);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   font-weight: 500;
   letter-spacing: normal;
   text-overflow: ellipsis;
@@ -4222,7 +4219,7 @@ body.is-panel-resizing {
   border: 0;
   background: transparent;
   text-align: left;
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
 }
 
 .changed-file-row + .changed-file-row {
@@ -4255,7 +4252,7 @@ body.is-panel-resizing {
   justify-content: space-between;
   padding: 0 11px;
   border-bottom: 1px solid var(--border);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
 }
 
 .diff-panel > header > span {
@@ -4378,7 +4375,7 @@ body.is-panel-resizing {
   grid-template-columns: 8px minmax(0, 1fr) auto;
   gap: 8px;
   padding: 4px 0;
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
   line-height: 1.45;
 }
 
@@ -4422,7 +4419,7 @@ body.is-panel-resizing {
 .plan-empty {
   margin: 5px 0 0;
   color: var(--muted);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   line-height: 1.55;
 }
 
@@ -4453,7 +4450,7 @@ body.is-panel-resizing {
 
 .background-task-row strong {
   overflow: hidden;
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
   font-weight: 580;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4462,7 +4459,7 @@ body.is-panel-resizing {
 .background-task-row em {
   flex: none;
   color: var(--muted);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   font-style: normal;
   text-transform: capitalize;
 }
@@ -4473,7 +4470,7 @@ body.is-panel-resizing {
   margin: 4px 0 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   line-height: 1.45;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4487,7 +4484,7 @@ body.is-panel-resizing {
   gap: 7px;
   padding: 12px;
   color: var(--muted);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   line-height: 1.45;
   text-align: center;
 }
@@ -4538,7 +4535,7 @@ body.is-panel-resizing {
   align-items: center;
   gap: 7px;
   min-width: 0;
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
 }
 
 .files-toolbar > span {
@@ -4557,7 +4554,7 @@ body.is-panel-resizing {
   border-radius: 7px;
   color: var(--muted);
   background: var(--accent-soft);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   line-height: 1.4;
 }
 
@@ -4667,7 +4664,7 @@ body.is-panel-resizing {
   font-size: var(--type-micro-size);
   letter-spacing: 0.06em;
 }
-.file-search-results > header strong { font-size: var(--type-caption-size); font-weight: 590; }
+.file-search-results > header strong { font-size: var(--type-micro-size); font-weight: 590; }
 .file-search-results > button,
 .grep-match-list > button {
   min-width: 0;
@@ -4683,7 +4680,7 @@ body.is-panel-resizing {
   background: transparent;
   cursor: pointer;
   text-align: left;
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
 }
 .file-search-results > button:hover,
 .grep-match-list > button:hover { background: rgba(0, 0, 0, 0.06); }
@@ -4706,7 +4703,7 @@ body.is-panel-resizing {
   border-radius: 8px;
   background: transparent;
   text-align: left;
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
   cursor: pointer;
 }
 
@@ -4797,7 +4794,7 @@ body.is-panel-resizing {
 
 .file-preview-identity strong {
   color: var(--ink);
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
   font-weight: 620;
 }
 
@@ -4888,7 +4885,7 @@ body.is-panel-resizing {
   gap: 8px;
   padding: 24px;
   color: var(--muted);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   line-height: 1.55;
   text-align: center;
 }
@@ -4904,7 +4901,7 @@ body.is-panel-resizing {
   color: var(--text);
   background: #ffffff;
   font-family: var(--font-mono);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
   line-height: 1.6;
 }
 
@@ -4967,7 +4964,7 @@ body.is-panel-resizing {
   gap: 8px;
   padding: 0 9px 0 13px;
   border-bottom: 1px solid var(--border);
-  font-size: var(--type-ui-small-size);
+  font-size: var(--type-caption-size);
 }
 
 .attachment-preview-dialog > header strong {
@@ -5200,7 +5197,7 @@ body.is-panel-resizing {
   align-items: center;
   gap: 6px;
   color: var(--accent);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
 }
 
 .browser-annotation-popover > header button,
@@ -5319,7 +5316,7 @@ body.is-panel-resizing {
 
 .browser-empty strong {
   color: var(--text);
-  font-size: var(--type-caption-size);
+  font-size: var(--type-micro-size);
 }
 
 .browser-loading {
@@ -5744,7 +5741,7 @@ body.is-panel-resizing {
   overflow: auto;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(236, 235, 233, 0.92);
+  background: rgba(244, 243, 241, 0.92);
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
