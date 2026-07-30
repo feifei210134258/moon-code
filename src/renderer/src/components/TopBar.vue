@@ -190,7 +190,7 @@ function usageWindowLabel(label: string): string {
   return label
 }
 
-/* 用量接口返回英文重置提示（如 "resets in 5d 20h 5m"），展示前转为中文。 */
+/* 用量接口返回英文重置提示（如 "resets in 5d 20h 5m"），展示前换算成总秒数再格式化。 */
 function resetHintLabel(hint: string): string {
   const resetAt = Date.parse(hint)
   if (!Number.isNaN(resetAt)) {
@@ -199,16 +199,21 @@ function resetHintLabel(hint: string): string {
   }
   const body = /^resets?\s+in\s+(.+)$/i.exec(hint.trim())?.[1]
   if (body === undefined) return hint
-  const unitNames: Record<string, string> = { s: '秒', m: '分', h: '小时', d: '天', w: '周' }
-  const parts = [...body.matchAll(/(\d+)\s*([smhdw])\b/gi)].slice(0, 2)
-  if (parts.length === 0) return hint
-  return `${parts.map((part) => `${part[1] ?? ''}${unitNames[(part[2] ?? '').toLowerCase()] ?? ''}`).join('')}后重置`
+  const unitSeconds: Record<string, number> = { s: 1, m: 60, h: 3_600, d: 86_400, w: 604_800 }
+  let matched = false
+  let totalSeconds = 0
+  for (const part of body.matchAll(/(\d+)\s*([smhdw])\b/gi)) {
+    matched = true
+    totalSeconds += Number(part[1]) * (unitSeconds[(part[2] ?? '').toLowerCase()] ?? 0)
+  }
+  return matched ? `${resetDurationLabel(totalSeconds)}后重置` : hint
 }
 
+/* 紧凑倒计时：天/时/分最多三段，前导零单位省略（0 天不显示），不足一分钟显示“不到 1 分”。 */
 function resetDurationLabel(totalSeconds: number): string {
   const units = [
     ['天', 86_400],
-    ['小时', 3_600],
+    ['时', 3_600],
     ['分', 60]
   ] as const
   let remaining = totalSeconds
@@ -217,7 +222,6 @@ function resetDurationLabel(totalSeconds: number): string {
     const value = Math.floor(remaining / seconds)
     if (value > 0) parts.push(`${value}${label}`)
     remaining %= seconds
-    if (parts.length === 2) break
   }
   return parts.join('') || '不到 1 分'
 }

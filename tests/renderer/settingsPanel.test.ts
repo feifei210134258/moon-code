@@ -209,12 +209,13 @@ describe('SettingsPanel', () => {
     await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
 
     expect(wrapper.text()).toContain('跟随主模型')
-    expect(wrapper.find('.provider-model-item.is-selected').exists()).toBe(false)
+    expect(wrapper.get('.provider-model-follow.is-selected').text()).toContain('跟随主模型')
+    expect(wrapper.find('.provider-model-item:not(.provider-model-follow).is-selected').exists()).toBe(false)
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeDefined()
 
     await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
-    await wrapper.get('.provider-model-item').trigger('click')
-    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('gpt-5-mini')
+    await wrapper.get('.provider-model-item:not(.provider-model-follow)').trigger('click')
+    expect(wrapper.get('.provider-model-item:not(.provider-model-follow).is-selected').text()).toContain('gpt-5-mini')
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeUndefined()
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
     await flushPromises()
@@ -244,7 +245,7 @@ describe('SettingsPanel', () => {
     expect(wrapper.text()).toContain('Kimi Fast')
     expect(wrapper.text()).toContain('独立模型已启用')
     expect(wrapper.text()).toContain('Config API does not accept secondary_model yet')
-    expect(wrapper.findAll('.provider-model-item')).toHaveLength(2)
+    expect(wrapper.findAll('.provider-model-item:not(.provider-model-follow)')).toHaveLength(2)
     wrapper.unmount()
   })
 
@@ -434,6 +435,60 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
+  it('switches back to following the primary model from the model list row', async () => {
+    const configuredSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      secondaryModelControl: {
+        preference: { mode: 'configured', model: 'kimi-fast', defaultEffort: 'low' },
+        appliedPreference: { mode: 'configured', model: 'kimi-fast', defaultEffort: 'low' },
+        appliedSource: 'moon-code-environment',
+        requiresRestart: false,
+        configurationMode: 'runtime-env'
+      },
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          supported: true,
+          enabled: true,
+          writable: true,
+          canDisable: true,
+          maxOutputSizeWritable: false,
+          unavailableReason: null
+        }
+      }
+    }
+    const disabled: KimiSettingsSnapshot = {
+      ...configuredSnapshot,
+      secondaryModel: { model: null, defaultEffort: null, maxOutputSize: null },
+      secondaryModelControl: {
+        ...configuredSnapshot.secondaryModelControl,
+        preference: { mode: 'disabled', model: null, defaultEffort: null }
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => configuredSnapshot),
+      disableSecondaryModel: vi.fn(async () => disabled)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+
+    /* 已配置独立模型时，“跟随主模型”行未选中，当前模型行选中；点击跟随行后直接切回 */
+    expect(wrapper.find('.provider-model-follow.is-selected').exists()).toBe(false)
+    expect(wrapper.get('.provider-model-item:not(.provider-model-follow).is-selected').text()).toContain('Kimi Fast')
+    await wrapper.get('.provider-model-follow').trigger('click')
+    await flushPromises()
+
+    expect(api.disableSecondaryModel).toHaveBeenCalledOnce()
+    expect(wrapper.get('.provider-model-follow.is-selected').text()).toContain('跟随主模型')
+    expect(wrapper.find('.provider-model-item:not(.provider-model-follow).is-selected').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('lets the user remove a Moon Code override and return to Kimi configuration', async () => {
     const configured: KimiSettingsSnapshot = {
       ...snapshot,
@@ -573,8 +628,8 @@ describe('SettingsPanel', () => {
       apiKey: 'sk-ant-secret'
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
-    await wrapper.get('.provider-model-item').trigger('click')
-    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('claude-sonnet-4-5')
+    await wrapper.get('.provider-model-item:not(.provider-model-follow)').trigger('click')
+    expect(wrapper.get('.provider-model-item:not(.provider-model-follow).is-selected').text()).toContain('claude-sonnet-4-5')
     expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
     wrapper.unmount()
   })
@@ -730,7 +785,7 @@ describe('SettingsPanel', () => {
     await flushPromises()
     await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
     await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
-    await wrapper.get('.provider-model-item').trigger('click')
+    await wrapper.get('.provider-model-item:not(.provider-model-follow)').trigger('click')
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
     await flushPromises()
 

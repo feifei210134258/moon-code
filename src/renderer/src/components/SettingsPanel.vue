@@ -134,7 +134,8 @@ const secondaryOutcomeTitle = computed(() => {
 })
 const secondaryOutcomeMeta = computed(() => {
   const settings = snapshot.value
-  if (settings === null || secondaryFollowsPrimary.value) return '新建子 Agent 将使用当前主模型。'
+  if (settings === null) return '新建子 Agent 将使用当前主模型。'
+  if (secondaryFollowsPrimary.value) return '新建子 Agent 将使用当前主模型；在下方列表选择模型并保存，可指定独立模型。'
   const preference = settings.secondaryModelControl.preference
   const effort = usesSecondaryRuntimePreference.value && preference.mode === 'configured'
     ? preference.defaultEffort
@@ -525,6 +526,15 @@ async function setSecondaryModel(): Promise<void> {
     error.value = errorMessage(reason)
   } finally {
     actionPending.value = null
+  }
+}
+
+function selectFollowPrimaryModel(): void {
+  if (actionPending.value !== null || snapshot.value === null) return
+  secondaryModelDraft.value.model = ''
+  secondaryModelDraft.value.defaultEffort = ''
+  if (!secondaryFollowsPrimary.value && snapshot.value.capabilities.secondaryModel.canDisable) {
+    void disableSecondaryModel()
   }
 }
 
@@ -1299,23 +1309,36 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                           </button>
                         </div>
 
-                        <div v-if="secondaryProviderModels.length > 0" class="provider-model-list">
+                        <div class="provider-model-list">
                           <button
-                            v-for="model in secondaryProviderModels"
-                            :key="model.id"
-                            class="provider-model-item"
-                            :class="{ 'is-selected': secondaryModelDraft.model === model.id }"
+                            class="provider-model-item provider-model-follow"
+                            :class="{ 'is-selected': secondaryModelDraft.model.length < 1 }"
                             type="button"
                             :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
-                            @click="secondaryModelDraft.model = model.id; onSecondaryModelDraftChange()"
+                            title="新建子 Agent 使用当前主模型"
+                            @click="selectFollowPrimaryModel"
                           >
-                            <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model === model.id" :size="12" /></span>
-                            <span><strong>{{ model.displayName }}</strong><small>{{ model.id }}</small></span>
-                            <span v-if="currentSecondaryProviderId === model.providerId && secondaryModelDescriptor?.id === model.id" class="model-current-badge">当前使用</span>
-                            <small v-else>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                            <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model.length < 1" :size="12" /></span>
+                            <span><strong>跟随主模型</strong><small>新建子 Agent 使用当前主模型</small></span>
                           </button>
+                          <template v-if="secondaryProviderModels.length > 0">
+                            <button
+                              v-for="model in secondaryProviderModels"
+                              :key="model.id"
+                              class="provider-model-item"
+                              :class="{ 'is-selected': secondaryModelDraft.model === model.id }"
+                              type="button"
+                              :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
+                              @click="secondaryModelDraft.model = model.id; onSecondaryModelDraftChange()"
+                            >
+                              <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model === model.id" :size="12" /></span>
+                              <span><strong>{{ model.displayName }}</strong><small>{{ model.id }}</small></span>
+                              <span v-if="currentSecondaryProviderId === model.providerId && secondaryModelDescriptor?.id === model.id" class="model-current-badge">当前使用</span>
+                              <small v-else>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                            </button>
+                          </template>
                         </div>
-                        <div v-else class="provider-model-empty">这个服务暂时没有可用模型。</div>
+                        <div v-if="secondaryProviderModels.length < 1" class="provider-model-empty">这个服务暂时没有可用模型。</div>
 
                         <div v-if="snapshot.capabilities.secondaryModel.writable" class="secondary-model-footer">
                           <div class="provider-form secondary-model-form">

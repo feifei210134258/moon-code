@@ -93,8 +93,8 @@ describe('TopBar usage', () => {
     const popover = wrapper.get('.usage-popover').text()
     expect(popover).toContain('套餐总量')
     expect(popover).toContain('5 小时窗口')
-    expect(popover).toContain('5天20小时后重置')
-    expect(popover).toContain('1小时12分后重置')
+    expect(popover).toContain('5天20时5分后重置')
+    expect(popover).toContain('1时12分后重置')
     expect(popover).not.toContain('resets in')
   })
 
@@ -119,11 +119,11 @@ describe('TopBar usage', () => {
       }
     })
 
-    expect(wrapper.get('.plan-usage').text()).toContain('2小时后重置')
+    expect(wrapper.get('.plan-usage').text()).toContain('2时后重置')
     const popover = wrapper.get('.usage-popover').text()
     expect(popover).toContain('每周窗口')
     expect(popover).toContain('5 小时窗口')
-    expect(popover).toContain('3天14小时后重置')
+    expect(popover).toContain('3天14时后重置')
     expect(popover).not.toContain('2026-')
     wrapper.unmount()
     vi.useRealTimers()
