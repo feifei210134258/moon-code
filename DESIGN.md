@@ -38,6 +38,11 @@ typography:
     fontSize: "1.125rem"
     fontWeight: 650
     lineHeight: 1.35
+  conversation:
+    fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
+    fontSize: "0.9375rem"
+    fontWeight: 400
+    lineHeight: 1.62
   body:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
     fontSize: "1rem"
@@ -110,7 +115,7 @@ components:
   composer:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
-    typography: "{typography.body}"
+    typography: "{typography.conversation}"
     rounded: "{rounded.lg}"
     padding: "13px 14px 10px"
   interaction-card:
@@ -137,7 +142,7 @@ Moon Code is a focused developer workbench: calm enough for long sessions, dense
 
 The visual language serves the product personality captured in `packages/kimi-adapter/PRODUCT.md`: **高效、清晰、可靠**. Preserve the existing desktop-tool familiarity—Inter and system fallbacks, Phosphor icons, restrained borders, and small state pills—while tightening anything that competes with the task. The system explicitly rejects over-gamified UI, marketing-landing-page composition, and dense information without hierarchy.
 
-The following are captured optimizations rather than a new visual direction: use a comfortable 16px reading size for transcript prose and composer input, keep persistent supporting text at 12px or larger, replace failing faint-gray text with a darker semantic muted ramp, collapse empty panels instead of reserving dashboard-sized space, and avoid pairing a strong border with a 16px+ soft shadow. A missing data value must never render as a full progress bar.
+The following are captured optimizations rather than a new visual direction: use a comfortable 15px size for transcript prose and composer input, keep persistent supporting text at 12px or larger, replace failing faint-gray text with a darker semantic muted ramp, collapse empty panels instead of reserving dashboard-sized space, and avoid pairing a strong border with a 16px+ soft shadow. A missing data value must never render as a full progress bar.
 
 **Key Characteristics:**
 
@@ -194,14 +199,15 @@ The palette is a restrained cool-neutral system: white content surfaces sit on a
 - **Display** (700, 1.4375rem / 23px, 1.2): Brand lockup and rare high-confidence headings.
 - **Headline** (650, 1.25rem / 20px, 1.3): Markdown h2 and prominent page headings.
 - **Title** (650, 1.125rem / 18px, 1.35): Panel titles, transcript section labels, and important control text.
-- **Body** (400, 1rem / 16px, 1.6): Transcript prose, composer input, and user-facing explanatory copy. Keep prose lines near 65–75ch where the surface allows; compact task metadata may be denser.
+- **Conversation** (400, 0.9375rem / 15px, 1.62): Transcript prose and composer input. Keep prose lines near 65–75ch where the surface allows.
+- **Body** (400, 1rem / 16px, 1.6): User-facing explanatory copy; compact task metadata may be denser.
 - **UI** (500, 0.875rem / 14px, 1.45): Navigation, ordinary controls, file rows, and high-frequency product labels.
 - **Label** (590, 0.78125rem / 12.5px, 1.4): Supporting labels, status text, timestamps, and metadata. Persistent text should stay at or above 12px; 11px is reserved for very short, transient badges.
 - **Mono** (400, 0.8125rem / 13px, 1.5): Code, paths, diffs, and terminal output. Do not use mono for ordinary UI labels.
 
 ### Named Rules
 
-**The Readable Floor Rule.** Long-form reading and authoring use 16px; persistent interface copy is at least 12px and must meet a 4.5:1 contrast target where it carries meaning. Do not use wide tracking to compensate for text that is too small or too light.
+**The Readable Floor Rule.** Conversation reading and composing use 15px; persistent interface copy is at least 12px and must meet a 4.5:1 contrast target where it carries meaning. Do not use wide tracking to compensate for text that is too small or too light.
 
 ## 4. Elevation
 
@@ -275,7 +281,7 @@ Changes, Plan, and Background Tasks remain three separate cards because they rep
 - **Do** use Moon Blue only for action, selection, focus, links, and information state.
 - **Do** preserve the cool light workbench field and white transcript/composer surfaces as the homepage baseline.
 - **Do** keep controls familiar: Phosphor icons, consistent 7–12px radii, shared button heights, and explicit hover/focus/disabled states.
-- **Do** keep persistent UI text at 12px or larger, use 16px for reading and authoring surfaces, and verify 4.5:1 contrast for meaningful copy.
+- **Do** keep persistent UI text at 12px or larger, use 15px for conversation reading and composing, and verify 4.5:1 contrast for meaningful copy.
 - **Do** collapse empty plans, changes, tasks, and usage surfaces to a teaching empty state with a next action.
 - **Do** make runtime, usage, approval, and error state visible in both text and semantic color.
 - **Do** respect `prefers-reduced-motion` and keep all state transitions short (roughly 120–250ms).
