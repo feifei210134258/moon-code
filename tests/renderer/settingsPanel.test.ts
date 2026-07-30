@@ -116,7 +116,7 @@ describe('SettingsPanel', () => {
     await flushPromises()
 
     expect(api.getKimiSettings).toHaveBeenCalledTimes(2)
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
     expect(wrapper.findAll('.model-row')[1]!.classes()).toContain('is-selected')
     wrapper.unmount()
@@ -139,7 +139,7 @@ describe('SettingsPanel', () => {
     await flushPromises()
 
     expect(api.getKimiSettings).toHaveBeenCalledOnce()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
     const modelRows = wrapper.findAll('.model-row')
     expect(modelRows).toHaveLength(2)
@@ -162,7 +162,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
 
     const thinkingRow = wrapper.get('.primary-thinking-row')
@@ -206,7 +206,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     expect(wrapper.text()).toContain('跟随主模型')
     expect(wrapper.get('.provider-model-follow.is-selected').text()).toContain('跟随主模型')
@@ -239,7 +239,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     expect(wrapper.text()).toContain('子 Agent 模型')
     expect(wrapper.text()).toContain('Kimi Fast')
@@ -281,7 +281,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     expect(wrapper.text()).toContain('外部环境变量覆盖')
     wrapper.unmount()
@@ -322,7 +322,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     await wrapper.find('.secondary-model-form input[type="number"]').setValue('4096')
     const saveButton = wrapper.find('.secondary-model-actions .primary-button')
     expect(saveButton.attributes('disabled')).toBeUndefined()
@@ -408,7 +408,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     expect(wrapper.find('.secondary-model-form input[type="number"]').exists()).toBe(false)
     await wrapper.find('.secondary-model-actions .primary-button').trigger('click')
@@ -475,7 +475,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     /* 已配置独立模型时，“跟随主模型”行未选中，当前模型行选中；点击跟随行后直接切回 */
     expect(wrapper.find('.provider-model-follow.is-selected').exists()).toBe(false)
@@ -531,7 +531,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     await wrapper.get('.secondary-runtime-details summary').trigger('click')
     const inheritButton = wrapper.findAll('.secondary-runtime-details .provider-disclosure-button')
@@ -556,8 +556,8 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    expect(wrapper.findAll('.settings-nav button').map((button) => button.text())).not.toContain('Provider')
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    expect(wrapper.findAll('.settings-tab').map((button) => button.text())).not.toContain('Provider')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     expect(wrapper.findAll('.provider-catalog-item')).toHaveLength(2)
     expect(wrapper.find('.secondary-model-footer').exists()).toBe(false)
     expect(wrapper.text()).toContain('新子 Agent 将使用')
@@ -606,7 +606,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     const addButton = wrapper.findAll('.provider-manager button')
       .find((button) => button.text().includes('添加模型服务'))
     expect(addButton).toBeDefined()
@@ -672,7 +672,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
 
     await wrapper.get('.provider-icon-button[aria-label="编辑 openai-main"]').trigger('click')
@@ -732,7 +732,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('pixel'))!.trigger('click')
     await wrapper.get('.provider-icon-button[aria-label="编辑 pixel"]').trigger('click')
 
@@ -783,7 +783,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
     await wrapper.get('.provider-model-item:not(.provider-model-follow)').trigger('click')
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
@@ -845,12 +845,12 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[2]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[2]!.trigger('click')
     await flushPromises()
     expect(api.listSessionSkills).toHaveBeenCalledWith('session-1')
     expect(wrapper.get('.skill-list').text()).toContain('/review')
 
-    await wrapper.findAll('.settings-nav button')[3]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[3]!.trigger('click')
     await flushPromises()
     expect(wrapper.get('.mcp-list').text()).toContain('github')
     expect(wrapper.get('.tool-list').text()).toContain('mcp__github__search')
@@ -877,7 +877,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[2]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[2]!.trigger('click')
     await flushPromises()
 
     expect(api.listWorkspaceSkills).toHaveBeenCalledWith('workspace-empty')
@@ -897,7 +897,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[4]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[4]!.trigger('click')
     const thresholds = wrapper.findAll('.preference-row input[type="number"]')
     expect(thresholds).toHaveLength(3)
     await thresholds[1]!.setValue('75')
@@ -924,11 +924,11 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[4]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[4]!.trigger('click')
     const notificationToggles = wrapper.findAll('.preference-row input[type="checkbox"]')
     await notificationToggles[1]!.setValue(false)
     await notificationToggles[2]!.setValue(false)
-    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
     await wrapper.get('.preference-row select').setValue('en-US')
     await flushPromises()
 
@@ -951,7 +951,7 @@ describe('SettingsPanel', () => {
     await flushPromises()
     vi.useFakeTimers()
 
-    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
     const petToggle = wrapper.find('.settings-section input[type="checkbox"]')
     expect((petToggle.element as HTMLInputElement).checked).toBe(false)
     await petToggle.setValue(true)
@@ -989,7 +989,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
     await flushPromises()
     expect(api.checkKimiCliUpdate).toHaveBeenCalledOnce()
     expect(wrapper.get('.cli-update-card').text()).toContain('发现 0.29.1，当前版本为 0.29.0')
@@ -1017,7 +1017,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
 
-    await wrapper.findAll('.settings-nav button')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
     await flushPromises()
     expect(api.getKimiSettings).not.toHaveBeenCalled()
     expect(api.checkKimiCliUpdate).toHaveBeenCalledOnce()
@@ -1043,7 +1043,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-nav button')[5]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[5]!.trigger('click')
     await flushPromises()
     expect(wrapper.get('.archive-session-list').text()).toContain('已归档任务')
     await wrapper.get('.archive-session-row button').trigger('click')

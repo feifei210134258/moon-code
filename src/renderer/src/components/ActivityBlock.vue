@@ -47,8 +47,8 @@ function toggle(): void {
       @click="toggle"
     >
       <PhLightbulb v-if="activity.kind === 'thinking'" :size="18" />
-      <PhSparkle v-else-if="isSkillActivity" :size="18" class="blue" />
-      <PhTerminalWindow v-else-if="activity.kind === 'tool'" :size="18" class="blue" />
+      <PhSparkle v-else-if="isSkillActivity" :size="18" class="accent" />
+      <PhTerminalWindow v-else-if="activity.kind === 'tool'" :size="18" class="accent" />
       <PhInfo v-else :size="18" />
       <strong>{{ activity.label }}</strong>
       <span>{{ activity.description }}</span>

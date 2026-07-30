@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside class="extensions-panel glass-panel" :style="{ width: `${width}px` }">
+  <aside class="extensions-panel" :style="{ width: `${width}px` }">
     <header class="extensions-header">
       <span>扩展</span>
       <span class="extensions-header-actions">

@@ -3,6 +3,7 @@ import {
   PhArchive,
   PhArrowClockwise,
   PhArrowCounterClockwise,
+  PhArrowLeft,
   PhCheck,
   PhCpu,
   PhChartDonut,
@@ -15,8 +16,7 @@ import {
   PhPlugsConnected,
   PhTrash,
   PhSignOut,
-  PhSpinnerGap,
-  PhX
+  PhSpinnerGap
 } from '@phosphor-icons/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
@@ -887,10 +887,6 @@ function showNotice(message: string): void {
   }, NOTICE_DURATION_MS)
 }
 
-function onDialogKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') emit('close')
-}
-
 watch(
   () => [props.open, props.runtimeRunning] as const,
   ([open, running]) => {
@@ -964,41 +960,37 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="settings-backdrop" @click.self="emit('close')" @keydown="onDialogKeydown">
-      <section class="settings-panel glass-panel" role="dialog" aria-modal="true" aria-label="Moon Code 设置">
-        <header class="settings-header">
-          <div><PhGearSix :size="19" /><strong>设置</strong></div>
-          <button type="button" aria-label="关闭设置" @click="emit('close')"><PhX :size="17" /></button>
-        </header>
+  <section v-if="open" class="settings-page" aria-label="Moon Code 设置">
+    <nav class="settings-nav" aria-label="设置分类">
+      <button class="settings-back" type="button" @click="emit('close')">
+        <PhArrowLeft :size="16" />返回
+      </button>
+      <div class="settings-nav-divider" />
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'account' }" type="button" @click="activeTab = 'account'">
+        <PhKey :size="17" />账号
+      </button>
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'models' }" type="button" @click="activeTab = 'models'">
+        <PhCpu :size="17" />模型
+      </button>
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'skills' }" type="button" @click="activeTab = 'skills'">
+        <PhMagicWand :size="17" />Skills
+      </button>
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'tools' }" type="button" @click="activeTab = 'tools'">
+        <PhPlugsConnected :size="17" />MCP 与工具
+      </button>
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'usage' }" type="button" @click="activeTab = 'usage'">
+        <PhChartDonut :size="17" />用量
+      </button>
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'archives' }" type="button" @click="activeTab = 'archives'">
+        <PhArchive :size="17" />已归档任务
+      </button>
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'general' }" type="button" @click="activeTab = 'general'">
+        <PhGearSix :size="17" />通用
+      </button>
+    </nav>
 
-        <div class="settings-layout">
-          <nav class="settings-nav" aria-label="设置分类">
-            <button :class="{ 'is-active': activeTab === 'account' }" type="button" @click="activeTab = 'account'">
-              <PhKey :size="17" />账号
-            </button>
-            <button :class="{ 'is-active': activeTab === 'models' }" type="button" @click="activeTab = 'models'">
-              <PhCpu :size="17" />模型
-            </button>
-            <button :class="{ 'is-active': activeTab === 'skills' }" type="button" @click="activeTab = 'skills'">
-              <PhMagicWand :size="17" />Skills
-            </button>
-            <button :class="{ 'is-active': activeTab === 'tools' }" type="button" @click="activeTab = 'tools'">
-              <PhPlugsConnected :size="17" />MCP 与工具
-            </button>
-            <button :class="{ 'is-active': activeTab === 'usage' }" type="button" @click="activeTab = 'usage'">
-              <PhChartDonut :size="17" />用量
-            </button>
-            <button :class="{ 'is-active': activeTab === 'archives' }" type="button" @click="activeTab = 'archives'">
-              <PhArchive :size="17" />已归档任务
-            </button>
-            <button :class="{ 'is-active': activeTab === 'general' }" type="button" @click="activeTab = 'general'">
-              <PhGearSix :size="17" />通用
-            </button>
-          </nav>
-
-          <div class="settings-content">
-            <section v-if="activeTab === 'general'" class="settings-section">
+    <div class="settings-content">
+      <section v-if="activeTab === 'general'" class="settings-section">
               <div class="settings-title"><div><h2>通用</h2><p>Kimi 配置和仅本机的产品偏好会明确分开保存。</p></div></div>
               <article class="cli-update-card" :class="{ 'is-error': cliUpdate?.phase === 'error' }">
                 <div>
@@ -1498,13 +1490,10 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
               </section>
 
             </template>
-          </div>
-        </div>
-        <Transition name="settings-toast">
-          <div v-if="error" class="settings-message is-error" role="alert">{{ error }}</div>
-          <div v-else-if="notice" class="settings-message" role="status" aria-live="polite"><PhCheck :size="14" />{{ notice }}</div>
-        </Transition>
-      </section>
     </div>
-  </Teleport>
+    <Transition name="settings-toast">
+      <div v-if="error" class="settings-message is-error" role="alert">{{ error }}</div>
+      <div v-else-if="notice" class="settings-message" role="status" aria-live="polite"><PhCheck :size="14" />{{ notice }}</div>
+    </Transition>
+  </section>
 </template>

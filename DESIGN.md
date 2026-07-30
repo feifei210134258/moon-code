@@ -2,24 +2,27 @@
 name: Moon Code
 description: A clear, efficient Kimi Code-native desktop workbench for staying in project context.
 colors:
-  window-bg: "#F6F9FC"
+  window-bg: "#ECEBE9"
+  sidebar-bg: "#E4E3DF"
   surface: "#FFFFFF"
-  glass: "#F6F9FCE6"
-  surface-quiet: "#F0F5FBE6"
-  surface-panel: "#EAF1F7"
-  border: "#0F172A17"
-  border-strong: "#0F172A29"
-  text: "#20252D"
-  muted: "#5D6673"
-  faint: "#697386"
-  blue: "#3085FA"
-  blue-soft: "#3085FA14"
-  green: "#43A047"
-  green-soft: "#43A0471A"
-  red: "#E25555"
-  red-soft: "#E255551A"
+  glass: "#ECEBE9E0"
+  surface-quiet: "#E4E3DFD9"
+  surface-panel: "#E9E8E4"
+  border: "#00000012"
+  border-strong: "#00000021"
+  card-border: "#0000000F"
+  text: "#1D1D1F"
+  muted: "#6E6E73"
+  faint: "#8E8E93"
+  accent: "#1D1D1F"
+  accent-strong: "#000000"
+  accent-soft: "#0000000F"
+  green: "#3D9A50"
+  green-soft: "#3D9A501F"
+  red: "#D64545"
+  red-soft: "#D645451A"
   amber: "#A56712"
-  ink-soft: "#3D4756"
+  ink-soft: "#3A3A3E"
 typography:
   display:
     fontFamily: "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, SF Pro Text, PingFang SC, Microsoft YaHei, sans-serif"
@@ -67,8 +70,10 @@ rounded:
   xs: "5px"
   sm: "7px"
   md: "9px"
-  lg: "12px"
-  xl: "14px"
+  lg: "14px"
+  xl: "16px"
+  card: "16px"
+  composer: "20px"
   pill: "999px"
 spacing:
   xs: "4px"
@@ -78,7 +83,7 @@ spacing:
   xl: "24px"
 components:
   button-primary:
-    backgroundColor: "{colors.blue}"
+    backgroundColor: "{colors.accent}"
     textColor: "{colors.surface}"
     typography: "{typography.label}"
     rounded: "{rounded.md}"
@@ -116,7 +121,7 @@ components:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text}"
     typography: "{typography.conversation}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.composer}"
     padding: "13px 14px 10px"
   interaction-card:
     backgroundColor: "{colors.surface}"
@@ -138,7 +143,7 @@ components:
 
 **Creative North Star: "The Quiet Control Room"**
 
-Moon Code is a focused developer workbench: calm enough for long sessions, dense enough to keep project state close, and explicit enough that an Agent action never feels mysterious. The current homepage establishes a cool, near-white canvas with translucent workspace layers, one blue action accent, and compact status surfaces. The system should feel like a well-calibrated instrument panel rather than a marketing page.
+Moon Code is a focused developer workbench: calm enough for long sessions, dense enough to keep project state close, and explicit enough that an Agent action never feels mysterious. The current homepage establishes a warm neutral-gray window field with white floating content cards, one near-black action accent, and compact status surfaces. The system should feel like a well-calibrated instrument panel rather than a marketing page.
 
 The visual language serves the product personality captured in `packages/kimi-adapter/PRODUCT.md`: **高效、清晰、可靠**. Preserve the existing desktop-tool familiarity—Inter and system fallbacks, Phosphor icons, restrained borders, and small state pills—while tightening anything that competes with the task. The system explicitly rejects over-gamified UI, marketing-landing-page composition, and dense information without hierarchy.
 
@@ -146,41 +151,42 @@ The following are captured optimizations rather than a new visual direction: use
 
 **Key Characteristics:**
 
-- Cool light workbench surfaces with a restrained blue primary.
-- Compact, familiar controls with 7–12px corner radii.
+- Warm neutral-gray window field with white content cards and a restrained near-black primary.
+- Compact, familiar controls with 7–9px corner radii; 16px cards and a 20px composer as the signature containers.
 - State-rich but low-saturation semantic colors for runtime, usage, warning, and error.
 - Layered panels and dividers establish hierarchy; decoration stays subordinate to transcript and task content.
 - Motion is short, state-driven, and disabled or reduced for `prefers-reduced-motion`.
 
 ## 2. Colors
 
-The palette is a restrained cool-neutral system: white content surfaces sit on a blue-gray window field, while one medium-bright blue carries action, selection, and focus. Green, amber, and red are reserved for semantic state.
+The palette is a restrained warm-neutral system: white content cards float on a warm gray window field, while one near-black ink carries action, selection, and focus. Green, amber, and red are reserved for semantic state.
 
 ### Primary
 
-- **Moon Blue** (#3085FA): Primary actions, active selections, links, progress tracks, focus accents, and question states. Keep it scarce enough that an active control is immediately legible.
-- **Moon Blue Soft** (#3085FA14): Tinted background for selected or informational states; never use it as decorative page fill.
+- **Ink Accent** (#1D1D1F): Primary actions, active selections, links, progress tracks, focus accents, toggles, and question states. Keep it scarce enough that an active control is immediately legible.
+- **Ink Accent Soft** (#0000000F): Tinted background for selected or informational states; never use it as decorative page fill.
 
 ### Secondary
 
-- **Operational Green** (#43A047): Healthy runtime and plan usage. Use for state, not branding.
+- **Operational Green** (#3D9A50): Healthy runtime and plan usage. Use for state, not branding.
 - **Caution Amber** (#A56712): Starting/stopping runtime, approaching usage limits, and approval states. The darker tone keeps semantic text legible on light surfaces.
-- **Failure Red** (#E25555): Errors, abort/stop actions, and critical usage.
+- **Failure Red** (#D64545): Errors, abort/stop actions, and critical usage.
 
 ### Neutral
 
-- **Window Field** (#F6F9FC): Main application background.
-- **Surface White** (#FFFFFF): Transcript, composer, menus, dialogs, and content containers.
-- **Quiet Surface** (#F0F5FBE6): Secondary cells, token summaries, and low-emphasis grouping.
-- **Panel Surface** (#EAF1F7): Non-white background for the three right-sidebar cards; it separates work categories without adding decorative shadows.
-- **Ink** (#20252D): Primary text and high-confidence labels.
-- **Muted Ink** (#5D6673): Supporting text, metadata, and secondary labels.
-- **Faint Ink** (#697386): Lowest-emphasis readable text on white and near-white surfaces. Reserve it for non-essential chrome; meaningful body copy should still use Muted Ink or Ink.
-- **Border** (#0F172A17) and **Strong Border** (#0F172A29): Hairline separators and control boundaries.
+- **Window Field** (#ECEBE9): Main application background; the sidebar sits directly on it.
+- **Sidebar Field** (#E4E3DF): Slightly deeper gray reserved for sidebar-level grouping on the window field.
+- **Surface White** (#FFFFFF): Transcript, composer, menus, dialogs, and content cards.
+- **Quiet Surface** (#E4E3DFD9): Secondary cells, token summaries, and low-emphasis grouping.
+- **Panel Surface** (#E9E8E4): Non-white background for the three right-sidebar cards; it separates work categories without adding decorative shadows.
+- **Ink** (#1D1D1F): Primary text and high-confidence labels.
+- **Muted Ink** (#6E6E73): Supporting text, metadata, and secondary labels.
+- **Faint Ink** (#8E8E93): Lowest-emphasis readable text on white and near-white surfaces. Reserve it for non-essential chrome; meaningful body copy should still use Muted Ink or Ink.
+- **Border** (#00000012) and **Strong Border** (#00000021): Hairline separators and control boundaries. **Card Border** (#0000000F) is the lightest hairline, reserved for floating white cards on the gray field.
 
 ### Named Rules
 
-**The One Accent Rule.** Moon Blue is for action, selection, focus, and information state. Do not use it as a general decoration or large background wash.
+**The One Accent Rule.** Ink Accent is for action, selection, focus, and information state. Do not use it as a general decoration or large background wash.
 
 **The State-Truth Rule.** If a value is unavailable, show an unavailable state (`--`, empty, or a connection prompt) and no proportional fill. Never imply usage or progress that the data does not support.
 
@@ -215,54 +221,56 @@ Depth is primarily tonal layering and hairline separation. The current implement
 
 ### Shadow Vocabulary
 
-- **Popover:** `0 4px 8px rgba(15, 23, 42, 0.12)`. Use for menus, usage/context popovers, and command suggestions. Pair it with a neutral hairline only when the boundary is necessary against the surrounding surface.
-- **Panel lift:** `0 4px 12px rgba(15, 23, 42, 0.08)`. Use sparingly for an interaction dock or transient side panel.
-- **Focus ring:** `0 0 0 3px rgba(48, 133, 250, 0.16)`. This is state communication, not elevation.
+- **Card:** `0 1px 3px rgba(0, 0, 0, 0.04)` paired with the Card Border hairline. Use for the white content cards floating on the gray field.
+- **Popover:** `0 8px 28px rgba(0, 0, 0, 0.12)`. Use for menus, usage/context popovers, and command suggestions. Pair it with a neutral hairline only when the boundary is necessary against the surrounding surface.
+- **Dialog:** `0 16px 48px rgba(0, 0, 0, 0.18)`. Use for modal dialogs above a dimmed backdrop.
+- **Focus ring:** `0 0 0 3px rgba(0, 0, 0, 0.1)`. This is state communication, not elevation.
 
 ### Named Rules
 
-**The Layered-Not-Glossy Rule.** Use a neutral surface change or a hairline before reaching for blur or shadow. Backdrop blur is reserved for the draggable top bar and transient overlays; it is not the default treatment for every card.
+**The Layered-Not-Glossy Rule.** Use a neutral surface change or a hairline before reaching for blur or shadow. The top bar sits transparently on the window field; backdrop blur is reserved for transient overlays only and is not the default treatment for any card.
 
 ## 5. Components
 
 ### Buttons
 
-- **Shape:** 7–9px radius for ordinary controls; 10px for the 35px send button. Full-pill is reserved for status chips and progress tracks.
-- **Primary:** Moon Blue background with white text, 34px minimum height, 11px horizontal padding, and a clear disabled opacity. The send action may use 35px square geometry because it is an icon-led composer control.
+- **Shape:** 7–9px radius for ordinary controls; circular for the icon-led send button. Full-pill is reserved for status chips and progress tracks.
+- **Primary:** Ink Accent background with white text, 34px minimum height, 11px horizontal padding, and a clear disabled state. The send action may use circular geometry because it is an icon-led composer control.
 - **Hover / Focus:** Slightly darker or more opaque surface on hover; use the shared 3px focus ring on focus-visible. Avoid lift or glow as a default hover animation.
 - **Secondary / Quiet:** White surface + strong border for secondary actions; transparent muted text for quiet actions. Both retain the same height and label scale as primary buttons.
 
 ### Chips
 
-- **Style:** Compact 5–7px radius for model/effort and queue labels; 999px only for usage/status pills and progress tracks.
-- **State:** Blue-soft for informational or selected state, amber-soft for queued/caution, red-soft for critical/error. Pair color with text or icon; never communicate state by color alone.
+- **Style:** Compact 5–7px radius for queue labels; 999px for model/effort selectors, usage/status pills, and progress tracks.
+- **State:** Accent-soft for informational or selected state, amber-soft for queued/caution, red-soft for critical/error. Pair color with text or icon; never communicate state by color alone.
 
 ### Cards / Containers
 
-- **Corner Style:** 9px controls, 12px content containers, 14px transient popovers. Avoid 24px+ rounding.
-- **Background:** Surface White for primary content, Panel Surface for the three right-sidebar category cards, Glass for the top bar and purposeful overlays, and Quiet Surface for secondary grouping.
+- **Corner Style:** 9px controls, 12px transient popovers, 16px content cards, 20px composer. Avoid 24px+ rounding.
+- **Background:** Surface White for content cards floating on the Window Field, Panel Surface for the three right-sidebar category cards, and Quiet Surface for secondary grouping.
 - **Shadow Strategy:** Follow the Elevation vocabulary. A card gets a border or a shadow; it does not need both.
-- **Border:** Hairline neutral by default; semantic border tints only when they clarify approval, question, warning, or error state.
+- **Border:** Card Border hairline by default; semantic border tints only when they clarify approval, question, warning, or error state.
 - **Internal Padding:** 8–14px for compact controls and cards; 18px for sidebar rhythm; 24px only for spacious empty or explanatory states.
 
 ### Inputs / Fields
 
-- **Style:** 36px search and select fields with 7–8px radius, white or quiet-surface fill, and a transparent border until focused.
-- **Focus:** Shared Moon Blue focus ring and a stronger input border. The shell owns focus for compound controls such as search.
+- **Style:** 36px search and select fields with 7–8px radius, white or quiet-surface fill, and a transparent border until focused. Boolean preferences use iOS-style toggles: 38×23px pill, white knob, Ink Accent track when on.
+- **Focus:** Shared neutral focus ring and a stronger input border. The shell owns focus for compound controls such as search.
 - **Error / Disabled:** Error uses Failure Red plus an explanatory message; disabled states reduce opacity and interactivity without making the label unreadable.
 
 ### Navigation
 
-- **Style:** 56px top bar with macOS title-bar breathing room, then a 244–280px project sidebar that collapses below 920px. Project and session rows are 40px high with 9–10px radius.
-- **Default / Hover / Active:** Transparent at rest, low-opacity ink tint on hover, and a cool blue-gray selected surface (`#E7EEF7` / `#EAF1F8`) for the active workspace or session. Keep action buttons discoverable without shifting row text.
+- **Style:** 56px top bar with macOS title-bar breathing room, then a 244–280px project sidebar that sits directly on the window field and collapses below 920px. Project and session rows are 40px high with 7–9px radius.
+- **Default / Hover / Active:** Transparent at rest, `rgba(0,0,0,0.04)` ink tint on hover, and `rgba(0,0,0,0.07)` ink tint for the active workspace or session. Keep action buttons discoverable without shifting row text.
 - **Project icon semantics:** Project rows always use the familiar folder icon. Do not replace it with a disclosure caret; the full project row already owns expand/collapse behavior, while the icon identifies the object type.
+- **Settings:** Settings is a full-page surface, not a modal: a gray navigation column (with a back affordance) beside a white content card of grouped rows separated by hairlines.
 - **Responsive treatment:** At ≤1180px, right panels become overlay surfaces; at ≤920px the sidebar and top-bar context collapse so the transcript remains primary.
 
 **The Object-Before-State Rule.** In persistent navigation, the leading icon identifies what an item is before showing what state it is in. A project remains a folder whether expanded or collapsed; state may be conveyed by its revealed children, selection surface, or accessible attributes without replacing the folder glyph.
 
 ### Composer
 
-The composer is the signature work surface: a centered 810px maximum white field, 12px radius, 13–14px internal padding, and a visible focus state. Attachments, slash commands, `@` mentions, plan/collaboration controls, and send/stop states share one vocabulary. When disabled, the composer should contract to a compact explanation instead of reserving a large empty block.
+The composer is the signature work surface: a centered 810px maximum white field, 20px radius, 13–14px internal padding, and a visible focus state. Attachments, slash commands, `@` mentions, plan/collaboration controls, and send/stop states share one vocabulary. When disabled, the composer should contract to a compact explanation instead of reserving a large empty block.
 
 The model summary is the single entry point for session controls. Its popover reveals model and thinking strength first, then keeps approval and execution modes behind an **Advanced Execution** disclosure. Enabling **Fully Automatic** requires an inline confirmation that explains the session-scoped consequence. Slash-command and file-mention menus are fixed-position listboxes anchored to their trigger, flip toward available viewport space, dismiss on outside interaction, and preserve explicit loading, empty, failure, and retry states. Selecting a file inserts a trailing space so the user can continue typing without repairing the token.
 
@@ -272,14 +280,14 @@ The TOC rail is the homepage's distinctive component. Keep it as a quiet, scroll
 
 ### Right Sidebar Category Cards
 
-Changes, Plan, and Background Tasks remain three separate cards because they represent distinct operational concerns. Each uses Panel Surface (`#EAF1F7`), a 12px radius, an 11–12px inset, and a neutral hairline with no shadow. Lists inside stay borderless and linear so the categories read as cards without becoming nested card stacks.
+Changes, Plan, and Background Tasks remain three separate cards because they represent distinct operational concerns. Each uses Panel Surface (`#E9E8E4`), a 12px radius, an 11–12px inset, and a neutral hairline with no shadow. Lists inside stay borderless and linear so the categories read as cards without becoming nested card stacks.
 
 ## 6. Do's and Don'ts
 
 ### Do:
 
-- **Do** use Moon Blue only for action, selection, focus, links, and information state.
-- **Do** preserve the cool light workbench field and white transcript/composer surfaces as the homepage baseline.
+- **Do** use Ink Accent only for action, selection, focus, links, and information state.
+- **Do** preserve the warm gray window field and white floating content cards as the homepage baseline.
 - **Do** keep controls familiar: Phosphor icons, consistent 7–12px radii, shared button heights, and explicit hover/focus/disabled states.
 - **Do** keep persistent UI text at 12px or larger, use 15px for conversation reading and composing, and verify 4.5:1 contrast for meaningful copy.
 - **Do** collapse empty plans, changes, tasks, and usage surfaces to a teaching empty state with a next action.

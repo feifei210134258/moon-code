@@ -177,7 +177,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside class="project-sidebar glass-panel">
+  <aside class="project-sidebar">
     <div class="sidebar-actions">
       <button class="new-task-button" type="button" :disabled="lifecyclePending !== null || projects.length === 0" @click="createSession">
         <PhNotePencil :size="17" />

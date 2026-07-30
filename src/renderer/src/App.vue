@@ -647,6 +647,7 @@ onBeforeUnmount(() => {
     />
 
     <main class="workbench" :style="{ '--sidebar-width': `${leftPanelWidth}px` }">
+      <template v-if="!settingsOpen">
       <ProjectSidebar
         :projects="projects"
         :active-workspace-id="activeWorkspaceId"
@@ -824,6 +825,18 @@ onBeforeUnmount(() => {
           @cancel-task="cancelTask"
         />
       </template>
+      </template>
+      <SettingsPanel
+        v-else
+        :open="settingsOpen"
+        :runtime-running="runtimeBridge.runtime.value.status === 'running'"
+        :active-session-id="activeSessionId"
+        :active-workspace-id="activeWorkspaceId"
+        :usage="usageBridge.state.value"
+        :config-revision="runtimeBridge.globalConfigRevision.value"
+        @close="settingsOpen = false"
+        @session-restored="selectRestoredSession"
+      />
     </main>
     <FilePreviewDialog
       :preview="runtimeBridge.filePreview.value"
@@ -836,16 +849,6 @@ onBeforeUnmount(() => {
       @download="runtimeBridge.downloadWorkspaceFile"
       @open-external="openWorkspaceFileSystem"
       @reveal="runtimeBridge.revealWorkspaceFile"
-    />
-    <SettingsPanel
-      :open="settingsOpen"
-      :runtime-running="runtimeBridge.runtime.value.status === 'running'"
-      :active-session-id="activeSessionId"
-      :active-workspace-id="activeWorkspaceId"
-      :usage="usageBridge.state.value"
-      :config-revision="runtimeBridge.globalConfigRevision.value"
-      @close="settingsOpen = false"
-      @session-restored="selectRestoredSession"
     />
     <RuntimeConnectDialog
       :open="runtimeBridge.runtime.value.status === 'error'"
