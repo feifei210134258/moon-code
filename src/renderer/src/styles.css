@@ -22,7 +22,7 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   --window-bg: #dedcd9;
-  --sidebar-bg: #e4e3e0;
+  --sidebar-bg: #e8e7e4;
   --surface: #ffffff;
   --glass: rgba(222, 220, 217, 0.85);
   --surface-quiet: rgba(236, 236, 236, 0.85);
@@ -711,7 +711,7 @@ select:focus-visible {
   overflow: hidden;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(228, 227, 224, 0.92);
+  background: rgba(232, 231, 228, 0.92);
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -5706,7 +5706,7 @@ body.is-panel-resizing {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -5744,7 +5744,7 @@ body.is-panel-resizing {
   overflow: auto;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(228, 227, 224, 0.92);
+  background: rgba(232, 231, 228, 0.92);
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
