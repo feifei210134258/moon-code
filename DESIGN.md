@@ -2,12 +2,12 @@
 name: Moon Code
 description: A clear, efficient Kimi Code-native desktop workbench for staying in project context.
 colors:
-  window-bg: "#ECEBE9"
-  sidebar-bg: "#E4E3DF"
+  window-bg: "#E0E0DF"
+  sidebar-bg: "#ECECEC"
   surface: "#FFFFFF"
-  glass: "#ECEBE9E0"
-  surface-quiet: "#E4E3DFD9"
-  surface-panel: "#E9E8E4"
+  glass: "#E0E0DFD9"
+  surface-quiet: "#ECECECD9"
+  surface-panel: "#EDEDED"
   border: "#00000012"
   border-strong: "#00000021"
   card-border: "#0000000F"
@@ -174,11 +174,11 @@ The palette is a restrained warm-neutral system: white content cards float on a 
 
 ### Neutral
 
-- **Window Field** (#ECEBE9): Main application background; the sidebar sits directly on it.
-- **Sidebar Field** (#E4E3DF): Slightly deeper gray reserved for sidebar-level grouping on the window field.
+- **Window Field** (#E0E0DF): Main application background; the white content cards float on it.
+- **Sidebar Field** (#ECECEC): The frosted sidebar card surface, one step lighter than the window field so navigation reads as a separate layer.
 - **Surface White** (#FFFFFF): Transcript, composer, menus, dialogs, and content cards.
-- **Quiet Surface** (#E4E3DFD9): Secondary cells, token summaries, and low-emphasis grouping.
-- **Panel Surface** (#E9E8E4): Non-white background for the three right-sidebar cards; it separates work categories without adding decorative shadows.
+- **Quiet Surface** (#ECECECD9): Secondary cells, token summaries, and low-emphasis grouping.
+- **Panel Surface** (#EDEDED): Non-white background for the three right-sidebar cards; it separates work categories without adding decorative shadows.
 - **Ink** (#1D1D1F): Primary text and high-confidence labels.
 - **Muted Ink** (#6E6E73): Supporting text, metadata, and secondary labels.
 - **Faint Ink** (#8E8E93): Lowest-emphasis readable text on white and near-white surfaces. Reserve it for non-essential chrome; meaningful body copy should still use Muted Ink or Ink.
@@ -280,7 +280,7 @@ The TOC rail is the homepage's distinctive component. Keep it as a quiet, scroll
 
 ### Right Sidebar Category Cards
 
-Changes, Plan, and Background Tasks remain three separate cards because they represent distinct operational concerns. Each uses Panel Surface (`#E9E8E4`), a 12px radius, an 11–12px inset, and a neutral hairline with no shadow. Lists inside stay borderless and linear so the categories read as cards without becoming nested card stacks.
+Changes, Plan, and Background Tasks remain three separate cards because they represent distinct operational concerns. Each uses Panel Surface (`#EDEDED`), a 12px radius, an 11–12px inset, and a neutral hairline with no shadow. Lists inside stay borderless and linear so the categories read as cards without becoming nested card stacks.
 
 ## 6. Do's and Don'ts
 

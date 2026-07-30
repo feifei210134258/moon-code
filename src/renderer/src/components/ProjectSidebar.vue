@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   PhArchive,
+  PhCaretDown,
   PhChatCircleText,
   PhCopy,
   PhDotsThree,
@@ -191,7 +192,7 @@ onBeforeUnmount(() => {
       <button v-if="searchQuery" type="button" aria-label="清除搜索" @click="searchQuery = ''"><PhX :size="13" /></button>
     </label>
 
-    <div class="section-heading"><span>项目</span></div>
+    <div class="section-heading"><span>项目</span><PhCaretDown :size="12" weight="bold" /></div>
 
     <nav class="project-tree" aria-label="项目和任务">
       <section v-for="project in filteredProjects" :key="project.id" class="project-group">
