@@ -18,13 +18,13 @@
   font-kerning: normal;
   font-optical-sizing: auto;
   color: #1d1d1f;
-  background: #e0e0df;
+  background: #dedcd9;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --window-bg: #e0e0df;
-  --sidebar-bg: #ececec;
+  --window-bg: #dedcd9;
+  --sidebar-bg: #e4e3e0;
   --surface: #ffffff;
-  --glass: rgba(224, 224, 223, 0.85);
+  --glass: rgba(222, 220, 217, 0.85);
   --surface-quiet: rgba(236, 236, 236, 0.85);
   --surface-panel: #ededed;
   --border: rgba(0, 0, 0, 0.07);
@@ -691,7 +691,7 @@ select:focus-visible {
 .workbench {
   position: relative;
   display: grid;
-  grid-template-columns: var(--sidebar-width, 280px) 10px minmax(0, 1fr) auto auto;
+  grid-template-columns: var(--sidebar-width, 280px) 8px minmax(0, 1fr) auto auto;
   height: calc(100% - 56px);
   min-height: 0;
   padding: 0 12px 12px 0;
@@ -706,12 +706,12 @@ select:focus-visible {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  margin: 0 0 12px 12px;
+  margin: 0 0 0 12px;
   padding: 14px 10px 12px;
   overflow: hidden;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(236, 236, 236, 0.9);
+  background: rgba(228, 227, 224, 0.92);
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -4044,7 +4044,7 @@ select:focus-visible {
 .column-splitter {
   position: relative;
   z-index: 10;
-  width: 10px;
+  width: 8px;
   cursor: col-resize;
   touch-action: none;
   background: transparent;
@@ -4053,7 +4053,7 @@ select:focus-visible {
 .column-splitter::after {
   content: '';
   position: absolute;
-  inset: 0 auto 0 4px;
+  inset: 0 auto 0 3px;
   width: 2px;
   border-radius: 999px;
   background: transparent;
@@ -5707,7 +5707,7 @@ body.is-panel-resizing {
   min-height: 0;
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .settings-back {
@@ -5739,8 +5739,14 @@ body.is-panel-resizing {
   flex-direction: column;
   gap: 2px;
   align-content: start;
-  padding: 6px 2px;
+  margin: 0 0 0 12px;
+  padding: 14px 10px 12px;
   overflow: auto;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: rgba(228, 227, 224, 0.92);
+  backdrop-filter: blur(30px) saturate(1.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .settings-nav button {
@@ -6445,7 +6451,7 @@ body.is-panel-resizing {
   flex-direction: column;
   padding: 16px 12px 12px;
   border-right: 1px solid var(--border);
-  background: #e0e0df;
+  background: #dedcd9;
 }
 
 .provider-catalog > header,
@@ -6698,7 +6704,7 @@ body.is-panel-resizing {
   gap: 12px;
   padding: 0 12px;
   border-radius: 8px;
-  background: #e0e0df;
+  background: #dedcd9;
 }
 
 .provider-connection-summary span {
