@@ -162,8 +162,9 @@ The palette is a restrained warm-neutral system: white content cards float on a 
 
 ### Primary
 
-- **Ink Accent** (#1D1D1F): Primary actions, active selections, links, progress tracks, focus accents, toggles, and question states. Keep it scarce enough that an active control is immediately legible.
+- **Ink Accent** (#1D1D1F): Primary actions, active selections, progress tracks, focus accents, toggles, and question states. Keep it scarce enough that an active control is immediately legible.
 - **Ink Accent Soft** (#0000000F): Tinted background for selected or informational states; never use it as decorative page fill.
+- **File Link Blue** (#3085FA): Conversation file references — linked files, markdown file links, and attachment names/icons. Deliberately blue so file affordances read as navigable references, not neutral ink.
 
 ### Secondary
 
@@ -285,7 +286,7 @@ Changes, Plan, and Background Tasks remain three separate cards because they rep
 
 ### Do:
 
-- **Do** use Ink Accent only for action, selection, focus, links, and information state.
+- **Do** use Ink Accent only for action, selection, focus, and information state; reserve File Link Blue for file references in conversations.
 - **Do** preserve the warm gray window field and white floating content cards as the homepage baseline.
 - **Do** keep controls familiar: Phosphor icons, consistent 7–12px radii, shared button heights, and explicit hover/focus/disabled states.
 - **Do** keep persistent UI text at 12px or larger, use 15px for conversation reading and composing, and verify 4.5:1 contrast for meaningful copy.

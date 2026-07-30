@@ -245,6 +245,10 @@ async function loadPromptDraft(text: string, attachments: KimiUploadedFile[] = [
   await composer.value?.loadDraft(text, attachments)
 }
 
+function insertFileMention(path: string): void {
+  composer.value?.insertFileMention(path)
+}
+
 function scrollToTurn(turnId: string): void {
   document.getElementById(turnDomId(turnId))?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 }
@@ -340,7 +344,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', closeOutputMenuOnEscape)
 })
 
-defineExpose({ focusFromPet, loadPromptDraft })
+defineExpose({ focusFromPet, loadPromptDraft, insertFileMention })
 
 watch(
   () => props.phase,

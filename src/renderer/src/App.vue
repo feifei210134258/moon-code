@@ -421,6 +421,11 @@ function trashWorkspaceEntry(reference: string): void {
   if (path.length > 0) void runtimeBridge.trashWorkspaceEntry(path)
 }
 
+function attachFileToSession(reference: string): void {
+  const { path } = normalizeWorkspaceFileReference(reference)
+  if (path.length > 0) conversationPane.value?.insertFileMention(path)
+}
+
 function onWindowKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape' && (usageOpen.value || contextOpen.value || branchesOpen.value || settingsOpen.value)) {
     event.preventDefault()
@@ -812,6 +817,7 @@ onBeforeUnmount(() => {
           @open-directory="runtimeBridge.loadDirectory"
           @open-system="openWorkspaceFileSystem"
           @trash-entry="trashWorkspaceEntry"
+          @attach-to-session="attachFileToSession"
           @search-files="runtimeBridge.searchFiles"
           @grep-files="runtimeBridge.grepFiles"
           @refresh="runtimeBridge.refreshWorkspaceContext(activeSessionId)"

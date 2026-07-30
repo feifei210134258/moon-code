@@ -4,6 +4,7 @@ import {
   PhArrowSquareOut,
   PhArrowUp,
   PhCaretRight,
+  PhChatCircleText,
   PhFile,
   PhFileCss,
   PhFileHtml,
@@ -101,6 +102,7 @@ const emit = defineEmits<{
   openDirectory: [path: string]
   openSystem: [path: string]
   trashEntry: [path: string]
+  attachToSession: [path: string]
   searchFiles: [query: string]
   grepFiles: [pattern: string]
   refresh: []
@@ -174,7 +176,7 @@ function statusLabel(status: string): string {
 
 function openEntryContextMenu(entry: WorkspaceFileEntry, event: MouseEvent): void {
   const menuWidth = 160
-  const menuHeight = 76
+  const menuHeight = 114
   const top = Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
   const left = Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8))
   contextMenuPosition.value = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
@@ -183,6 +185,12 @@ function openEntryContextMenu(entry: WorkspaceFileEntry, event: MouseEvent): voi
 
 function closeEntryContextMenu(): void {
   contextEntry.value = null
+}
+
+function attachContextEntryToSession(): void {
+  const entry = contextEntry.value
+  closeEntryContextMenu()
+  if (entry !== null) emit('attachToSession', entry.path)
 }
 
 function openContextEntryInSystem(): void {
@@ -427,6 +435,9 @@ onBeforeUnmount(() => {
       :style="contextMenuPosition"
       @click.stop
     >
+      <button type="button" @click="attachContextEntryToSession">
+        <PhChatCircleText :size="14" />添加至会话
+      </button>
       <button type="button" :disabled="fileActionPending !== null" @click="openContextEntryInSystem">
         <PhArrowSquareOut :size="14" />系统打开
       </button>

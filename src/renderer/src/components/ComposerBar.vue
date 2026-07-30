@@ -453,6 +453,26 @@ function selectMention(item: WorkspaceFileSearchItem): void {
   })
 }
 
+function insertFileMention(path: string): void {
+  if (props.disabled === true) return
+  const start = input.value?.selectionStart ?? value.value.length
+  const end = input.value?.selectionEnd ?? start
+  const leading = start > 0 && !/\s/.test(value.value[start - 1] ?? '') ? ' ' : ''
+  const suffix = value.value.slice(end)
+  const trailing = suffix.length === 0 ? ' ' : /^\s/.test(suffix) ? '' : ' '
+  const insertion = `${leading}${path}${trailing}`
+  value.value = `${value.value.slice(0, start)}${insertion}${suffix}`
+  commandOpen.value = false
+  optionsOpen.value = false
+  deliveryOpen.value = false
+  closeMention()
+  void nextTick(() => {
+    const caret = start + insertion.length
+    input.value?.setSelectionRange(caret, caret)
+    input.value?.focus()
+  })
+}
+
 function mentionIcon(item: WorkspaceFileSearchItem) {
   return item.kind === 'directory' ? PhFolderOpen : PhFile
 }
@@ -556,7 +576,7 @@ function onDocumentFocusin(event: FocusEvent): void {
   if (optionsOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
-defineExpose({ loadDraft })
+defineExpose({ loadDraft, insertFileMention })
 
 function onKeydown(event: KeyboardEvent): void {
   if (

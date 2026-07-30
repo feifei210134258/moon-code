@@ -35,6 +35,7 @@
   --accent: #1d1d1f;
   --accent-strong: #000000;
   --accent-soft: rgba(0, 0, 0, 0.06);
+  --link-blue: #3085fa;
   --green: #3d9a50;
   --green-soft: rgba(61, 154, 80, 0.12);
   --red: #d64545;
@@ -2322,7 +2323,7 @@ select:focus-visible {
   margin: 6px 0 6px 22px;
   border: 0;
   padding: 0;
-  color: var(--accent);
+  color: var(--link-blue);
   background: transparent;
   cursor: pointer;
   font-size: var(--type-ui-size);
@@ -2331,7 +2332,7 @@ select:focus-visible {
 .markdown-block .markdown-file-link,
 .markdown-block code.markdown-file-inline,
 .attachment-block strong {
-  color: var(--accent);
+  color: var(--link-blue);
   font-weight: 600;
 }
 
@@ -2376,7 +2377,7 @@ select:focus-visible {
 
 .attachment-block strong { font-size: var(--type-ui-small-size); }
 .attachment-block small { color: var(--faint); font-size: var(--type-micro-size); }
-.attachment-block > svg { color: var(--accent); }
+.attachment-block > svg { color: var(--link-blue); }
 .attachment-block > button {
   display: grid;
   width: 29px;

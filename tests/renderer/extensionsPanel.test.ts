@@ -179,7 +179,7 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.get('.file-row .is-html-file').classes()).toContain('is-html-file')
   })
 
-  it('offers system open and confirmed deletion from a file row context menu', async () => {
+  it('offers attach-to-session, system open and confirmed deletion from a file row context menu', async () => {
     const confirm = vi.fn(() => true)
     Object.defineProperty(window, 'confirm', { configurable: true, value: confirm })
     const wrapper = mount(ExtensionsPanel, {
@@ -189,12 +189,17 @@ describe('ExtensionsPanel', () => {
     const fileRow = wrapper.findAll('.file-row')[1]!
 
     await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
-    expect(wrapper.get('.file-context-menu').text()).toContain('系统打开')
+    expect(wrapper.get('.file-context-menu').text()).toContain('添加至会话')
     await wrapper.findAll('.file-context-menu button')[0]!.trigger('click')
+    expect(wrapper.emitted('attachToSession')).toEqual([['README.md']])
+
+    await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
+    expect(wrapper.get('.file-context-menu').text()).toContain('系统打开')
+    await wrapper.findAll('.file-context-menu button')[1]!.trigger('click')
     expect(wrapper.emitted('openSystem')).toEqual([['README.md']])
 
     await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
-    await wrapper.findAll('.file-context-menu button')[1]!.trigger('click')
+    await wrapper.findAll('.file-context-menu button')[2]!.trigger('click')
     expect(confirm).toHaveBeenCalledWith('将文件“README.md”移到废纸篓？')
     expect(wrapper.emitted('trashEntry')).toEqual([['README.md']])
     Object.defineProperty(window, 'confirm', { configurable: true, value: undefined })
