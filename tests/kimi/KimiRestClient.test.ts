@@ -32,6 +32,40 @@ describe('KimiRestClient', () => {
     )
   })
 
+  it('accepts the semantic usage rows returned by Kimi 0.30', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      msg: 'ok',
+      data: {
+        kind: 'ok',
+        summary: {
+          window: { duration: 1, unit: 'week' },
+          used: 72,
+          limit: 100,
+          reset_at: '2026-08-03T00:00:00.000Z'
+        },
+        limits: [{
+          name: 'rolling',
+          window: { duration: 5, unit: 'hour' },
+          used: 41,
+          limit: 100,
+          reset_at: '2026-07-30T12:00:00.000Z'
+        }],
+        extra_usage: null
+      }
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.getOAuthUsage()).resolves.toEqual(expect.objectContaining({
+      kind: 'ok',
+      summary: expect.objectContaining({
+        window: { duration: 1, unit: 'week' },
+        reset_at: '2026-08-03T00:00:00.000Z'
+      }),
+      limits: [expect.objectContaining({ name: 'rolling', window: { duration: 5, unit: 'hour' } })]
+    }))
+  })
+
   it('preserves Retry-After on API failures for bounded usage backoff', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       code: 42900, msg: 'slow down', data: null

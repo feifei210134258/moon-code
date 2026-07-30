@@ -124,6 +124,33 @@ describe('Conversation controls', () => {
     wrapper.unmount()
   })
 
+  it('lets a stopped prompt with no Kimi output be recalled into the composer', async () => {
+    const wrapper = mountConversation()
+    await wrapper.setProps({
+      turns: [
+        {
+          id: 'turn-stopped-user', role: 'user', author: 'You', time: '10:26',
+          blocks: [{ id: 'turn-stopped-user:text:0', type: 'text', text: '重新整理这条消息' }]
+        },
+        {
+          id: 'turn-empty-assistant', role: 'assistant', author: 'Kimi', time: '10:26',
+          blocks: []
+        }
+      ],
+      recallableTurnId: 'turn-stopped-user'
+    })
+
+    const action = wrapper.get('[aria-label="撤回最后一条消息并放回输入框"]')
+    expect(action.text()).toContain('撤回并编辑')
+    await action.trigger('click')
+    expect(wrapper.emitted('undo')).toEqual([[]])
+
+    await wrapper.setProps({ conversationActionPending: 'undo' })
+    expect((action.element as HTMLButtonElement).disabled).toBe(true)
+    expect(action.text()).toContain('正在撤回')
+    wrapper.unmount()
+  })
+
   it('offers the same system-open and delete menu for files in assistant output', async () => {
     const confirm = vi.fn(() => true)
     Object.defineProperty(window, 'confirm', { configurable: true, value: confirm })

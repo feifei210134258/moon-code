@@ -95,6 +95,23 @@ const visibleQuestions = computed(() => activeSessionView.value?.pendingQuestion
   showInteractionFixture ? [questionFixture] : []
 ))
 const visibleTurns = computed(() => showActivityFixture ? activityFixtureTurns : turns.value)
+const recallablePromptTurnId = computed<string | null>(() => {
+  const session = activeSessionView.value
+  if (session === null || session.mainTurnActive || session.phase !== 'ready') return null
+  const items = visibleTurns.value
+  let userIndex = items.length - 1
+  while (userIndex >= 0 && items[userIndex]?.role !== 'user') userIndex -= 1
+  const userTurn = items[userIndex]
+  if (
+    userTurn === undefined ||
+    userTurn.queued === true ||
+    (userTurn.originKind !== undefined && userTurn.originKind !== 'user')
+  ) return null
+  const trailingTurns = items.slice(userIndex + 1)
+  return trailingTurns.every((turn) => (
+    turn.role === 'assistant' && turn.pending !== true && turn.blocks.length === 0
+  )) ? userTurn.id : null
+})
 const visibleWarnings = computed(() => showActivityFixture ? sessionWarningFixture : runtimeBridge.sessionWarnings.value)
 watch(
   () => usageBridge.state.value.preferences.locale,
@@ -687,6 +704,7 @@ onBeforeUnmount(() => {
         :markers="activeSessionView?.markers ?? []"
         :conversation-action-pending="runtimeBridge.conversationActionPending.value"
         :conversation-action-error="runtimeBridge.conversationActionError.value"
+        :recallable-turn-id="recallablePromptTurnId"
         :side-chat="visibleSideChat"
         :side-chat-pending="runtimeBridge.sideChatPending.value"
         :side-chat-error="runtimeBridge.sideChatError.value"
@@ -718,6 +736,7 @@ onBeforeUnmount(() => {
         @close-side-chat="closeSideChat"
         @open-agent="openAgent"
         @close-agent="closeAgent"
+        @undo="undoSession"
       />
 
       <template v-if="rightPanelOpen">

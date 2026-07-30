@@ -626,10 +626,18 @@ export const oauthLogoutResultSchema = z.object({
 })
 
 export const managedUsageWindowSchema = z.object({
-  label: z.string().min(1),
+  // Kimi <= 0.29 exposes the presentation-ready label/reset_hint pair.
+  label: z.string().min(1).optional(),
+  reset_hint: z.string().optional(),
+  // Kimi >= 0.30 exposes the semantic name/window/reset_at fields instead.
+  name: z.string().min(1).optional(),
+  window: z.object({
+    duration: z.number().int(),
+    unit: z.enum(['minute', 'hour', 'day', 'week'])
+  }).optional(),
   used: z.number().int(),
   limit: z.number().int(),
-  reset_hint: z.string().optional()
+  reset_at: z.string().optional()
 })
 
 export const managedExtraUsageSchema = z.object({

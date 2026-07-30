@@ -98,6 +98,37 @@ describe('TopBar usage', () => {
     expect(popover).not.toContain('resets in')
   })
 
+  it('renders Kimi 0.30 window labels and absolute reset times', () => {
+    vi.useFakeTimers({ now: new Date('2026-07-30T10:00:00.000Z') })
+    const semanticUsage: KimiUsageState = {
+      ...usage,
+      summary: {
+        key: 'summary:Weekly limit', label: 'Weekly limit', used: 72, limit: 100, ratio: 0.72,
+        resetHint: '2026-08-03T00:00:00.000Z'
+      },
+      limits: [{
+        key: 'limit-0:5h limit', label: '5h limit', used: 41, limit: 100, ratio: 0.41,
+        resetHint: '2026-07-30T12:00:00.000Z'
+      }]
+    }
+    const wrapper = mount(TopBar, {
+      props: {
+        runtimeLabel: 'Kimi 0.30.0', runtimeStatus: 'running', runtimePending: false,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: semanticUsage, sessionUsage,
+        contextOpen: false, usageOpen: true, extensionsOpen: true
+      }
+    })
+
+    expect(wrapper.get('.plan-usage').text()).toContain('2 小时后重置')
+    const popover = wrapper.get('.usage-popover').text()
+    expect(popover).toContain('每周窗口')
+    expect(popover).toContain('5 小时窗口')
+    expect(popover).toContain('3 天 14 小时后重置')
+    expect(popover).not.toContain('2026-')
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
   it('cycles 5h and 7d at readable intervals without stopping after one pass', async () => {
     vi.useFakeTimers()
     const wrapper = mount(TopBar, {

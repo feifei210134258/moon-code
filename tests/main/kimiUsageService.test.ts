@@ -43,6 +43,41 @@ describe('KimiUsageService', () => {
     service.close()
   })
 
+  it('maps Kimi 0.30 semantic usage windows to stable display rows', async () => {
+    const getOAuthUsage = vi.fn(async () => ({
+      kind: 'ok',
+      summary: {
+        window: { duration: 1, unit: 'week' },
+        used: 72,
+        limit: 100,
+        reset_at: '2026-08-03T00:00:00.000Z'
+      },
+      limits: [{
+        name: 'rolling',
+        window: { duration: 5, unit: 'hour' },
+        used: 41,
+        limit: 100,
+        reset_at: '2026-07-30T12:00:00.000Z'
+      }],
+      extra_usage: null
+    }))
+    const { runtime } = fakeRuntime(getOAuthUsage)
+    const service = new KimiUsageService(runtime)
+
+    await service.refresh()
+
+    expect(service.state).toEqual(expect.objectContaining({
+      phase: 'ready',
+      summary: expect.objectContaining({
+        key: 'summary:Weekly limit', label: 'Weekly limit', resetHint: '2026-08-03T00:00:00.000Z'
+      }),
+      limits: [expect.objectContaining({
+        key: 'limit-0:5h limit', label: '5h limit', resetHint: '2026-07-30T12:00:00.000Z'
+      })]
+    }))
+    service.close()
+  })
+
   it('retains the last success as stale and respects Retry-After without request pile-up', async () => {
     vi.useFakeTimers({ now: new Date('2026-07-23T00:00:00.000Z') })
     const getOAuthUsage = vi.fn()

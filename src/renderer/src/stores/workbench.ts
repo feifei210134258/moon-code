@@ -384,6 +384,7 @@ function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
     author: message.role === 'user' ? 'You' : message.role === 'tool' ? 'Tool' : 'Kimi',
     time: formatMessageTime(message.createdAt),
     blocks,
+    ...(message.originKind === undefined ? {} : { originKind: message.originKind }),
     ...(message.role === 'user' && message.status === 'pending' ? { queued: true } : {}),
     ...(message.role === 'assistant' && message.status === 'pending' ? { pending: true } : {})
   }

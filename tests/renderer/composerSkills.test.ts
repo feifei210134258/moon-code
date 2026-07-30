@@ -34,11 +34,46 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('.slash-button').trigger('click')
     expect(wrapper.get('.command-popover').text()).toContain('/review')
     await wrapper.get('.command-popover button').trigger('click')
-    await wrapper.get('textarea').setValue('/review --fix src')
+    const token = wrapper.get('.composer-skill-token')
+    expect(token.text()).toContain('Review')
+    expect(token.find('svg').exists()).toBe(true)
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('')
+    expect(wrapper.get('textarea').attributes('placeholder')).toContain('技能参数')
+    await wrapper.get('textarea').setValue('--fix src')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.emitted('activateSkill')).toEqual([['review', '--fix src']])
     expect(wrapper.emitted('submit')).toBeUndefined()
+  })
+
+  it('activates a selected skill without arguments and removes its token by click or Backspace', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models, controls,
+        skills: [{
+          name: 'product-design', description: 'Product design workflow', source: 'project',
+          type: null, userInvocableOnly: false
+        }]
+      }
+    })
+
+    await wrapper.get('.slash-button').trigger('click')
+    await wrapper.get('.command-popover button').trigger('click')
+    expect(wrapper.get('.composer-skill-token').text()).toContain('Product Design')
+    expect(wrapper.get('.send-button:last-child').attributes('disabled')).toBeUndefined()
+    await wrapper.get('.composer-skill-token').trigger('click')
+    expect(wrapper.find('.composer-skill-token').exists()).toBe(false)
+
+    await wrapper.get('textarea').setValue('/')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.find('.composer-skill-token').exists()).toBe(true)
+    await wrapper.get('textarea').trigger('keydown', { key: 'Backspace' })
+    expect(wrapper.find('.composer-skill-token').exists()).toBe(false)
+
+    await wrapper.get('textarea').setValue('/')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('activateSkill')).toEqual([['product-design', undefined]])
   })
 
   it('keeps unknown slash text as a normal Kimi prompt', async () => {
@@ -213,7 +248,8 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' })
     expect(wrapper.get('textarea').attributes('aria-activedescendant')).toBe('composer-command-option-1')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('/release ')
+    expect(wrapper.get('.composer-skill-token').text()).toContain('Release')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('')
 
     await wrapper.get('.model-summary').trigger('click')
     expect(wrapper.find('.composer-popover').exists()).toBe(true)
