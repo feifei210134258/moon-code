@@ -87,6 +87,7 @@ describe('useRuntimeBridge session races', () => {
   })
 
   it('reattaches the active session when the runtime bounces within a single flush', async () => {
+    vi.useFakeTimers()
     let runtimeListener!: (state: { status: string; mode: string | null; version: string | null; serverId: string | null; origin: string | null; error: string | null }) => void
     const openSession = vi.fn(async (sessionId: string) => sessionState(sessionId))
     const api = {
@@ -138,7 +139,15 @@ describe('useRuntimeBridge session races', () => {
     expect(openSession).toHaveBeenCalledTimes(2)
     expect(openSession).toHaveBeenLastCalledWith('session-live')
     expect(bridge.sessionView.value?.sessionId).toBe('session-live')
+
+    /* 服务器重启后游标/订阅可能未对齐，延迟二次打开矫正（真实故障：流式事件
+       被当作重复帧静默丢弃，发消息无实时输出，手动刷新才恢复） */
+    await vi.advanceTimersByTimeAsync(2_600)
+    await flushPromises()
+    expect(openSession).toHaveBeenCalledTimes(3)
+    expect(openSession).toHaveBeenLastCalledWith('session-live')
     wrapper.unmount()
+    vi.useRealTimers()
   })
 
   it('does not reattach the detached session when connecting to an external runtime', async () => {

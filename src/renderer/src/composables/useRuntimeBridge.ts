@@ -181,6 +181,14 @@ export function useRuntimeBridge() {
            接入外部 runtime 时旧会话可能不存在，不重连。 */
         if (resumeSessionId !== null && (state.mode === 'managed' || state.mode === 'system')) {
           void openSession(resumeSessionId)
+          /* 服务器刚重启时，首次快照的游标可能领先于恢复后的直播流（或会话尚未挂回
+             事件总线），流式事件会被当作重复帧静默丢弃——表现为发消息无实时输出，
+             手动刷新后才一次性倒出。延迟二次打开，矫正游标并重新订阅。 */
+          window.setTimeout(() => {
+            if (runtime.value.status === 'running' && requestedSessionId === resumeSessionId) {
+              void openSession(resumeSessionId)
+            }
+          }, 2_500)
         }
         return
       }
