@@ -602,6 +602,59 @@ describe('SessionSyncController', () => {
     controller.close()
   })
 
+  it('settles the loading state from prompt completion when work_changed is omitted', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'prompt.completed',
+      seq: 11,
+      epoch: 'epoch-1',
+      session_id: 'session-1',
+      timestamp: '2026-07-24T00:06:00.000Z',
+      payload: { promptId: 'prompt-1', finishedAt: '2026-07-24T00:06:00.000Z' }
+    } satisfies SessionEventFrame)
+
+    expect(controller.getState('session-1')).toEqual(expect.objectContaining({
+      busy: false,
+      mainTurnActive: false,
+      activePromptId: null,
+      activePromptStatus: null
+    }))
+    controller.close()
+  })
+
+  it('settles the loading state from a terminal session status', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+
+    socket.emit('session-event', {
+      type: 'event.session.status_changed',
+      seq: 11,
+      epoch: 'epoch-1',
+      session_id: 'session-1',
+      timestamp: '2026-07-24T00:06:00.000Z',
+      payload: { status: 'completed' }
+    } satisfies SessionEventFrame)
+
+    expect(controller.getState('session-1')).toEqual(expect.objectContaining({
+      busy: false,
+      mainTurnActive: false,
+      activePromptId: null,
+      activePromptStatus: null
+    }))
+    controller.close()
+  })
+
   it('keeps Session token totals and Context separate from plan usage', async () => {
     const socket = new FakeSocket()
     const snapshot = makeSnapshot(10)

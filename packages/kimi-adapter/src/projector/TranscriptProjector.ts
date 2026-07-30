@@ -464,20 +464,31 @@ export class TranscriptProjector {
         state.active = false
         return changed()
       }
+      case 'prompt.completed':
+      case 'prompt.aborted': {
+        const promptId = stringValue(payload.promptId)
+        if (promptId !== null && promptId !== state.currentPromptId) {
+          return { changed: false, resyncRequired: false }
+        }
+        const message = currentAssistant(state)
+        if (message !== null) {
+          message.status = frame.type === 'prompt.aborted' ||
+            payload.reason === 'failed' ||
+            payload.reason === 'blocked'
+            ? 'error'
+            : 'completed'
+        }
+        state.currentAssistantMessageId = null
+        state.currentPromptId = null
+        state.retryTarget = null
+        state.active = false
+        return changed()
+      }
       case 'session.meta.updated':
       case 'agent.status.updated':
       case 'event.session.work_changed':
       case 'event.session.status_changed':
-      case 'prompt.completed':
-      case 'prompt.aborted': {
-        const promptId = stringValue(payload.promptId)
-        if (promptId !== null && promptId === state.currentPromptId) {
-          state.currentPromptId = null
-          if (frame.type === 'prompt.aborted' || payload.reason === 'blocked') state.active = false
-          return changed()
-        }
         return { changed: false, resyncRequired: false }
-      }
       case 'ping':
       case 'hook.result':
       case 'compaction.blocked':

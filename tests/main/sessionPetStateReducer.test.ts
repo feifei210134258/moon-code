@@ -126,6 +126,33 @@ describe('SessionPetStateReducer', () => {
     })
   })
 
+  it('settles the running pet from a terminal prompt event without work_changed', () => {
+    const reducer = new SessionPetStateReducer({ completedDurationMs: 5_000 })
+    reducer.reset('server-1')
+    reducer.seed([{ id: 'workspace-1', name: 'Project' }], [session({ id: 'task', busy: true, mainTurnActive: true })])
+    reducer.setConnected(true)
+
+    const frame = {
+      type: 'prompt.completed',
+      session_id: 'task',
+      seq: 2,
+      timestamp: '2026-07-23T08:01:00.000Z',
+      payload: {
+        type: 'prompt.completed',
+        promptId: 'prompt-1',
+        finishedAt: '2026-07-23T08:01:00.000Z'
+      }
+    } as SessionEventFrame
+
+    expect(reducer.applyEvent(frame)).toBe(true)
+    expect(reducer.getRoster().items[0]).toMatchObject({
+      sessionId: 'task',
+      status: 'completed',
+      unread: true,
+      backgroundActivity: false
+    })
+  })
+
   it('shows tracked sessions as disconnected without fabricating new pets', () => {
     const reducer = new SessionPetStateReducer()
     reducer.reset('server-1')

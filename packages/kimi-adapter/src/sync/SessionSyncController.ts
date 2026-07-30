@@ -483,6 +483,7 @@ export class SessionSyncController extends EventEmitter {
     }
     if (isAuthoritativeSkillWorkFrame(frame.type)) this.#optimisticSkills.delete(sessionId)
     const workChanged = this.#applySessionWorkChanged(state, frame)
+    const lifecycleChanged = this.#applySessionLifecycleChanged(state, frame)
     const usageChanged = this.#applyAgentUsage(state, frame)
     const todosChanged = this.#applyTodoEvent(state, frame)
     if (this.#applyInteractionEvent(state, frame)) {
@@ -499,7 +500,7 @@ export class SessionSyncController extends EventEmitter {
     }
     const cursor = this.#socket.cursors[sessionId]
     if (cursor !== undefined) state.cursor = { ...cursor }
-    if (!result.changed && !agentsChanged && !workChanged && !usageChanged && !todosChanged) return
+    if (!result.changed && !agentsChanged && !workChanged && !lifecycleChanged && !usageChanged && !todosChanged) return
     if (result.changed) this.#pendingProjections.add(sessionId)
     if (agentsChanged) state.agents = this.#agentProjector.getRoster(sessionId)
     this.#scheduleLiveStateEmission(state)
@@ -525,6 +526,34 @@ export class SessionSyncController extends EventEmitter {
       }
     }
     return changed
+  }
+
+  #applySessionLifecycleChanged(state: SessionSyncView, frame: SessionEventFrame): boolean {
+    if (frame.type === 'event.session.status_changed') {
+      const status = recordString(frame.payload, 'status')
+      if (
+        status === null ||
+        status === 'running' ||
+        status === 'awaiting_approval' ||
+        status === 'awaiting_question'
+      ) return false
+      return clearActiveWork(state)
+    }
+    if (
+      frame.type !== 'turn.ended' &&
+      frame.type !== 'prompt.completed' &&
+      frame.type !== 'prompt.aborted'
+    ) return false
+    const agentId = frameAgentId(frame)
+    if (agentId !== null && agentId !== 'main') return false
+    const promptId = recordString(frame.payload, 'promptId')
+      ?? recordString(frame.payload, 'prompt_id')
+    if (
+      promptId !== null &&
+      state.activePromptId !== null &&
+      promptId !== state.activePromptId
+    ) return false
+    return clearActiveWork(state)
   }
 
   #applyAgentUsage(state: SessionSyncView, frame: SessionEventFrame): boolean {
@@ -1005,7 +1034,24 @@ function frameAgentId(frame: SessionEventFrame): string | null {
 }
 
 function isAuthoritativeSkillWorkFrame(type: string): boolean {
-  return type === 'turn.started' || type === 'turn.ended' || type === 'event.session.work_changed'
+  return type === 'turn.started' ||
+    type === 'turn.ended' ||
+    type === 'prompt.completed' ||
+    type === 'prompt.aborted' ||
+    type === 'event.session.work_changed' ||
+    type === 'event.session.status_changed'
+}
+
+function clearActiveWork(state: SessionSyncView): boolean {
+  const changed = state.busy ||
+    state.mainTurnActive ||
+    state.activePromptId !== null ||
+    state.activePromptStatus !== null
+  state.busy = false
+  state.mainTurnActive = false
+  state.activePromptId = null
+  state.activePromptStatus = null
+  return changed
 }
 
 function errorMessage(error: unknown): string {

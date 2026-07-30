@@ -145,6 +145,36 @@ export class SessionPetStateReducer {
       }, now)
       return true
     }
+    if (
+      payload.type === 'turn.started' &&
+      isMainAgentFrame(payload)
+    ) {
+      this.#applyFact(session, {
+        ...session,
+        busy: true,
+        mainTurnActive: true,
+        pendingInteraction: 'none',
+        lastTurnReason: null,
+        updatedAt: frame.timestamp
+      }, now)
+      return true
+    }
+    if (
+      (payload.type === 'turn.ended' ||
+        payload.type === 'prompt.completed' ||
+        payload.type === 'prompt.aborted') &&
+      isMainAgentFrame(payload)
+    ) {
+      this.#applyFact(session, {
+        ...session,
+        busy: false,
+        mainTurnActive: false,
+        pendingInteraction: 'none',
+        lastTurnReason: terminalReason(payload.type, payload.reason),
+        updatedAt: frame.timestamp
+      }, now)
+      return true
+    }
     if (payload.type === 'session.meta.updated') {
       if (typeof payload.title === 'string') session.title = payload.title
       session.updatedAt = frame.timestamp
@@ -296,4 +326,22 @@ function isPendingInteraction(value: unknown): value is PetSessionFact['pendingI
 
 function isLastTurnReason(value: unknown): value is PetSessionFact['lastTurnReason'] {
   return value === 'completed' || value === 'cancelled' || value === 'failed'
+}
+
+function isMainAgentFrame(payload: Record<string, unknown>): boolean {
+  const agentId = typeof payload.agentId === 'string'
+    ? payload.agentId
+    : typeof payload.agent_id === 'string'
+      ? payload.agent_id
+      : 'main'
+  return agentId === 'main'
+}
+
+function terminalReason(
+  type: unknown,
+  reason: unknown
+): PetSessionFact['lastTurnReason'] {
+  if (type === 'prompt.aborted' || reason === 'cancelled') return 'cancelled'
+  if (reason === 'failed' || reason === 'blocked') return 'failed'
+  return 'completed'
 }

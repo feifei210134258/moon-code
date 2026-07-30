@@ -73,6 +73,24 @@ describe('TranscriptProjector', () => {
     expect(projection.active).toBe(true)
   })
 
+  it('settles an in-flight turn when prompt.completed is the only terminal event', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+
+    expect(projector.project(frame('prompt.completed', {
+      promptId: 'prompt-1',
+      finishedAt: '2026-07-23T00:02:00.000Z'
+    }))).toEqual({ changed: true, resyncRequired: false })
+
+    expect(projector.getProjection('session-1')).toEqual(expect.objectContaining({
+      active: false,
+      activePromptId: null
+    }))
+    expect(projector.getProjection('session-1').messages.at(-1)).toEqual(expect.objectContaining({
+      status: 'completed'
+    }))
+  })
+
   it('keeps Kimi cron turns visible with their authoritative origin metadata', () => {
     const cronSnapshot = snapshot()
     cronSnapshot.in_flight_turn = null
