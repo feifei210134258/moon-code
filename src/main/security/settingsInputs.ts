@@ -116,7 +116,8 @@ export function validatePreferencesPatch(value: unknown): KimiPreferencesPatch {
     'telemetry',
     'defaultPermissionMode',
     'defaultPlanMode',
-    'mergeAllAvailableSkills'
+    'mergeAllAvailableSkills',
+    'thinkingEffort'
   ])
   if (Object.keys(value).length < 1 || Object.keys(value).some((key) => !allowed.has(key))) {
     throw new TypeError('Invalid Kimi preferences patch')
@@ -135,6 +136,17 @@ export function validatePreferencesPatch(value: unknown): KimiPreferencesPatch {
       throw new TypeError('Invalid Kimi default permission mode')
     }
     patch.defaultPermissionMode = mode
+  }
+  if (value.thinkingEffort !== undefined) {
+    const effort = value.thinkingEffort
+    if (effort === null) {
+      patch.thinkingEffort = null
+    } else {
+      if (typeof effort !== 'string' || effort.trim().length < 1 || effort.length > 128 || effort.includes('\0')) {
+        throw new TypeError('Invalid Kimi thinking effort')
+      }
+      patch.thinkingEffort = effort.trim()
+    }
   }
   return patch
 }

@@ -31,7 +31,7 @@ describe('TopBar usage', () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage, sessionUsage,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage, sessionUsage,
         contextOpen: true, usageOpen: false, extensionsOpen: true
       }
     })
@@ -80,7 +80,7 @@ describe('TopBar usage', () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: englishUsage, sessionUsage,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage: englishUsage, sessionUsage,
         contextOpen: false, usageOpen: true, extensionsOpen: true
       }
     })
@@ -93,8 +93,8 @@ describe('TopBar usage', () => {
     const popover = wrapper.get('.usage-popover').text()
     expect(popover).toContain('套餐总量')
     expect(popover).toContain('5 小时窗口')
-    expect(popover).toContain('5 天 20 小时 5 分钟后重置')
-    expect(popover).toContain('1 小时 12 分钟后重置')
+    expect(popover).toContain('5天20小时后重置')
+    expect(popover).toContain('1小时12分后重置')
     expect(popover).not.toContain('resets in')
   })
 
@@ -114,16 +114,16 @@ describe('TopBar usage', () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.30.0', runtimeStatus: 'running', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: semanticUsage, sessionUsage,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage: semanticUsage, sessionUsage,
         contextOpen: false, usageOpen: true, extensionsOpen: true
       }
     })
 
-    expect(wrapper.get('.plan-usage').text()).toContain('2 小时后重置')
+    expect(wrapper.get('.plan-usage').text()).toContain('2小时后重置')
     const popover = wrapper.get('.usage-popover').text()
     expect(popover).toContain('每周窗口')
     expect(popover).toContain('5 小时窗口')
-    expect(popover).toContain('3 天 14 小时后重置')
+    expect(popover).toContain('3天14小时后重置')
     expect(popover).not.toContain('2026-')
     wrapper.unmount()
     vi.useRealTimers()
@@ -134,7 +134,7 @@ describe('TopBar usage', () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage, sessionUsage,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage, sessionUsage,
         contextOpen: false, usageOpen: false, extensionsOpen: true
       }
     })
@@ -168,7 +168,7 @@ describe('TopBar usage', () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: warningUsage, sessionUsage,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage: warningUsage, sessionUsage,
         contextOpen: false, usageOpen: false, extensionsOpen: true
       }
     })
@@ -193,7 +193,7 @@ describe('TopBar usage', () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage, sessionUsage,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage, sessionUsage,
         contextOpen: true, usageOpen: false, extensionsOpen: true,
         sessionReady: true, promptRunning: false, hasTurns: true, conversationActionPending: null
       }
@@ -229,7 +229,7 @@ describe('TopBar usage', () => {
     const wrapper = mount(TopBar, {
       props: {
         runtimeLabel: 'Kimi 未连接', runtimeStatus: 'stopped', runtimePending: false,
-        workspaceName: 'Kimi Agent', gitBranch: 'main', usage: unavailableUsage, sessionUsage: null,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage: unavailableUsage, sessionUsage: null,
         contextOpen: true, usageOpen: false, extensionsOpen: true
       }
     })
@@ -241,5 +241,31 @@ describe('TopBar usage', () => {
     await wrapper.setProps({ contextOpen: false, usageOpen: true })
     expect(wrapper.get('.usage-popover').text()).toContain('暂无套餐数据')
     expect(wrapper.get('.usage-popover').text()).toContain('尚未登录 Kimi')
+  })
+
+  it('opens the branch list from the top bar and marks the current branch', async () => {
+    const gitBranches = {
+      available: true,
+      current: 'main',
+      branches: ['fix/topbar', 'main', 'release/0.2.6']
+    }
+    const wrapper = mount(TopBar, {
+      props: {
+        runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches, branchesOpen: false, usage, sessionUsage,
+        contextOpen: false, usageOpen: false, extensionsOpen: true
+      }
+    })
+
+    const branchButton = wrapper.get('button[aria-controls="branch-popover"]')
+    expect(branchButton.text()).toContain('main')
+    await branchButton.trigger('click')
+    expect(wrapper.emitted('toggleBranches')).toEqual([[]])
+
+    await wrapper.setProps({ branchesOpen: true })
+    const items = wrapper.get('.branch-popover').findAll('.branch-list-item')
+    expect(items).toHaveLength(3)
+    expect(items.map((item) => item.text())).toEqual(['fix/topbar', 'main当前分支', 'release/0.2.6'])
+    expect(items[1]!.classes()).toContain('is-current')
   })
 })

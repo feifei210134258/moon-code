@@ -137,6 +137,7 @@ select:focus-visible {
 
 .topbar-context {
   gap: 8px;
+  position: relative;
 }
 
 .topbar-item,
@@ -353,6 +354,66 @@ select:focus-visible {
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(28px) saturate(1.08);
   user-select: text;
+}
+
+.branch-popover {
+  -webkit-app-region: no-drag;
+  position: absolute;
+  z-index: 80;
+  top: 42px;
+  left: 0;
+  width: min(320px, calc(100vw - 28px));
+  max-height: min(480px, calc(100vh - 76px));
+  overflow: auto;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(28px) saturate(1.08);
+  user-select: text;
+}
+
+.branch-list {
+  display: grid;
+  gap: 2px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.branch-list-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: var(--type-ui-small-size);
+}
+
+.branch-list-item > span {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-list-item.is-current {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.branch-list-item em {
+  font-size: var(--type-micro-size);
+  font-style: normal;
+}
+
+.branch-empty {
+  padding: 18px 2px 6px;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
 }
 
 .usage-popover-header,

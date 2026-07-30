@@ -11,7 +11,7 @@ import {
   PhArrowsInLineVertical,
   PhSpinnerGap
 } from '@phosphor-icons/vue'
-import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary } from '@shared/contracts'
+import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary, WorkspaceGitBranches } from '@shared/contracts'
 import { rendererLocale } from '../i18n/rendererLocale'
 
 const props = defineProps<{
@@ -20,6 +20,9 @@ const props = defineProps<{
   runtimePending: boolean
   workspaceName: string
   gitBranch: string | null
+  gitBranches: WorkspaceGitBranches | null
+  branchesOpen: boolean
+  branchesPending?: boolean
   usage: KimiUsageState
   sessionUsage: SessionUsageSummary | null
   contextOpen: boolean
@@ -38,6 +41,7 @@ const WEEKLY_USAGE_DISPLAY_MS = 5_000
 const emit = defineEmits<{
   toggleRuntime: []
   chooseWorkspace: []
+  toggleBranches: []
   toggleContext: []
   toggleUsage: []
   toggleExtensions: []
@@ -195,28 +199,27 @@ function resetHintLabel(hint: string): string {
   }
   const body = /^resets?\s+in\s+(.+)$/i.exec(hint.trim())?.[1]
   if (body === undefined) return hint
-  const unitNames: Record<string, string> = { s: '秒', m: '分钟', h: '小时', d: '天', w: '周' }
-  const parts = [...body.matchAll(/(\d+)\s*([smhdw])\b/gi)]
+  const unitNames: Record<string, string> = { s: '秒', m: '分', h: '小时', d: '天', w: '周' }
+  const parts = [...body.matchAll(/(\d+)\s*([smhdw])\b/gi)].slice(0, 2)
   if (parts.length === 0) return hint
-  return `${parts.map((part) => `${part[1] ?? ''} ${unitNames[(part[2] ?? '').toLowerCase()] ?? ''}`).join(' ')}后重置`
+  return `${parts.map((part) => `${part[1] ?? ''}${unitNames[(part[2] ?? '').toLowerCase()] ?? ''}`).join('')}后重置`
 }
 
 function resetDurationLabel(totalSeconds: number): string {
   const units = [
     ['天', 86_400],
     ['小时', 3_600],
-    ['分钟', 60],
-    ['秒', 1]
+    ['分', 60]
   ] as const
   let remaining = totalSeconds
   const parts: string[] = []
   for (const [label, seconds] of units) {
     const value = Math.floor(remaining / seconds)
-    if (value > 0) parts.push(`${value} ${label}`)
+    if (value > 0) parts.push(`${value}${label}`)
     remaining %= seconds
-    if (parts.length === 3) break
+    if (parts.length === 2) break
   }
-  return parts.join(' ') || '不到 1 秒'
+  return parts.join('') || '不到 1 分'
 }
 </script>
 
@@ -233,9 +236,22 @@ function resetDurationLabel(totalSeconds: number): string {
         <PhCaretDown :size="12" />
       </button>
       <span class="topbar-divider" />
-      <span class="topbar-item topbar-readout" :title="gitBranch || '非 Git 项目'">
+      <button
+        v-if="gitBranch !== null"
+        class="topbar-item"
+        type="button"
+        title="查看分支"
+        aria-controls="branch-popover"
+        :aria-expanded="branchesOpen"
+        @click="$emit('toggleBranches')"
+      >
         <PhGitBranch :size="17" />
-        <span>{{ gitBranch || '非 Git 项目' }}</span>
+        <span>{{ gitBranch }}</span>
+        <PhCaretDown :size="12" />
+      </button>
+      <span v-else class="topbar-item topbar-readout" title="非 Git 项目">
+        <PhGitBranch :size="17" />
+        <span>非 Git 项目</span>
       </span>
       <span class="topbar-divider" />
       <button
@@ -248,6 +264,28 @@ function resetDurationLabel(totalSeconds: number): string {
         <span class="status-dot" />
         <span>{{ runtimeLabel }}</span>
       </button>
+      <section v-if="branchesOpen" id="branch-popover" class="branch-popover" aria-label="Git 分支列表">
+        <header class="usage-popover-header">
+          <div>
+            <strong>本地分支</strong>
+            <span>{{ gitBranches?.available === true ? `共 ${gitBranches.branches.length} 个` : '来自当前项目 Git' }}</span>
+          </div>
+        </header>
+        <div v-if="gitBranches?.available === true && gitBranches.branches.length > 0" class="branch-list">
+          <span
+            v-for="branch in gitBranches.branches"
+            :key="branch"
+            class="branch-list-item"
+            :class="{ 'is-current': branch === gitBranches.current }"
+          >
+            <PhGitBranch :size="14" />
+            <span>{{ branch }}</span>
+            <em v-if="branch === gitBranches.current">当前分支</em>
+          </span>
+        </div>
+        <div v-else-if="branchesPending === true" class="branch-empty">正在读取分支…</div>
+        <div v-else class="branch-empty">当前项目没有可用的 Git 分支。</div>
+      </section>
     </div>
 
     <div class="topbar-actions">

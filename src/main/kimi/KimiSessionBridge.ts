@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events'
+import { execFile } from 'node:child_process'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { promisify } from 'node:util'
 import {
   SessionSyncController,
   type GlobalSyncEvent,
@@ -41,10 +43,12 @@ import type {
   WorkspaceGrepResult,
   WorkspaceMarkdownImage,
   WorkspaceOpenApp,
-  WorkspaceGitStatus
+  WorkspaceGitStatus,
+  WorkspaceGitBranches
 } from '../../shared/contracts.js'
 
 const KIMI_FS_GIT_UNAVAILABLE = 40908
+const execFileAsync = promisify(execFile)
 
 export class KimiSessionBridge extends EventEmitter {
   readonly #runtime: KimiRuntimeManager
@@ -521,6 +525,35 @@ export class KimiSessionBridge extends EventEmitter {
         deletions: 0,
         pullRequest: null
       }
+    }
+  }
+
+  async listGitBranches(sessionId: string): Promise<WorkspaceGitBranches> {
+    this.#assertActiveSession(sessionId)
+    const root = this.#getController().getState(sessionId)?.workspaceRoot ?? ''
+    if (root.length === 0) return { available: false, current: null, branches: [] }
+    try {
+      const [refs, current] = await Promise.all([
+        execFileAsync(
+          'git',
+          ['for-each-ref', '--sort=-committerdate', '--format=%(refname:short)', 'refs/heads'],
+          { cwd: root, timeout: 5_000 }
+        ),
+        execFileAsync('git', ['branch', '--show-current'], { cwd: root, timeout: 5_000 })
+      ])
+      const branches = refs.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+      const currentBranch = current.stdout.trim()
+      return {
+        available: true,
+        current: currentBranch.length > 0 ? currentBranch : null,
+        branches
+      }
+    } catch {
+      // git missing or the Workspace is not a repository: the TopBar just hides the list.
+      return { available: false, current: null, branches: [] }
     }
   }
 

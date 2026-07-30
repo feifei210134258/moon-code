@@ -58,6 +58,7 @@ export const ipcChannels = {
   filesTrash: 'files:trash',
   markdownImageRead: 'markdown:image:read',
   gitStatus: 'git:status',
+  gitBranches: 'git:branches',
   fileDiff: 'file:diff',
   terminalsList: 'terminals:list',
   terminalCreate: 'terminal:create',
@@ -683,6 +684,12 @@ export interface WorkspaceGitStatus {
   pullRequest: { number: number; state: 'open' | 'merged' | 'closed' | 'draft'; url: string } | null
 }
 
+export interface WorkspaceGitBranches {
+  available: boolean
+  current: string | null
+  branches: string[]
+}
+
 export interface WorkspaceFileDiff {
   path: string
   diff: string
@@ -760,6 +767,7 @@ export interface KimiSettingsPreferences {
   defaultPlanMode: boolean | null
   mergeAllAvailableSkills: boolean | null
   telemetry: boolean | null
+  thinkingEffort: string | null
 }
 
 export interface KimiSecondaryModelSettings {
@@ -836,6 +844,7 @@ export interface KimiPreferencesPatch {
   defaultPermissionMode?: 'manual' | 'auto' | 'yolo'
   defaultPlanMode?: boolean
   mergeAllAvailableSkills?: boolean
+  thinkingEffort?: string | null
 }
 
 export interface AddKimiProviderInput {
@@ -1157,6 +1166,7 @@ export interface KimiAgentDesktopApi {
   trashWorkspaceEntry(sessionId: string, path: string): Promise<{ trashed: true }>
   readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null>
   getGitStatus(sessionId: string): Promise<WorkspaceGitStatus>
+  listGitBranches(sessionId: string): Promise<WorkspaceGitBranches>
   getFileDiff(sessionId: string, path: string): Promise<WorkspaceFileDiff>
   listTerminals(sessionId: string): Promise<SessionTerminal[]>
   createTerminal(sessionId: string, size?: { cols: number; rows: number }): Promise<SessionTerminal>

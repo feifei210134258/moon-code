@@ -250,6 +250,25 @@ export class KimiSettingsBridge {
   }
 
   async updatePreferences(patch: KimiPreferencesPatch): Promise<KimiSettingsPreferences> {
+    const client = this.runtime.createRestClient()
+    let config: KimiConfigSnapshot | null = null
+    if (patch.thinkingEffort !== undefined) {
+      config = await client.getConfig()
+      const thinking = normalizeThinkingConfig(config.thinking)
+      if (patch.thinkingEffort === null) {
+        delete thinking.effort
+      } else {
+        thinking.effort = await this.#resolvePrimaryThinkingEffort(client, config.default_model, patch.thinkingEffort)
+      }
+      config = await client.setConfig({ thinking })
+      const effectiveEffort = normalizeThinkingConfig(config.thinking).effort ?? null
+      const expectedEffort = typeof thinking.effort === 'string' ? thinking.effort : null
+      if (effectiveEffort !== expectedEffort) {
+        throw new Error(
+          'Kimi Runtime did not apply the requested thinking effort configuration; check environment overrides and Runtime warnings.'
+        )
+      }
+    }
     const wirePatch: Record<string, unknown> = {}
     if (patch.telemetry !== undefined) wirePatch.telemetry = patch.telemetry
     if (patch.defaultPermissionMode !== undefined) {
@@ -259,8 +278,30 @@ export class KimiSettingsBridge {
     if (patch.mergeAllAvailableSkills !== undefined) {
       wirePatch.merge_all_available_skills = patch.mergeAllAvailableSkills
     }
-    const config = await this.runtime.createRestClient().setConfig(wirePatch)
+    if (Object.keys(wirePatch).length > 0) config = await client.setConfig(wirePatch)
+    if (config === null) config = await client.getConfig()
     return mapPreferences(config)
+  }
+
+  async #resolvePrimaryThinkingEffort(
+    client: ReturnType<KimiRuntimeManager['createRestClient']>,
+    defaultModel: string | undefined,
+    effort: string
+  ): Promise<string> {
+    const trimmed = effort.trim()
+    if (trimmed.length < 1) throw new TypeError('Invalid Kimi thinking effort')
+    if (defaultModel === undefined) return trimmed
+    const selected = (await client.listModels()).find((model) => model.model === defaultModel)
+    if (selected === undefined) return trimmed
+    const supported = selected.support_efforts ?? []
+    if (supported.length < 1) {
+      throw new TypeError(`Kimi 模型 ${defaultModel} 不支持选择思考强度`)
+    }
+    const matched = supported.find((item) => item.toLocaleLowerCase() === trimmed.toLocaleLowerCase())
+    if (matched === undefined) {
+      throw new TypeError(`Kimi 模型 ${defaultModel} 不支持思考强度 ${trimmed}`)
+    }
+    return matched
   }
 
   async addProvider(input: AddKimiProviderInput): Promise<KimiSettingsSnapshot> {
@@ -488,8 +529,19 @@ function mapPreferences(config: KimiConfigSnapshot): KimiSettingsPreferences {
         : null,
     defaultPlanMode: config.default_plan_mode ?? null,
     mergeAllAvailableSkills: config.merge_all_available_skills ?? null,
-    telemetry: config.telemetry ?? null
+    telemetry: config.telemetry ?? null,
+    thinkingEffort: normalizeThinkingConfig(config.thinking).effort ?? null
   }
+}
+
+function normalizeThinkingConfig(value: unknown): Record<string, unknown> & { effort?: string } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
+  const record = { ...(value as Record<string, unknown>) }
+  const effort = record.effort
+  if (effort !== undefined && (typeof effort !== 'string' || effort.trim().length < 1)) {
+    delete record.effort
+  }
+  return record as Record<string, unknown> & { effort?: string }
 }
 
 function mapSecondaryModel(config: KimiConfigSnapshot): KimiSettingsSnapshot['secondaryModel'] {

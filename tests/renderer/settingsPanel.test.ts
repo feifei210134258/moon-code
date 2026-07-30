@@ -52,7 +52,8 @@ const snapshot: KimiSettingsSnapshot = {
     defaultPermissionMode: 'manual',
     defaultPlanMode: true,
     mergeAllAvailableSkills: true,
-    telemetry: false
+    telemetry: false,
+    thinkingEffort: null
   },
   secondaryModel: { model: 'kimi-fast', defaultEffort: 'low', maxOutputSize: 8192 },
   secondaryModelControl: {
@@ -147,6 +148,78 @@ describe('SettingsPanel', () => {
 
     expect(api.setDefaultModel).toHaveBeenCalledWith('kimi-fast')
     expect(wrapper.findAll('.model-row')[1]!.classes()).toContain('is-selected')
+    wrapper.unmount()
+  })
+
+  it('saves a default thinking effort for the primary model', async () => {
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      updateKimiPreferences: vi.fn(async () => ({ ...snapshot.preferences, thinkingEffort: 'high' }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+    await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
+
+    const thinkingRow = wrapper.get('.primary-thinking-row')
+    const select = thinkingRow.get('select')
+    const optionValues = select.findAll('option').map((option) => option.attributes('value'))
+    expect(optionValues).toEqual(['', 'high'])
+    expect((select.element as HTMLSelectElement).value).toBe('')
+    await select.setValue('high')
+    await flushPromises()
+
+    expect(api.updateKimiPreferences).toHaveBeenCalledWith({ thinkingEffort: 'high' })
+    expect((thinkingRow.get('select').element as HTMLSelectElement).value).toBe('high')
+    wrapper.unmount()
+  })
+
+  it('keeps the sub Agent model unselected while following the primary model', async () => {
+    const followingSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      secondaryModel: { model: null, defaultEffort: null, maxOutputSize: null },
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const configured: KimiSettingsSnapshot = {
+      ...followingSnapshot,
+      secondaryModel: { model: 'gpt-5-mini', defaultEffort: null, maxOutputSize: null }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => followingSnapshot),
+      setSecondaryModel: vi.fn(async () => configured)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-nav button')[1]!.trigger('click')
+
+    expect(wrapper.text()).toContain('跟随主模型')
+    expect(wrapper.find('.provider-model-item.is-selected').exists()).toBe(false)
+    expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeDefined()
+
+    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
+    await wrapper.get('.provider-model-item').trigger('click')
+    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('gpt-5-mini')
+    expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeUndefined()
+    await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
+    await flushPromises()
+
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'medium' })
     wrapper.unmount()
   })
 
@@ -500,6 +573,7 @@ describe('SettingsPanel', () => {
       apiKey: 'sk-ant-secret'
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
+    await wrapper.get('.provider-model-item').trigger('click')
     expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('claude-sonnet-4-5')
     expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
     wrapper.unmount()

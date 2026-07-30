@@ -61,6 +61,7 @@ const showAgentFixture = import.meta.env.DEV && new URLSearchParams(window.locat
 const showMentionFixture = import.meta.env.DEV && new URLSearchParams(window.location.search).has('mention-fixture')
 const usageOpen = ref(showUsageFixture)
 const contextOpen = ref(false)
+const branchesOpen = ref(false)
 const usageSessionFixture = ref<SessionUsageSummary | null>(null)
 const operationalStateFixture = ref<KimiSessionOperationalState | null>(null)
 const localPromptQueueFixtureState = ref<LocalPromptDraft[] | null>(null)
@@ -223,17 +224,29 @@ function submitBrowserAnnotation(input: BrowserAnnotationSubmitInput): void {
 function openSettings(): void {
   usageOpen.value = false
   contextOpen.value = false
+  branchesOpen.value = false
   settingsOpen.value = true
+}
+
+function toggleBranches(): void {
+  branchesOpen.value = !branchesOpen.value
+  usageOpen.value = false
+  contextOpen.value = false
+  if (branchesOpen.value && activeSessionId.value.length > 0) {
+    void runtimeBridge.loadGitBranches(activeSessionId.value)
+  }
 }
 
 function toggleContext(): void {
   contextOpen.value = !contextOpen.value
   usageOpen.value = false
+  branchesOpen.value = false
 }
 
 function toggleUsage(): void {
   usageOpen.value = !usageOpen.value
   contextOpen.value = false
+  branchesOpen.value = false
 }
 
 function toggleExtensions(): void {
@@ -409,10 +422,11 @@ function trashWorkspaceEntry(reference: string): void {
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && (usageOpen.value || contextOpen.value || settingsOpen.value)) {
+  if (event.key === 'Escape' && (usageOpen.value || contextOpen.value || branchesOpen.value || settingsOpen.value)) {
     event.preventDefault()
     usageOpen.value = false
     contextOpen.value = false
+    branchesOpen.value = false
     settingsOpen.value = false
     return
   }
@@ -534,6 +548,7 @@ watch(
   [activeSessionId, () => runtimeBridge.runtime.value.status],
   ([sessionId, runtimeStatus]) => {
     closeAgent()
+    branchesOpen.value = false
     if (sessionId.length === 0) {
       runtimeBridge.clearActiveSession()
       return
@@ -608,6 +623,9 @@ onBeforeUnmount(() => {
       :runtime-pending="runtimeBridge.pending.value"
       :workspace-name="activeWorkspaceName"
       :git-branch="runtimeBridge.gitStatus.value?.branch ?? null"
+      :git-branches="runtimeBridge.gitBranches.value"
+      :branches-open="branchesOpen"
+      :branches-pending="runtimeBridge.gitBranchesPending.value"
       :usage="usageBridge.state.value"
       :session-usage="usageSessionFixture ?? activeSessionUsage"
       :context-open="contextOpen"
@@ -619,6 +637,7 @@ onBeforeUnmount(() => {
       :conversation-action-pending="runtimeBridge.conversationActionPending.value"
       @toggle-runtime="toggleRuntime"
       @choose-workspace="addWorkspace"
+      @toggle-branches="toggleBranches"
       @toggle-context="toggleContext"
       @toggle-usage="toggleUsage"
       @toggle-extensions="toggleExtensions"

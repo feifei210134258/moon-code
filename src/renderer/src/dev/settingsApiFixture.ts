@@ -64,7 +64,8 @@ const snapshot: KimiSettingsSnapshot = {
     defaultPermissionMode: 'manual',
     defaultPlanMode: true,
     mergeAllAvailableSkills: true,
-    telemetry: false
+    telemetry: false,
+    thinkingEffort: null
   },
   secondaryModel: { model: 'gpt-5-mini', defaultEffort: 'low', maxOutputSize: 8192 },
   secondaryModelControl: {

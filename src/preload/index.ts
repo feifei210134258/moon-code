@@ -78,6 +78,7 @@ const api: KimiAgentDesktopApi = {
   readMarkdownImage: (sessionId, source) =>
     ipcRenderer.invoke(ipcChannels.markdownImageRead, sessionId, source),
   getGitStatus: (sessionId) => ipcRenderer.invoke(ipcChannels.gitStatus, sessionId),
+  listGitBranches: (sessionId) => ipcRenderer.invoke(ipcChannels.gitBranches, sessionId),
   getFileDiff: (sessionId, path) => ipcRenderer.invoke(ipcChannels.fileDiff, sessionId, path),
   listTerminals: (sessionId) => ipcRenderer.invoke(ipcChannels.terminalsList, sessionId),
   createTerminal: (sessionId, size) => ipcRenderer.invoke(ipcChannels.terminalCreate, sessionId, size),

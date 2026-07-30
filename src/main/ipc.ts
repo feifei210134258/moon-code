@@ -47,6 +47,7 @@ import {
   type WorkspaceFileSearchResult,
   type WorkspaceGrepResult,
   type WorkspaceGitStatus,
+  type WorkspaceGitBranches,
   type WorkspaceOpenApp,
   type WorkspaceNavigationItem,
   type WorkspaceNavigationSnapshot,
@@ -655,6 +656,14 @@ export function registerIpc(
       assertTrustedSender(event)
       assertSessionId(sessionId)
       return await sessions.getGitStatus(sessionId)
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.gitBranches,
+    async (event, sessionId?: unknown): Promise<WorkspaceGitBranches> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      return await sessions.listGitBranches(sessionId)
     }
   )
   ipcMain.handle(

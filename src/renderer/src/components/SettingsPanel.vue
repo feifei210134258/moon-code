@@ -181,6 +181,32 @@ const selectedSecondaryProviderProtocol = computed(() => {
   return secondaryProviderTypes.find((item) => item.value === type)?.label ?? type ?? '未知协议'
 })
 const currentSecondaryProviderId = computed(() => secondaryModelDescriptor.value?.providerId ?? null)
+const primaryModelDescriptor = computed(() => {
+  const settings = snapshot.value
+  if (settings === null) return null
+  return settings.models.find((model) => model.id === settings.preferences.defaultModel) ?? null
+})
+const primaryThinkingOptions = computed(() =>
+  (primaryModelDescriptor.value?.supportEfforts ?? []).filter(isSelectableThinkingEffort)
+)
+const primaryThinkingSelection = computed(() => {
+  const effort = snapshot.value?.preferences.thinkingEffort ?? null
+  if (effort === null) return ''
+  return primaryThinkingOptions.value.find((option) =>
+    option.toLocaleLowerCase() === effort.toLocaleLowerCase()
+  ) ?? effort
+})
+const primaryThinkingSelectOptions = computed(() => {
+  const options = [...primaryThinkingOptions.value]
+  const selection = primaryThinkingSelection.value
+  if (selection.length > 0 && !options.some((option) => option === selection)) options.push(selection)
+  return options
+})
+const primaryThinkingUnsupported = computed(() => {
+  const selection = primaryThinkingSelection.value
+  return selection.length > 0 && primaryThinkingOptions.value.length > 0 &&
+    !primaryThinkingOptions.value.some((option) => option === selection)
+})
 const accountStatusLabel = computed(() => {
   const status = snapshot.value?.auth.managedProvider?.status
   if (status === 'authenticated') return '已登录'
@@ -242,19 +268,32 @@ async function loadSettings(): Promise<void> {
   }
 }
 
-function syncSecondaryModelDraft(settings: KimiSettingsSnapshot): void {
+function effectiveSecondarySelection(): { model: string; defaultEffort: string } | null {
+  const settings = snapshot.value
+  const descriptor = secondaryModelDescriptor.value
+  if (settings === null || descriptor === null || secondaryFollowsPrimary.value) return null
   const preference = settings.secondaryModelControl.preference
-  const usePreference = settings.secondaryModelControl.configurationMode === 'runtime-env'
-  const model = (usePreference && preference.mode === 'configured' ? preference.model : settings.secondaryModel.model) ??
-    settings.secondaryModelOptions[0]?.id ?? ''
+  const effort = usesSecondaryRuntimePreference.value && preference.mode === 'configured'
+    ? preference.defaultEffort
+    : settings.secondaryModel.defaultEffort
+  return { model: descriptor.id, defaultEffort: effort ?? '' }
+}
+
+function syncSecondaryModelDraft(settings: KimiSettingsSnapshot): void {
+  const effective = effectiveSecondarySelection()
   secondaryModelDraft.value = {
-    model,
-    defaultEffort: (usePreference && preference.mode === 'configured' ? preference.defaultEffort : settings.secondaryModel.defaultEffort) ?? '',
+    model: effective?.model ?? '',
+    defaultEffort: effective?.defaultEffort ?? '',
     maxOutputSize: settings.secondaryModel.maxOutputSize?.toString() ?? ''
   }
-  secondaryProviderId.value = settings.secondaryModelOptions.find((item) => item.id === model)?.providerId ??
-    settings.providers.find((provider) => provider.models.includes(model))?.id ??
-    settings.providers.find((provider) => provider.id === settings.preferences.defaultProvider)?.id ??
+  const providerIds = new Set(settings.providers.map((provider) => provider.id))
+  secondaryProviderId.value = (effective !== null
+    ? settings.secondaryModelOptions.find((item) => item.id === effective.model)?.providerId
+    : undefined) ??
+    (providerIds.has(secondaryProviderId.value) ? secondaryProviderId.value : undefined) ??
+    (settings.preferences.defaultProvider !== null && providerIds.has(settings.preferences.defaultProvider)
+      ? settings.preferences.defaultProvider
+      : undefined) ??
     settings.providers[0]?.id ?? ''
 }
 
@@ -270,8 +309,10 @@ function selectSecondaryProvider(providerId: string): void {
   secondaryProviderId.value = providerId
   const options = snapshot.value?.secondaryModelOptions.filter((model) => model.providerId === providerId) ?? []
   if (!options.some((model) => model.id === secondaryModelDraft.value.model)) {
-    secondaryModelDraft.value.model = options[0]?.id ?? ''
-    secondaryModelDraft.value.defaultEffort = ''
+    const effective = effectiveSecondarySelection()
+    const restore = effective !== null && options.some((model) => model.id === effective.model) ? effective : null
+    secondaryModelDraft.value.model = restore?.model ?? ''
+    secondaryModelDraft.value.defaultEffort = restore?.defaultEffort ?? ''
   }
   onSecondaryModelDraftChange()
 }
@@ -431,6 +472,25 @@ async function setDefaultModel(modelId: string): Promise<void> {
   } finally {
     actionPending.value = null
   }
+}
+
+function updatePrimaryThinkingEffort(value: string): void {
+  void updatePreference({ thinkingEffort: value.trim().length < 1 ? null : value })
+}
+
+function isSelectableThinkingEffort(effort: string): boolean {
+  const normalized = effort.trim()
+  return normalized.length > 0 && normalized.toLocaleLowerCase() !== 'off'
+}
+
+function thinkingEffortLabel(effort: string): string {
+  return {
+    low: '低',
+    medium: '中',
+    high: '高',
+    xhigh: '超高',
+    max: '最高'
+  }[effort.trim().toLocaleLowerCase()] ?? effort
 }
 
 async function setSecondaryModel(): Promise<void> {
@@ -1064,6 +1124,20 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                       <small>{{ Math.round(model.maxContextSize / 1024) }}k</small>
                     </button>
                   </div>
+                  <label class="preference-row primary-thinking-row">
+                    <span><strong>默认思考强度</strong><small>创建新 Session 时使用；不同模型支持的强度不同</small></span>
+                    <select
+                      v-if="primaryThinkingSelectOptions.length > 0"
+                      :value="primaryThinkingSelection"
+                      :disabled="actionPending !== null"
+                      @change="updatePrimaryThinkingEffort(($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">跟随模型默认</option>
+                      <option v-for="effort in primaryThinkingSelectOptions" :key="effort" :value="effort">{{ thinkingEffortLabel(effort) }}</option>
+                    </select>
+                    <small v-else class="primary-thinking-fixed">当前模型的思考强度由模型自身决定</small>
+                  </label>
+                  <p v-if="primaryThinkingUnsupported" class="field-error">当前主模型不支持已配置的强度，Kimi 将回退到模型默认值。</p>
                 </section>
 
                 <section v-else class="secondary-model-workspace" aria-labelledby="secondary-model-title">
@@ -1247,15 +1321,15 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                           <div class="provider-form secondary-model-form">
                             <label>
                               <span>推理强度</span>
-                              <select v-if="(secondaryModelDraftDescriptor?.supportEfforts.length ?? 0) > 0" v-model="secondaryModelDraft.defaultEffort" :disabled="actionPending !== null">
+                              <select v-if="(secondaryModelDraftDescriptor?.supportEfforts.length ?? 0) > 0" v-model="secondaryModelDraft.defaultEffort" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1">
                                 <option value="">使用模型默认值</option>
                                 <option v-for="effort in secondaryModelDraftDescriptor?.supportEfforts ?? []" :key="effort" :value="effort">{{ effort }}</option>
                               </select>
-                              <input v-else v-model="secondaryModelDraft.defaultEffort" type="text" placeholder="使用模型默认值" :disabled="actionPending !== null" />
+                              <input v-else v-model="secondaryModelDraft.defaultEffort" type="text" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
                             </label>
                             <label v-if="snapshot.capabilities.secondaryModel.maxOutputSizeWritable">
                               <span>最大输出 Token</span>
-                              <input v-model="secondaryModelDraft.maxOutputSize" type="number" min="1" max="16777216" placeholder="使用模型默认值" :disabled="actionPending !== null" />
+                              <input v-model="secondaryModelDraft.maxOutputSize" type="number" min="1" max="16777216" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
                             </label>
                           </div>
                           <div class="secondary-model-actions">

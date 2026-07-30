@@ -462,4 +462,40 @@ describe('KimiSettingsBridge', () => {
     await expect(sharedBridge.inheritSecondaryModel()).rejects.toThrow('不是由 Moon Code 启动')
     expect(store.save).not.toHaveBeenCalled()
   })
+
+  it('merges the primary thinking effort into the existing thinking config', async () => {
+    const client = createClient()
+    client.getConfig.mockResolvedValue({
+      ...await client.getConfig(),
+      thinking: { enabled: true, keep: 'all', effort: 'low' }
+    } as never)
+    client.setConfig.mockImplementation((async (patch: Record<string, unknown>) => {
+      const updated = { ...await client.getConfig(), ...patch }
+      client.getConfig.mockResolvedValue(updated as never)
+      return updated
+    }) as never)
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.30.0', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+    const bridge = new KimiSettingsBridge(runtime)
+
+    const high = await bridge.updatePreferences({ thinkingEffort: 'HIGH' })
+    expect(client.setConfig).toHaveBeenCalledWith({
+      thinking: { enabled: true, keep: 'all', effort: 'high' }
+    })
+    expect(high.thinkingEffort).toBe('high')
+
+    const cleared = await bridge.updatePreferences({ thinkingEffort: null })
+    expect(client.setConfig).toHaveBeenLastCalledWith({
+      thinking: { enabled: true, keep: 'all' }
+    })
+    expect(cleared.thinkingEffort).toBeNull()
+
+    await expect(bridge.updatePreferences({ thinkingEffort: 'xhigh' }))
+      .rejects.toThrow('不支持思考强度')
+  })
 })

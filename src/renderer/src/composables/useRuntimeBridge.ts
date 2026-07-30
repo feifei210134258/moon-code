@@ -38,6 +38,7 @@ import type {
   WorkspaceFileSearchResult,
   WorkspaceGrepResult,
   WorkspaceGitStatus,
+  WorkspaceGitBranches,
   WorkspaceOpenApp,
   WorkspaceNavigationItem
 } from '@shared/contracts'
@@ -108,6 +109,8 @@ export function useRuntimeBridge() {
   const gitStatus = ref<WorkspaceGitStatus | null>(null)
   const gitStatusPending = ref(false)
   const gitStatusError = ref<string | null>(null)
+  const gitBranches = ref<WorkspaceGitBranches | null>(null)
+  const gitBranchesPending = ref(false)
   const fileDiff = ref<WorkspaceFileDiff | null>(null)
   const fileDiffPending = ref(false)
   const fileDiffError = ref<string | null>(null)
@@ -130,6 +133,7 @@ export function useRuntimeBridge() {
   let loadedSessionPageCount = 0
   let workspaceGeneration = 0
   let directoryGeneration = 0
+  let branchesGeneration = 0
   let previewGeneration = 0
   let diffGeneration = 0
   let fileSearchGeneration = 0
@@ -1032,6 +1036,20 @@ export function useRuntimeBridge() {
     await Promise.all([directoryPromise, gitPromise])
   }
 
+  const loadGitBranches = async (sessionId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || sessionId !== requestedSessionId) return
+    const generation = ++branchesGeneration
+    gitBranchesPending.value = true
+    try {
+      const result = await window.kimiAgent.listGitBranches(sessionId)
+      if (generation === branchesGeneration && sessionId === requestedSessionId) gitBranches.value = result
+    } catch {
+      if (generation === branchesGeneration && sessionId === requestedSessionId) gitBranches.value = null
+    } finally {
+      if (generation === branchesGeneration) gitBranchesPending.value = false
+    }
+  }
+
   const loadDirectoryForSession = async (
     sessionId: string,
     path: string,
@@ -1082,6 +1100,9 @@ export function useRuntimeBridge() {
     gitStatus.value = null
     gitStatusPending.value = false
     gitStatusError.value = null
+    branchesGeneration += 1
+    gitBranches.value = null
+    gitBranchesPending.value = false
     fileDiff.value = null
     fileDiffPending.value = false
     fileDiffError.value = null
@@ -1378,6 +1399,9 @@ export function useRuntimeBridge() {
     gitStatus,
     gitStatusPending,
     gitStatusError,
+    gitBranches,
+    gitBranchesPending,
+    loadGitBranches,
     fileDiff,
     fileDiffPending,
     fileDiffError,
