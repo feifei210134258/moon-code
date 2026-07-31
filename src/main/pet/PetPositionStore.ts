@@ -9,11 +9,15 @@ export interface StoredPetPosition {
 
 interface StoredPetPositions {
   version: 1
-  sessions: Record<string, StoredPetPosition>
+  pet: StoredPetPosition | null
 }
 
-const EMPTY_POSITIONS: StoredPetPositions = { version: 1, sessions: {} }
+const EMPTY_POSITIONS: StoredPetPositions = { version: 1, pet: null }
 
+/**
+ * Stores the position of the single pet window. Older versions keyed positions
+ * by session id; that data is deliberately ignored, the pet is global now.
+ */
 export class PetPositionStore {
   readonly #path: string
   #loaded: StoredPetPositions | null = null
@@ -23,14 +27,14 @@ export class PetPositionStore {
     this.#path = path
   }
 
-  async get(sessionId: string): Promise<StoredPetPosition | null> {
+  async get(): Promise<StoredPetPosition | null> {
     const positions = await this.#load()
-    return positions.sessions[sessionId] ?? null
+    return positions.pet
   }
 
-  async set(sessionId: string, position: StoredPetPosition): Promise<void> {
+  async set(position: StoredPetPosition): Promise<void> {
     const positions = await this.#load()
-    positions.sessions[sessionId] = sanitizePosition(position)
+    positions.pet = sanitizePosition(position)
     this.#writeQueue = this.#writeQueue.then(async () => {
       await mkdir(dirname(this.#path), { recursive: true })
       const temporaryPath = `${this.#path}.tmp`
@@ -53,26 +57,24 @@ export class PetPositionStore {
 }
 
 function parsePositions(value: unknown): StoredPetPositions {
-  if (!isRecord(value) || value.version !== 1 || !isRecord(value.sessions)) {
-    return structuredClone(EMPTY_POSITIONS)
-  }
-  const sessions: Record<string, StoredPetPosition> = {}
-  for (const [sessionId, candidate] of Object.entries(value.sessions)) {
-    if (
-      sessionId.length === 0 ||
-      !isRecord(candidate) ||
-      typeof candidate.displayId !== 'string' ||
-      (candidate.edge !== 'left' && candidate.edge !== 'right') ||
-      typeof candidate.offsetY !== 'number' ||
-      !Number.isFinite(candidate.offsetY)
-    ) continue
-    sessions[sessionId] = sanitizePosition({
+  if (!isRecord(value) || value.version !== 1) return structuredClone(EMPTY_POSITIONS)
+  const candidate = value.pet
+  if (
+    candidate === null ||
+    !isRecord(candidate) ||
+    typeof candidate.displayId !== 'string' ||
+    (candidate.edge !== 'left' && candidate.edge !== 'right') ||
+    typeof candidate.offsetY !== 'number' ||
+    !Number.isFinite(candidate.offsetY)
+  ) return structuredClone(EMPTY_POSITIONS)
+  return {
+    version: 1,
+    pet: sanitizePosition({
       displayId: candidate.displayId,
       edge: candidate.edge,
       offsetY: candidate.offsetY
     })
   }
-  return { version: 1, sessions }
 }
 
 function sanitizePosition(position: StoredPetPosition): StoredPetPosition {

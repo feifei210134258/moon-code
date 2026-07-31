@@ -1,6 +1,6 @@
 # ADR 0009：桌宠多 Session 状态与窗口权限边界
 
-- 状态：Accepted
+- 状态：Accepted（2026-08-01 修订：窗口模型改为单窗 + 悬停浮层，见「窗口与 IPC」）
 - 日期：2026-07-23
 
 ## 背景
@@ -24,20 +24,21 @@ Main 中新增 `KimiPetService`：
 Disconnected > Waiting > Failed > Running > Completed transient > Review/Unread > Idle
 ```
 
-Completed 动画默认持续 6 秒；未读 Session 保留为 Review。用户在主窗口真正加载该 Session 后才标记 Viewed。默认最多显示 5 个窗口，更多状态由最后一只宠物的 `+N` 折叠标记表示，并保留高优先级排序。
+Completed 动画默认持续 6 秒；未读 Session 保留为 Review。用户在主窗口真正加载该 Session 后才标记 Viewed。~~默认最多显示 5 个窗口，更多状态由最后一只宠物的 `+N` 折叠标记表示，并保留高优先级排序。~~（2026-08-01 修订：不再按会话开窗，见下节。）
 
 ### 窗口与 IPC
 
-每个可见 Session 对应一个透明、无边框、置顶、固定尺寸的 `BrowserWindow`。窗口使用独立 `pet.cjs` sandbox preload，只暴露：
+~~每个可见 Session 对应一个透明、无边框、置顶、固定尺寸的 `BrowserWindow`。~~（2026-08-01 修订）所有可见 Session 共用一个透明、无边框、置顶、固定尺寸的 `BrowserWindow`：任意数量的并发任务 Session 只显示一只宠物，鼠标移入时主进程把窗口向屏幕内侧扩展，Renderer 在浮层中列出每个 Session 的状态条目，移出即收起恢复原 bounds。窗口使用独立 `pet.cjs` sandbox preload，只暴露：
 
-- 获取当前绑定的最小 Pet 状态；
+- 获取当前完整 Pet Roster 状态；
 - 接收该状态的更新；
-- 打开当前绑定 Session；
+- 打开指定 Session（或单 Session 时省略 ID）；
+- 悬停展开/收起通知；
 - 拖拽开始、移动和结束。
 
-Pet Renderer 不暴露 `window.kimiAgent`，不能发送 Prompt、读取 Transcript/文件、访问浏览器数据，也不能批准 Approval 或回答 Question。Main 根据 `event.sender` 反查窗口与 Session 绑定；Renderer 不能通过传入另一个 Session ID 越权跳转。
+Pet Renderer 不暴露 `window.kimiAgent`，不能发送 Prompt、读取 Transcript/文件、访问浏览器数据，也不能批准 Approval 或回答 Question。Main 根据 `event.sender` 反查窗口，并校验 Renderer 传入的 Session ID 属于当前 Roster；Renderer 不能通过传入其他 Session ID 越权跳转。
 
-点击宠物产生 `{serverId, workspaceId, sessionId, focus}` 意图。Main 显示或重建主窗口，主 Renderer 验证 Server ID、选择真实 Session，并在 snapshot 加载后定位 Interaction 或最新 Turn。敏感操作仍只在主窗口中完成。
+点击宠物（单 Session 时点击本体，多 Session 时点击悬停浮层中的条目）产生 `{serverId, workspaceId, sessionId, focus}` 意图。Main 显示或重建主窗口，主 Renderer 验证 Server ID、选择真实 Session，并在 snapshot 加载后定位 Interaction 或最新 Turn。敏感操作仍只在主窗口中完成。
 
 ### 拖拽与位置
 

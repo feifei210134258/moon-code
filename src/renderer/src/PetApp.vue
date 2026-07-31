@@ -1,33 +1,89 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { PetPointerPosition, PetSessionState } from '@shared/contracts'
+import type {
+  PetPointerPosition,
+  PetRosterState,
+  PetSessionState,
+  PetVisualState
+} from '@shared/contracts'
 import LumiSprite from './components/LumiSprite.vue'
 
-const state = ref<PetSessionState | null>(null)
+const roster = ref<PetRosterState | null>(null)
 const fixtureStatus = import.meta.env.DEV
   ? new URLSearchParams(window.location.search).get('pet-fixture')
   : null
 const now = ref(Date.now())
 const dragging = ref(false)
+const overlayOpen = ref(false)
+const windowExpanded = ref(false)
 let startPointer: PetPointerPosition | null = null
 let lastPointer: PetPointerPosition | null = null
+let hoverTimer: ReturnType<typeof setTimeout> | null = null
 let stopStateListener: (() => void) | null = null
 let clock: ReturnType<typeof setInterval> | null = null
 
-const statusLabel = computed(() => {
-  const value = state.value
-  if (value === null) return '正在连接'
-  if (value.status === 'waiting') return value.pendingInteraction === 'question' ? '等待回答' : '等待授权'
-  if (value.status === 'running') return value.backgroundActivity ? '后台执行' : '正在工作'
-  if (value.status === 'completed') return '已完成'
-  if (value.status === 'failed') return '运行失败'
-  if (value.status === 'review') return '等待查看'
-  if (value.status === 'disconnected') return '连接中断'
+const STATUS_PRIORITY: Record<PetVisualState, number> = {
+  disconnected: 7,
+  waiting: 6,
+  failed: 5,
+  running: 4,
+  completed: 3,
+  review: 2,
+  idle: 1
+}
+
+const items = computed(() => roster.value?.items ?? [])
+
+// 宠物本体展示聚合状态：任一待交互优先于运行中，其余按 reducer 的固定优先级。
+const bodyStatus = computed<PetVisualState>(() => {
+  if (roster.value === null) return 'disconnected'
+  let best: PetVisualState = 'idle'
+  for (const item of items.value) {
+    if (STATUS_PRIORITY[item.status] > STATUS_PRIORITY[best]) best = item.status
+  }
+  return best
+})
+
+const bodyLabel = computed(() => {
+  if (items.value.length === 0) return '正在连接'
+  const pending = waitingInteraction.value
+  const status = bodyStatus.value
+  if (status === 'waiting') return pending === 'question' ? '等待回答' : '等待授权'
+  if (status === 'running') return items.value.some((item) => item.backgroundActivity) ? '后台执行' : '正在工作'
+  if (status === 'completed') return '已完成'
+  if (status === 'failed') return '运行失败'
+  if (status === 'review') return '等待查看'
+  if (status === 'disconnected') return '连接中断'
   return '空闲'
 })
 
-const elapsed = computed(() => {
-  const startedAt = state.value?.startedAt
+const rootLabel = computed(() => {
+  if (items.value.length === 0) return 'Kimi 桌宠，正在连接'
+  const title = items.value.length === 1
+    ? items.value[0]!.title
+    : `${items.value.length} 个任务`
+  return `${title}，${bodyLabel.value}`
+})
+
+function statusLabelFor(item: Pick<PetSessionState, 'status' | 'pendingInteraction' | 'backgroundActivity'>): string {
+  if (item.status === 'waiting') return item.pendingInteraction === 'question' ? '等待回答' : '等待授权'
+  if (item.status === 'running') return item.backgroundActivity ? '后台执行' : '正在工作'
+  if (item.status === 'completed') return '已完成'
+  if (item.status === 'failed') return '运行失败'
+  if (item.status === 'review') return '等待查看'
+  if (item.status === 'disconnected') return '连接中断'
+  return '空闲'
+}
+
+const waitingInteraction = computed<'question' | 'approval' | 'none'>(() => {
+  const waiting = items.value.filter((item) => item.status === 'waiting')
+  if (waiting.some((item) => item.pendingInteraction === 'question')) return 'question'
+  if (waiting.some((item) => item.pendingInteraction === 'approval')) return 'approval'
+  return 'none'
+})
+
+function elapsedFor(item: PetSessionState): string {
+  const startedAt = item.startedAt
   if (startedAt === null || startedAt === undefined) return ''
   const started = Date.parse(startedAt)
   if (!Number.isFinite(started)) return ''
@@ -36,14 +92,51 @@ const elapsed = computed(() => {
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${minutes}m`
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-})
+}
 
 function pointer(event: PointerEvent): PetPointerPosition {
   return { screenX: event.screenX, screenY: event.screenY }
 }
 
+// 展开窗口先于浮层展示（窗口放大的 IPC 与重绘需要几毫秒），
+// 避免浮层先被折叠窗口裁切出闪烁。
+function onMouseEnter(): void {
+  const api = window.kimiPet
+  if (api === undefined) return
+  if (!windowExpanded.value) {
+    windowExpanded.value = true
+    api.setHovered(true)
+  }
+  if (hoverTimer !== null) clearTimeout(hoverTimer)
+  hoverTimer = setTimeout(() => { overlayOpen.value = true }, 60)
+}
+
+function onMouseLeave(): void {
+  collapse()
+}
+
+function collapse(): void {
+  if (hoverTimer !== null) {
+    clearTimeout(hoverTimer)
+    hoverTimer = null
+  }
+  overlayOpen.value = false
+  if (windowExpanded.value) {
+    windowExpanded.value = false
+    window.kimiPet?.setHovered(false)
+  }
+}
+
+function onEntryClick(item: PetSessionState): void {
+  const api = window.kimiPet
+  if (api === undefined) return
+  api.openSession(item.sessionId)
+  collapse()
+}
+
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0 || window.kimiPet === undefined) return
+  collapse()
   startPointer = pointer(event)
   lastPointer = startPointer
   dragging.value = false
@@ -65,7 +158,8 @@ function onPointerMove(event: PointerEvent): void {
 function onPointerUp(event: PointerEvent): void {
   if (startPointer === null || window.kimiPet === undefined) return
   if (dragging.value) window.kimiPet.endDrag(pointer(event))
-  else window.kimiPet.openSession()
+  // 仅单个会话时点击本体直接打开；多会话由悬停浮层选择。
+  else if (items.value.length === 1) window.kimiPet.openSession()
   startPointer = null
   lastPointer = null
   dragging.value = false
@@ -80,31 +174,37 @@ function onPointerCancel(event: PointerEvent): void {
 
 onMounted(async () => {
   if (fixtureStatus === 'running' || fixtureStatus === 'completed') {
-    state.value = {
-      serverId: 'fixture-server',
-      workspaceId: 'fixture-workspace',
-      workspaceName: 'Moon Code',
-      sessionId: 'fixture-session',
-      title: fixtureStatus === 'running' ? '正在构建月狐宠物' : '月狐宠物已完成',
-      status: fixtureStatus,
-      pendingInteraction: 'none',
-      backgroundActivity: false,
-      unread: fixtureStatus === 'completed',
-      startedAt: fixtureStatus === 'running' ? new Date().toISOString() : null,
-      updatedAt: new Date().toISOString(),
-      latestTool: null,
-      overflowCount: 0
+    roster.value = {
+      connected: true,
+      items: [{
+        serverId: 'fixture-server',
+        workspaceId: 'fixture-workspace',
+        workspaceName: 'Moon Code',
+        sessionId: 'fixture-session',
+        title: fixtureStatus === 'running' ? '正在构建月狐宠物' : '月狐宠物已完成',
+        status: fixtureStatus,
+        pendingInteraction: 'none',
+        backgroundActivity: false,
+        unread: fixtureStatus === 'completed',
+        startedAt: fixtureStatus === 'running' ? new Date().toISOString() : null,
+        updatedAt: new Date().toISOString(),
+        latestTool: null,
+        overflowCount: 0
+      }],
+      overflow: 0,
+      updatedAt: new Date().toISOString()
     }
     return
   }
   const api = window.kimiPet
   if (api === undefined) return
-  stopStateListener = api.onStateChanged((next) => { state.value = next })
-  state.value = await api.getState()
+  stopStateListener = api.onStateChanged((next) => { roster.value = next })
+  roster.value = await api.getState()
   clock = setInterval(() => { now.value = Date.now() }, 1_000)
 })
 
 onBeforeUnmount(() => {
+  if (hoverTimer !== null) clearTimeout(hoverTimer)
   stopStateListener?.()
   if (clock !== null) clearInterval(clock)
 })
@@ -113,25 +213,44 @@ onBeforeUnmount(() => {
 <template>
   <main
     class="pet-root"
-    :class="[`is-${state?.status ?? 'disconnected'}`, { 'is-dragging': dragging }]"
-    :aria-label="state === null ? 'Kimi 桌宠' : `${state.title}，${statusLabel}`"
-    @pointerdown="onPointerDown"
-    @pointermove="onPointerMove"
-    @pointerup="onPointerUp"
-    @pointercancel="onPointerCancel"
+    :class="[`is-${bodyStatus}`, { 'is-dragging': dragging }]"
+    :aria-label="rootLabel"
+    @mouseenter="onMouseEnter"
+    @mouseleave="onMouseLeave"
     @contextmenu.prevent
   >
-    <div class="pet-tooltip" role="status">
-      <strong>{{ state?.title ?? 'Moon Code' }}</strong>
-      <span>{{ state?.workspaceName ?? '正在连接' }}</span>
-      <small>{{ statusLabel }}<template v-if="elapsed"> · {{ elapsed }}</template></small>
+    <div
+      class="pet-overlay"
+      :class="{ 'is-open': overlayOpen }"
+      role="list"
+      aria-label="进行中的任务会话"
+    >
+      <button
+        v-for="item in items"
+        :key="item.sessionId"
+        type="button"
+        class="pet-entry"
+        @click="onEntryClick(item)"
+      >
+        <strong class="pet-entry__title">{{ item.title }}</strong>
+        <span class="pet-entry__workspace">{{ item.workspaceName }}</span>
+        <small class="pet-entry__status">
+          {{ statusLabelFor(item) }}<template v-if="elapsedFor(item)"> · {{ elapsedFor(item) }}</template>
+        </small>
+      </button>
     </div>
 
-    <div class="pet-character" aria-hidden="true">
+    <div
+      class="pet-body"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerCancel"
+    >
       <LumiSprite
-        :status="state?.status ?? 'disconnected'"
+        :status="bodyStatus"
       />
-      <div v-if="(state?.overflowCount ?? 0) > 0" class="pet-overflow">+{{ state?.overflowCount }}</div>
+      <div v-if="(roster?.overflow ?? 0) > 0" class="pet-overflow">+{{ roster?.overflow }}</div>
     </div>
   </main>
 </template>
@@ -155,46 +274,66 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: flex-end;
   padding: 5px 5px 7px;
-  cursor: grab;
   touch-action: none;
 }
 
-.pet-root.is-dragging { cursor: grabbing; }
+.pet-root.is-dragging .pet-body { cursor: grabbing; }
 .pet-root.is-running { --pet-accent: #2563eb; --pet-soft: rgba(37, 99, 235, 0.18); }
 .pet-root:not(.is-running) { --pet-accent: #16a36a; --pet-soft: rgba(22, 163, 106, 0.18); }
 
-.pet-tooltip {
+.pet-overlay {
   position: absolute;
-  top: 2px;
-  left: 3px;
-  right: 3px;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
   z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 5px 6px;
+  width: 224px;
+  max-height: 196px;
+  overflow-y: auto;
+  padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.86);
-  border-radius: 8px;
-  background: rgba(250, 253, 255, 0.82);
+  border-radius: 10px;
+  background: rgba(250, 253, 255, 0.9);
   box-shadow: 0 9px 24px rgba(55, 72, 90, 0.14);
   backdrop-filter: blur(16px) saturate(1.08);
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 140ms ease, transform 140ms ease;
   pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
 }
 
-.pet-root:hover .pet-tooltip,
-.pet-root:focus-within .pet-tooltip { opacity: 1; transform: translateY(0); }
-.pet-tooltip strong, .pet-tooltip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pet-tooltip strong { font-size: var(--type-caption-size); font-weight: 700; }
-.pet-tooltip span { color: #687386; font-size: var(--type-micro-size); }
-.pet-tooltip small { color: var(--pet-accent); font-size: var(--type-micro-size); font-weight: 650; }
+.pet-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
 
-.pet-character {
+.pet-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pet-entry:hover { background: var(--pet-soft); }
+.pet-entry + .pet-entry { border-top: 1px solid rgba(124, 147, 173, 0.18); }
+.pet-entry strong, .pet-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pet-entry__title { font-size: var(--type-caption-size); font-weight: 700; }
+.pet-entry__workspace { color: #687386; font-size: var(--type-micro-size); }
+.pet-entry__status { color: var(--pet-accent); font-size: var(--type-micro-size); font-weight: 650; }
+
+.pet-body {
   position: relative;
   width: 96px;
   height: 104px;
+  cursor: grab;
 }
 .pet-overflow { position: absolute; left: -1px; bottom: 1px; display: grid; min-width: 20px; height: 17px; padding: 0 3px; place-items: center; border: 1px solid rgba(255,255,255,0.92); border-radius: 999px; color: #536273; background: rgba(247,250,252,0.96); font-size: var(--type-micro-size); font-weight: 760; }
 </style>

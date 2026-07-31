@@ -25,8 +25,10 @@ interface DragState {
 
 interface PetWindowRecord {
   window: BrowserWindow
-  state: PetSessionState
+  roster: PetRosterState
   drag: DragState | null
+  /** Bounds before the hover expansion; restores the pet footprint on leave. */
+  collapsedBounds: Rectangle | null
 }
 
 export interface KimiPetWindowManagerOptions {
@@ -38,6 +40,9 @@ export interface KimiPetWindowManagerOptions {
 }
 
 const DEFAULT_SIZE = { width: 112, height: 140 }
+// The session overlay is shown above the pet when hovered; the window grows
+// towards the screen centre so the pet body itself never moves.
+const EXPANDED_SIZE = { width: 240, height: 340 }
 const EDGE_MARGIN = 8
 
 export class KimiPetWindowManager {
@@ -47,8 +52,8 @@ export class KimiPetWindowManager {
   readonly #onOpenSession: (intent: PetOpenSessionIntent) => void
   readonly #preloadPath: string
   readonly #windowSize: { width: number; height: number }
-  readonly #windows = new Map<string, PetWindowRecord>()
-  readonly #creating = new Set<string>()
+  #window: PetWindowRecord | null = null
+  #creating = false
   #started = false
   #enabled = false
   #latestRoster: PetRosterState | null = null
@@ -58,20 +63,22 @@ export class KimiPetWindowManager {
     void this.#reconcile(roster)
   }
 
-  readonly #onBootstrap = (event: IpcMainInvokeEvent): PetSessionState => {
+  readonly #onBootstrap = (event: IpcMainInvokeEvent): PetRosterState => {
     const record = this.#recordForSender(event)
-    return { ...record.state }
+    return { ...record.roster, items: record.roster.items.map((item) => ({ ...item })) }
   }
 
-  readonly #onOpen = (event: IpcMainEvent): void => {
+  readonly #onOpen = (event: IpcMainEvent, input?: unknown): void => {
     const record = this.#recordForSender(event)
+    const target = this.#sessionForInput(record.roster, input)
+    if (target === undefined) throw new Error('Rejected pet open-session request: no matching session')
     this.#onOpenSession({
-      serverId: record.state.serverId,
-      workspaceId: record.state.workspaceId,
-      sessionId: record.state.sessionId,
-      focus: record.state.pendingInteraction !== 'none'
+      serverId: target.serverId,
+      workspaceId: target.workspaceId,
+      sessionId: target.sessionId,
+      focus: target.pendingInteraction !== 'none'
         ? 'interaction'
-        : record.state.unread
+        : target.unread
           ? 'unread'
           : 'latest'
     })
@@ -80,6 +87,7 @@ export class KimiPetWindowManager {
   readonly #onDragStart = (event: IpcMainEvent, input?: unknown): void => {
     const record = this.#recordForSender(event)
     const pointer = validatePointer(input)
+    this.#collapse(record)
     record.drag = { pointer, bounds: record.window.getBounds() }
   }
 
@@ -88,11 +96,12 @@ export class KimiPetWindowManager {
     if (record.drag === null) return
     const pointer = validatePointer(input)
     const display = screen.getDisplayNearestPoint({ x: Math.round(pointer.screenX), y: Math.round(pointer.screenY) })
+    const bounds = record.window.getBounds()
     const x = record.drag.bounds.x + Math.round(pointer.screenX - record.drag.pointer.screenX)
     const y = record.drag.bounds.y + Math.round(pointer.screenY - record.drag.pointer.screenY)
     record.window.setPosition(
-      clamp(x, display.workArea.x, display.workArea.x + display.workArea.width - this.#windowSize.width),
-      clamp(y, display.workArea.y, display.workArea.y + display.workArea.height - this.#windowSize.height),
+      clamp(x, display.workArea.x, display.workArea.x + display.workArea.width - bounds.width),
+      clamp(y, display.workArea.y, display.workArea.y + display.workArea.height - bounds.height),
       false
     )
   }
@@ -103,6 +112,18 @@ export class KimiPetWindowManager {
     this.#onDragMove(event, input)
     record.drag = null
     void this.#snapAndSave(record)
+  }
+
+  readonly #onHoverChanged = (event: IpcMainEvent, input?: unknown): void => {
+    const record = this.#recordForSender(event)
+    if (input === true) {
+      if (record.collapsedBounds !== null) return
+      record.collapsedBounds = record.window.getBounds()
+      this.#expand(record)
+      return
+    }
+    if (input !== false) throw new TypeError('Invalid pet hover state')
+    this.#collapse(record)
   }
 
   constructor(service: KimiPetService, options: KimiPetWindowManagerOptions) {
@@ -122,6 +143,7 @@ export class KimiPetWindowManager {
     ipcMain.on(ipcChannels.petDragStart, this.#onDragStart)
     ipcMain.on(ipcChannels.petDragMove, this.#onDragMove)
     ipcMain.on(ipcChannels.petDragEnd, this.#onDragEnd)
+    ipcMain.on(ipcChannels.petHoverChanged, this.#onHoverChanged)
     this.#service.on('state-changed', this.#onRosterChanged)
     this.#latestRoster = this.#service.state
     void this.#reconcile(this.#latestRoster)
@@ -135,8 +157,8 @@ export class KimiPetWindowManager {
       if (this.#latestRoster !== null) void this.#reconcile(this.#latestRoster)
       return
     }
-    for (const record of this.#windows.values()) record.window.destroy()
-    this.#windows.clear()
+    this.#window?.window.destroy()
+    this.#window = null
   }
 
   close(): void {
@@ -148,42 +170,41 @@ export class KimiPetWindowManager {
     ipcMain.off(ipcChannels.petDragStart, this.#onDragStart)
     ipcMain.off(ipcChannels.petDragMove, this.#onDragMove)
     ipcMain.off(ipcChannels.petDragEnd, this.#onDragEnd)
-    for (const record of this.#windows.values()) record.window.destroy()
-    this.#windows.clear()
-    this.#creating.clear()
+    ipcMain.off(ipcChannels.petHoverChanged, this.#onHoverChanged)
+    this.#window?.window.destroy()
+    this.#window = null
+    this.#creating = false
   }
 
   async #reconcile(roster: PetRosterState): Promise<void> {
     if (!this.#started || !this.#enabled) return
-    const desired = new Map(roster.items.map((state) => [state.sessionId, state]))
-    for (const [sessionId, record] of this.#windows) {
-      const state = desired.get(sessionId)
-      if (state === undefined) {
-        this.#windows.delete(sessionId)
-        record.window.destroy()
-        continue
-      }
-      record.state = state
-      if (!record.window.isDestroyed()) record.window.webContents.send(ipcChannels.petStateChanged, state)
+    if (roster.items.length === 0) {
+      this.#window?.window.destroy()
+      this.#window = null
+      return
     }
-
-    for (const [index, state] of roster.items.entries()) {
-      if (this.#windows.has(state.sessionId) || this.#creating.has(state.sessionId)) continue
-      this.#creating.add(state.sessionId)
-      try {
-        await this.#createWindow(state, index)
-      } finally {
-        this.#creating.delete(state.sessionId)
-      }
+    const record = this.#window
+    if (record !== null) {
+      record.roster = roster
+      if (!record.window.isDestroyed()) record.window.webContents.send(ipcChannels.petStateChanged, roster)
+      return
+    }
+    if (this.#creating) return
+    this.#creating = true
+    try {
+      await this.#createWindow(roster)
+    } finally {
+      this.#creating = false
     }
   }
 
-  async #createWindow(state: PetSessionState, index: number): Promise<void> {
-    if (!this.#started || !this.#enabled || this.#windows.has(state.sessionId)) return
-    const bounds = await this.#initialBounds(state.sessionId, index)
-    const currentState = this.#latestRoster?.items.find((item) => item.sessionId === state.sessionId)
-    if (!this.#started || !this.#enabled || currentState === undefined) return
-    state = currentState
+  async #createWindow(roster: PetRosterState): Promise<void> {
+    if (!this.#started || !this.#enabled || this.#window !== null) return
+    const latest = this.#latestRoster
+    if (latest === null || latest.items.length === 0) return
+    roster = latest
+    const bounds = await this.#initialBounds()
+    if (!this.#started || !this.#enabled || this.#window !== null) return
     const window = new BrowserWindow({
       ...bounds,
       show: false,
@@ -207,8 +228,8 @@ export class KimiPetWindowManager {
         webSecurity: true
       }
     })
-    const record: PetWindowRecord = { window, state, drag: null }
-    this.#windows.set(state.sessionId, record)
+    const record: PetWindowRecord = { window, roster, drag: null, collapsedBounds: null }
+    this.#window = record
 
     window.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal')
     if (process.platform === 'darwin') {
@@ -226,8 +247,7 @@ export class KimiPetWindowManager {
     })
     window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     window.on('closed', () => {
-      const current = this.#windows.get(state.sessionId)
-      if (current?.window === window) this.#windows.delete(state.sessionId)
+      if (this.#window?.window === window) this.#window = null
     })
     window.once('ready-to-show', () => window.showInactive())
 
@@ -240,8 +260,8 @@ export class KimiPetWindowManager {
     }
   }
 
-  async #initialBounds(sessionId: string, index: number): Promise<Rectangle> {
-    const stored = await this.#positionStore.get(sessionId)
+  async #initialBounds(): Promise<Rectangle> {
+    const stored = await this.#positionStore.get()
     const displays = screen.getAllDisplays()
     const display = displays.find((candidate) => String(candidate.id) === stored?.displayId)
       ?? screen.getPrimaryDisplay()
@@ -249,7 +269,7 @@ export class KimiPetWindowManager {
     const x = edge === 'left'
       ? display.workArea.x + EDGE_MARGIN
       : display.workArea.x + display.workArea.width - this.#windowSize.width - EDGE_MARGIN
-    const defaultY = display.workArea.y + 28 + index * (this.#windowSize.height + 8)
+    const defaultY = display.workArea.y + 28
     const storedY = stored === null
       ? defaultY
       : display.workArea.y + Math.round(stored.offsetY * Math.max(0, display.workArea.height - this.#windowSize.height))
@@ -259,6 +279,36 @@ export class KimiPetWindowManager {
       width: this.#windowSize.width,
       height: this.#windowSize.height
     }
+  }
+
+  /** Grows the window towards the screen centre so the pet body stays put. */
+  #expand(record: PetWindowRecord): void {
+    const current = record.window.getBounds()
+    const display = screen.getDisplayMatching(current)
+    const centerX = current.x + current.width / 2
+    const displayCenter = display.workArea.x + display.workArea.width / 2
+    const x = centerX < displayCenter
+      ? current.x
+      : current.x + current.width - EXPANDED_SIZE.width
+    const y = Math.max(display.workArea.y, current.y + current.height - EXPANDED_SIZE.height)
+    record.window.setBounds({
+      x: clamp(x, display.workArea.x, display.workArea.x + Math.max(0, display.workArea.width - EXPANDED_SIZE.width)),
+      y: clamp(y, display.workArea.y, display.workArea.y + Math.max(0, display.workArea.height - EXPANDED_SIZE.height)),
+      width: EXPANDED_SIZE.width,
+      height: EXPANDED_SIZE.height
+    })
+  }
+
+  #collapse(record: PetWindowRecord): void {
+    const bounds = record.collapsedBounds
+    record.collapsedBounds = null
+    if (bounds === null || record.window.isDestroyed()) return
+    const display = screen.getDisplayMatching(bounds)
+    record.window.setBounds({
+      ...bounds,
+      x: clamp(bounds.x, display.workArea.x, display.workArea.x + Math.max(0, display.workArea.width - bounds.width)),
+      y: clamp(bounds.y, display.workArea.y, display.workArea.y + Math.max(0, display.workArea.height - bounds.height))
+    })
   }
 
   async #snapAndSave(record: PetWindowRecord): Promise<void> {
@@ -274,17 +324,26 @@ export class KimiPetWindowManager {
     const y = clamp(current.y, display.workArea.y, display.workArea.y + display.workArea.height - current.height)
     record.window.setPosition(x, y, true)
     const availableY = Math.max(1, display.workArea.height - current.height)
-    await this.#positionStore.set(record.state.sessionId, {
+    await this.#positionStore.set({
       displayId: String(display.id),
       edge,
       offsetY: (y - display.workArea.y) / availableY
     })
   }
 
+  #sessionForInput(roster: PetRosterState, input: unknown): PetSessionState | undefined {
+    if (input === undefined) {
+      if (roster.items.length === 1) return roster.items[0]
+      return undefined
+    }
+    if (typeof input !== 'string' || input.length === 0 || input.length > 256) return undefined
+    return roster.items.find((item) => item.sessionId === input)
+  }
+
   #recordForSender(event: IpcMainEvent | IpcMainInvokeEvent): PetWindowRecord {
-    const record = [...this.#windows.values()].find((candidate) => candidate.window.webContents === event.sender)
+    const record = this.#window
     const senderUrl = event.senderFrame?.url ?? ''
-    if (record === undefined || !isTrustedRendererUrl(senderUrl, this.#trustedRendererUrl)) {
+    if (record === null || record.window.webContents !== event.sender || !isTrustedRendererUrl(senderUrl, this.#trustedRendererUrl)) {
       throw new Error('Rejected pet IPC request from an untrusted renderer')
     }
     return record

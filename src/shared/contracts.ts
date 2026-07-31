@@ -123,7 +123,8 @@ export const ipcChannels = {
   petStateChanged: 'pet:state-changed',
   petDragStart: 'pet:drag-start',
   petDragMove: 'pet:drag-move',
-  petDragEnd: 'pet:drag-end'
+  petDragEnd: 'pet:drag-end',
+  petHoverChanged: 'pet:hover-changed'
 } as const
 
 export type RuntimeStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'
@@ -1092,12 +1093,13 @@ export interface PetPointerPosition {
 }
 
 export interface KimiPetWindowApi {
-  getState(): Promise<PetSessionState>
-  openSession(): void
+  getState(): Promise<PetRosterState>
+  openSession(sessionId?: string): void
+  setHovered(hovered: boolean): void
   beginDrag(position: PetPointerPosition): void
   moveDrag(position: PetPointerPosition): void
   endDrag(position: PetPointerPosition): void
-  onStateChanged(listener: (state: PetSessionState) => void): () => void
+  onStateChanged(listener: (roster: PetRosterState) => void): () => void
 }
 
 export interface KimiAgentDesktopApi {
