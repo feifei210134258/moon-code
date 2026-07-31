@@ -80,6 +80,7 @@ export class KimiWsClient extends EventEmitter {
   #connectRequest: { id: string; frame: ClientHelloFrame } | null = null
   #connectionGeneration = 0
   #messageQueue: Promise<void> = Promise.resolve()
+  #subscriptionRequests = new Map<string, string[]>()
 
   constructor(options: KimiWsClientOptions) {
     super()
@@ -117,6 +118,7 @@ export class KimiWsClient extends EventEmitter {
         }
       }
     }
+    this.#subscriptionRequests.set(id, options.subscriptions ?? [])
 
     const socket = this.#factory(withClientId(this.#url, this.#clientId), [`kimi-code.bearer.${this.#token}`])
     this.#socket = socket
@@ -140,6 +142,7 @@ export class KimiWsClient extends EventEmitter {
       }
     }
     const ack = this.#awaitAck(id)
+    this.#subscriptionRequests.set(id, sessionIds)
     this.#send(frame)
     return await ack
   }
@@ -221,6 +224,7 @@ export class KimiWsClient extends EventEmitter {
     const socket = this.#socket
     this.#connectionGeneration += 1
     this.#messageQueue = Promise.resolve()
+    this.#subscriptionRequests.clear()
     this.#socket = null
     this.#helloSent = false
     this.#connectRequest = null
@@ -305,8 +309,10 @@ export class KimiWsClient extends EventEmitter {
       }
       clearTimeout(pending.timer)
       this.#pending.delete(frame.id)
-      if (frame.code === 0) pending.resolve(frame)
-      else pending.reject(new Error(`Kimi WebSocket request failed (${frame.code}): ${frame.msg}`))
+      if (frame.code === 0) {
+        this.#noteSubscriptionAck(frame)
+        pending.resolve(frame)
+      } else pending.reject(new Error(`Kimi WebSocket request failed (${frame.code}): ${frame.msg}`))
       return
     }
     if (frame.type === 'ping') {
@@ -354,6 +360,28 @@ export class KimiWsClient extends EventEmitter {
     })
   }
 
+  #noteSubscriptionAck(frame: AckFrame): void {
+    const sessionIds = this.#subscriptionRequests.get(frame.id)
+    this.#subscriptionRequests.delete(frame.id)
+    if (sessionIds === undefined || sessionIds.length === 0) return
+    const payload = framePayload(frame.payload)
+    if (payload === null) return
+    const rejected = [
+      ...stringArrayValue(payload.not_found),
+      ...stringArrayValue(payload.resync_required)
+    ]
+    if (rejected.length === 0) return
+    for (const sessionId of rejected) {
+      if (sessionIds.includes(sessionId)) {
+        // The server declined the subscription (cold session after a runtime
+        // restart, epoch mismatch, or a session that is no longer attachable).
+        // The connection itself stays healthy, so without this signal the
+        // controller would wait forever for frames that never arrive.
+        this.emit('resync-required', { sessionId, reason: 'subscription_rejected', frame })
+      }
+    }
+  }
+
   #awaitAck(id: string): Promise<Extract<KnownControlFrame, { type: 'ack' }>> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -396,6 +424,7 @@ export class KimiWsClient extends EventEmitter {
     if (connectionGeneration !== this.#connectionGeneration) return
     this.#connectionGeneration += 1
     this.#messageQueue = Promise.resolve()
+    this.#subscriptionRequests.clear()
     this.#socket = null
     this.#helloSent = false
     this.#connectRequest = null
@@ -415,6 +444,18 @@ function toWebSocketUrl(origin: string): string {
   url.search = ''
   url.hash = ''
   return url.toString()
+}
+
+function framePayload(value: unknown): Record<string, unknown> | null {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return null
+}
+
+function stringArrayValue(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
 }
 
 function withClientId(url: string, clientId: string): string {

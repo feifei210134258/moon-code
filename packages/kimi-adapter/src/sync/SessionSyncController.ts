@@ -164,6 +164,9 @@ export interface SessionSyncControllerOptions {
 }
 
 const LIVE_STATE_EMIT_INTERVAL_MS = 16
+const RESUBSCRIBE_BASE_MS = 750
+const RESUBSCRIBE_MAX_MS = 30_000
+const RESUBSCRIBE_MAX_ATTEMPTS = 8
 
 export class SessionSyncController extends EventEmitter {
   readonly #rest: SyncRestClient
@@ -184,6 +187,8 @@ export class SessionSyncController extends EventEmitter {
   #reconnectTimer: NodeJS.Timeout | null = null
   #liveStateTimer: NodeJS.Timeout | null = null
   #pendingLiveState: SessionSyncView | null = null
+  #resubscribeAttempts = new Map<string, number>()
+  #resubscribeTimers = new Map<string, NodeJS.Timeout>()
 
   readonly #onSessionEvent = (frame: SessionEventFrame): void => this.#handleSessionEvent(frame)
   readonly #onResyncRequired = (detail: unknown): void => {
@@ -236,6 +241,7 @@ export class SessionSyncController extends EventEmitter {
     this.#activeSessionId = sessionId
     this.#cancelLiveStateEmission()
     this.#pendingProjections.clear()
+    this.#cancelResubscribeTimers()
     if (this.#sideChatProjector?.sessionId !== sessionId) this.#sideChatProjector = null
     if (previousSessionId !== null && previousSessionId !== sessionId && this.#connected) {
       try {
@@ -322,6 +328,7 @@ export class SessionSyncController extends EventEmitter {
     this.#reconnectTimer = null
     this.#cancelLiveStateEmission()
     this.#pendingProjections.clear()
+    this.#cancelResubscribeTimers()
     this.#socket.off('session-event', this.#onSessionEvent)
     this.#socket.off('resync-required', this.#onResyncRequired)
     this.#socket.off('close', this.#onClose)
@@ -668,14 +675,46 @@ export class SessionSyncController extends EventEmitter {
       state.usage = mapSnapshotUsage(snapshot.session.usage)
       state.hasMoreMessages = snapshot.messages.has_more
       state.unknownEventCount = projection.unknownEventCount
-      if (this.#connected) await this.#socket.subscribe([sessionId])
       state.phase = 'ready'
       this.#emitState(state)
+      if (this.#connected) {
+        const ack = await this.#socket.subscribe([sessionId])
+        if (subscriptionRejected(ack, sessionId)) {
+          // The server declined the subscription (cold session right after a
+          // runtime restart, or an epoch/watermark mismatch). The snapshot is
+          // already published; keep re-snapshotting with backoff until the
+          // session becomes attachable, otherwise the connection silently
+          // stays deaf and live deltas and terminal frames never arrive.
+          this.#scheduleResubscribe(sessionId)
+        } else {
+          this.#resubscribeAttempts.delete(sessionId)
+        }
+      }
     } catch (error) {
       state.phase = 'error'
       state.error = errorMessage(error)
       this.#emitState(state)
     }
+  }
+
+  #scheduleResubscribe(sessionId: string): void {
+    if (this.#closed || sessionId !== this.#activeSessionId) return
+    if (this.#resubscribeTimers.has(sessionId)) return
+    const attempt = Math.min(this.#resubscribeAttempts.get(sessionId) ?? 0, RESUBSCRIBE_MAX_ATTEMPTS)
+    this.#resubscribeAttempts.set(sessionId, attempt + 1)
+    const delay = Math.min(RESUBSCRIBE_BASE_MS * 2 ** attempt, RESUBSCRIBE_MAX_MS)
+    const timer = setTimeout(() => {
+      this.#resubscribeTimers.delete(sessionId)
+      void this.#resync(sessionId)
+    }, delay)
+    timer.unref()
+    this.#resubscribeTimers.set(sessionId, timer)
+  }
+
+  #cancelResubscribeTimers(): void {
+    for (const timer of this.#resubscribeTimers.values()) clearTimeout(timer)
+    this.#resubscribeTimers.clear()
+    this.#resubscribeAttempts.clear()
   }
 
   async #loadTranscriptSupplement(sessionId: string): Promise<TranscriptSupplement> {
@@ -832,7 +871,11 @@ function globalSyncEvent(frame: SessionEventFrame): GlobalSyncEvent | null {
     frame.type === 'event.session.deleted' ||
     frame.type === 'event.session.work_changed' ||
     frame.type === 'event.session.status_changed' ||
-    frame.type === 'session.meta.updated'
+    frame.type === 'session.meta.updated' ||
+    frame.type === 'turn.started' ||
+    frame.type === 'turn.ended' ||
+    frame.type === 'prompt.completed' ||
+    frame.type === 'prompt.aborted'
   ) return { scope: 'navigation', eventType: frame.type }
   if (frame.type === 'event.config.changed' || frame.type === 'event.model_catalog.changed') {
     return { scope: 'config', eventType: frame.type }
@@ -933,6 +976,29 @@ function recordValue(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+/**
+ * A hello/subscribe ack may carry `not_found` (standalone subscribe) or
+ * `resync_required` (client hello) listing sessions the server declined to
+ * attach — e.g. a cold session right after a runtime restart. The connection
+ * stays healthy, so without this check the controller would wait forever for
+ * frames that never arrive.
+ */
+function subscriptionRejected(ack: unknown, sessionId: string): boolean {
+  const record = recordValue(ack)
+  const payload = recordValue(record?.payload)
+  if (payload === null) return false
+  const rejected = [
+    ...stringArray(payload.not_found),
+    ...stringArray(payload.resync_required)
+  ]
+  return rejected.includes(sessionId)
 }
 
 function nonNegativeNumber(value: unknown): number | null {

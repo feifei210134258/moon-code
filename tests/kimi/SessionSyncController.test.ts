@@ -655,6 +655,109 @@ describe('SessionSyncController', () => {
     controller.close()
   })
 
+  it('retries a rejected re-subscribe with backoff until the session becomes attachable', async () => {
+    vi.useFakeTimers()
+    const socket = new FakeSocket()
+    /* 服务端在会话未挂载（如 runtime 重启后）时通过 ack 的 not_found 拒绝订阅；
+       连接本身健康，控制器必须按退避反复重订，直到会话可挂载。 */
+    socket.subscribe
+      .mockResolvedValueOnce({
+        type: 'ack', id: 'c_1', code: 0, msg: 'ok',
+        payload: { accepted: [], not_found: ['session-1'], resync_required: [] }
+      })
+      .mockResolvedValue({})
+    const rest = {
+      getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10))
+    }
+    const controller = new SessionSyncController({ rest, socket })
+    try {
+      await controller.openSession('session-1')
+      expect(controller.getState('session-1')).toEqual(expect.objectContaining({
+        phase: 'ready',
+        busy: true,
+        mainTurnActive: true
+      }))
+
+      /* 首次重订被拒后不应进入 error，也不应热循环；750ms 后自动重试 */
+      socket.emit('resync-required', { sessionId: 'session-1', reason: 'subscription_rejected' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(socket.subscribe).toHaveBeenCalledOnce()
+      expect(controller.getState('session-1')?.phase).toBe('ready')
+      expect(rest.getSessionSnapshot).toHaveBeenCalledTimes(2)
+
+      await vi.advanceTimersByTimeAsync(749)
+      expect(socket.subscribe).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(socket.subscribe).toHaveBeenCalledTimes(2)
+      expect(rest.getSessionSnapshot).toHaveBeenCalledTimes(3)
+
+      /* 订阅恢复后，实时帧与终止帧照常流动，loading 状态被结算 */
+      socket.emit('session-event', {
+        type: 'assistant.delta', seq: 10, epoch: 'epoch-1', volatile: true, offset: 5,
+        session_id: 'session-1', timestamp: '2026-07-24T00:06:00.000Z',
+        payload: { delta: 'X' }
+      } satisfies SessionEventFrame)
+      expect(controller.getState('session-1')?.messages.at(-1)?.content).toContainEqual({
+        type: 'text', text: 'HelloX'
+      })
+
+      socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+      socket.emit('session-event', {
+        type: 'turn.ended', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+        timestamp: '2026-07-24T00:06:01.000Z',
+        payload: { type: 'turn.ended', reason: 'completed' }
+      } satisfies SessionEventFrame)
+      expect(controller.getState('session-1')).toEqual(expect.objectContaining({
+        busy: false,
+        mainTurnActive: false,
+        activePromptId: null
+      }))
+    } finally {
+      controller.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('emits navigation global events for turn and prompt lifecycle frames', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+    const events: Array<{ scope: string; eventType: string }> = []
+    controller.on('global-event', (event) => events.push(event))
+
+    socket.emit('session-event', {
+      type: 'turn.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-24T00:06:00.000Z',
+      payload: { turnId: 2 }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'turn.ended', seq: 12, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-24T00:06:01.000Z',
+      payload: { type: 'turn.ended', reason: 'completed' }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'prompt.completed', seq: 13, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-24T00:06:02.000Z',
+      payload: { promptId: 'prompt-1', finishedAt: '2026-07-24T00:06:02.000Z' }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
+      type: 'tool.use', seq: 14, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-24T00:06:03.000Z',
+      payload: { toolCallId: 'tool-1', name: 'read_file' }
+    } satisfies SessionEventFrame)
+
+    expect(events).toEqual([
+      { scope: 'navigation', eventType: 'turn.started' },
+      { scope: 'navigation', eventType: 'turn.ended' },
+      { scope: 'navigation', eventType: 'prompt.completed' }
+    ])
+    controller.close()
+  })
+
   it('keeps Session token totals and Context separate from plan usage', async () => {
     const socket = new FakeSocket()
     const snapshot = makeSnapshot(10)

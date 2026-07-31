@@ -202,6 +202,95 @@ describe('KimiWsClient', () => {
     client.close()
   })
 
+  it('reports sessions the server declined in the hello ack as resync-required', async () => {
+    const socket = new FakeWebSocket()
+    const client = new KimiWsClient({
+      origin: 'http://127.0.0.1:54959',
+      token: 'secret-token',
+      clientId: 'test-client',
+      requestTimeoutMs: 1_000,
+      webSocketFactory: () => socket
+    })
+    const resync = vi.fn()
+    client.on('resync-required', resync)
+
+    const connecting = client.connect({ subscriptions: ['session-1'] })
+    socket.emit('open')
+    socket.message(serverHello())
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
+    const hello = JSON.parse(socket.sent[0] ?? '{}') as { id?: string }
+    /* 服务端拒绝订阅（如重启后会话尚未挂载）时，hello ack 通过
+       `resync_required` 列表点名；连接本身保持健康，客户端必须把它当成
+       resync 信号，否则会永久收不到任何实时帧。 */
+    socket.message({
+      type: 'ack', id: hello.id, code: 0, msg: 'ok',
+      payload: { accepted_subscriptions: [], resync_required: ['session-1'], cursors: {} }
+    })
+    await connecting
+
+    await vi.waitFor(() => expect(resync).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-1',
+      reason: 'subscription_rejected'
+    })))
+    client.close()
+  })
+
+  it('reports sessions the server declined in the subscribe ack as resync-required', async () => {
+    const socket = new FakeWebSocket()
+    const client = new KimiWsClient({
+      origin: 'http://127.0.0.1:54959',
+      token: 'secret-token',
+      clientId: 'test-client',
+      requestTimeoutMs: 1_000,
+      webSocketFactory: () => socket
+    })
+    const resync = vi.fn()
+    client.on('resync-required', resync)
+    await connectAndAck(client, socket)
+
+    const subscribing = client.subscribe(['session-1'])
+    await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThan(0))
+    const subscribe = JSON.parse(socket.sent.at(-1) ?? '{}') as { id?: string }
+    socket.message({
+      type: 'ack', id: subscribe.id, code: 0, msg: 'ok',
+      payload: { accepted: [], not_found: ['session-1'], resync_required: [], cursors: {} }
+    })
+    await subscribing
+
+    await vi.waitFor(() => expect(resync).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-1',
+      reason: 'subscription_rejected'
+    })))
+    client.close()
+  })
+
+  it('keeps a fully accepted hello ack silent', async () => {
+    const socket = new FakeWebSocket()
+    const client = new KimiWsClient({
+      origin: 'http://127.0.0.1:54959',
+      token: 'secret-token',
+      clientId: 'test-client',
+      requestTimeoutMs: 1_000,
+      webSocketFactory: () => socket
+    })
+    const resync = vi.fn()
+    client.on('resync-required', resync)
+
+    const connecting = client.connect({ subscriptions: ['session-1'] })
+    socket.emit('open')
+    socket.message(serverHello())
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
+    const hello = JSON.parse(socket.sent[0] ?? '{}') as { id?: string }
+    socket.message({
+      type: 'ack', id: hello.id, code: 0, msg: 'ok',
+      payload: { accepted_subscriptions: ['session-1'], resync_required: [], cursors: { 'session-1': { seq: 5, epoch: 'epoch-1' } } }
+    })
+    await connecting
+
+    expect(resync).not.toHaveBeenCalled()
+    client.close()
+  })
+
   it('sends official fire-and-forget terminal frames and keeps Terminal seq outside Session cursors', async () => {
     const socket = new FakeWebSocket()
     const client = new KimiWsClient({
