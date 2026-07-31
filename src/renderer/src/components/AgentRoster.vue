@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PhCaretDown, PhCaretRight, PhCirclesThreePlus } from '@phosphor-icons/vue'
+import { PhCaretDown, PhCaretRight, PhCirclesThreePlus, PhListMagnifyingGlass } from '@phosphor-icons/vue'
 import { computed, ref } from 'vue'
 import type { SessionAgentView } from '@shared/contracts'
 import { rendererLocale } from '../i18n/rendererLocale'
@@ -51,18 +51,23 @@ function usageLabel(agent: SessionAgentView): string | null {
         v-for="agent in subagents"
         :key="agent.id"
         class="agent-row"
-        role="button"
-        tabindex="0"
-        :aria-label="`打开 ${agent.name} 的详情`"
-        @click="emit('open', agent)"
-        @keydown.enter.prevent="emit('open', agent)"
-        @keydown.space.prevent="emit('open', agent)"
       >
         <span class="agent-state" :class="`is-${agent.status}`" />
         <div>
-          <header><strong>{{ agent.name }}</strong><span>{{ statusLabel(agent.status) }}</span></header>
+          <header>
+            <strong>{{ agent.name }}</strong>
+            <span>{{ statusLabel(agent.status) }}</span>
+            <button
+              type="button"
+              class="agent-track-button"
+              :aria-label="`追踪 ${agent.name}`"
+              @click.stop="emit('open', agent)"
+            >
+              <PhListMagnifyingGlass :size="12" />
+              追踪
+            </button>
+          </header>
           <p>{{ agent.description }}</p>
-          <pre v-if="agent.outputPreview">{{ agent.outputPreview }}</pre>
           <footer>
             <span v-if="agent.subagentType">{{ agent.subagentType }}</span>
             <span v-if="agent.swarmIndex !== null">#{{ agent.swarmIndex + 1 }}</span>

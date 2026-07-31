@@ -3920,14 +3920,17 @@ select:focus-visible {
   font-style: normal;
 }
 .agent-roster {
-  width: calc(100% - 46px);
-  max-width: 810px;
+  width: calc(40% - 18px);
+  min-width: 260px;
+  max-width: 324px;
   margin: 0 auto 8px;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
-  background: #ffffff;
-  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
 .agent-roster-summary {
@@ -3953,9 +3956,13 @@ select:focus-visible {
 }
 
 .agent-roster-summary span {
+  min-width: 0;
   margin-left: auto;
+  overflow: hidden;
   color: var(--muted);
   font-size: var(--type-micro-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .agent-roster-list {
@@ -3970,11 +3977,7 @@ select:focus-visible {
   gap: 9px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  cursor: pointer;
 }
-
-.agent-row:hover,
-.agent-row:focus-visible { background: var(--accent-soft); outline: none; }
 
 .agent-row:last-child {
   border-bottom: 0;
@@ -4038,15 +4041,25 @@ select:focus-visible {
   line-height: 1.45;
 }
 
-.agent-row pre {
-  max-height: 92px;
-  margin: 0;
-  overflow: auto;
-  padding: 7px 8px;
-  border-radius: 8px;
+.agent-track-button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--type-micro-size);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.agent-track-button:hover {
+  color: var(--text);
   background: var(--accent-soft);
-  font: var(--type-micro-size)/1.45 var(--font-mono);
-  white-space: pre-wrap;
 }
 
 .column-splitter {
