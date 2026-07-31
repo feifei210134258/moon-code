@@ -79,7 +79,7 @@ export const useWorkbenchStore = defineStore('workbench', {
     activeExtension: 'changes' as ExtensionTab,
     rightPanelOpen: true,
     leftPanelWidth: 260,
-    rightPanelWidth: 382,
+    rightPanelWidth: 332,
     terminalOpen: false,
     turns: structuredClone(initialTurns),
     transcriptPhase: 'idle' as SessionViewState['phase'],
