@@ -1174,7 +1174,6 @@ select:focus-visible {
   flex: none;
   margin-top: auto;
   margin-bottom: 10px;
-  padding-top: 8px;
   font-size: var(--type-ui-small-size);
 }
 
@@ -6446,7 +6445,6 @@ body.is-panel-resizing {
 /* ---------- 子 Agent：模型服务 master / detail ---------- */
 
 .provider-manager {
-  min-height: 540px;
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
   overflow: hidden;
@@ -6861,8 +6859,8 @@ body.is-panel-resizing {
 }
 
 .secondary-model-form label {
-  min-width: 170px;
-  flex: 1 1 170px;
+  width: 216px;
+  flex: none;
 }
 
 .secondary-provider-form {

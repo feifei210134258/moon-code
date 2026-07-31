@@ -50,10 +50,12 @@ describe('workbench transcript hydration', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     window.localStorage.removeItem('moon-code:navigation-activity:v2')
+    window.localStorage.removeItem('moon-code:project-expansion:v1')
   })
 
   afterEach(() => {
     window.localStorage.removeItem('moon-code:navigation-activity:v2')
+    window.localStorage.removeItem('moon-code:project-expansion:v1')
   })
 
   it('maps the authoritative Kimi transcript into conversation turns without local mock activities', () => {
@@ -216,11 +218,67 @@ describe('workbench transcript hydration', () => {
       }
     ])
 
-    store.toggleProject('workspace-empty')
+    /* 未操作过的项目默认收起，仅自动展开当前会话所在的 workspace-active */
+    expect(store.projects[0]?.expanded).toBe(false)
+    expect(store.projects[1]?.expanded).toBe(true)
 
+    store.toggleProject('workspace-empty')
+    expect(store.projects[0]?.expanded).toBe(true)
+    store.toggleProject('workspace-empty')
     expect(store.projects[0]?.expanded).toBe(false)
     expect(store.activeWorkspaceId).toBe('workspace-active')
     expect(store.activeSessionId).toBe('session-1')
+  })
+
+  it('restores the manually expanded or collapsed workspaces after a relaunch', () => {
+    const tree = [
+      {
+        id: 'workspace-restore-a', name: 'Restore A', root: '/restore-a', sessions: [{
+          id: 'session-restore-a', title: 'Session A', updatedAt: null, busy: false,
+          pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      },
+      {
+        id: 'workspace-restore-b', name: 'Restore B', root: '/restore-b', sessions: [{
+          id: 'session-restore-b', title: 'Session B', updatedAt: null, busy: false,
+          pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      }
+    ]
+    const store = useWorkbenchStore()
+    store.hydrateProjects(tree)
+
+    /* 退出前：手动收起默认展开的 A，并展开 B */
+    store.toggleProject('workspace-restore-a')
+    store.toggleProject('workspace-restore-b')
+
+    setActivePinia(createPinia())
+    const reloadedStore = useWorkbenchStore()
+    reloadedStore.hydrateProjects(tree)
+
+    expect(reloadedStore.projects.find((project) => project.id === 'workspace-restore-a')?.expanded).toBe(false)
+    expect(reloadedStore.projects.find((project) => project.id === 'workspace-restore-b')?.expanded).toBe(true)
+  })
+
+  it('collapses workspaces never touched before instead of expanding the first two', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects([
+      {
+        id: 'workspace-fresh-a', name: 'Fresh A', root: '/fresh-a', sessions: [{
+          id: 'session-fresh-a', title: 'Session A', updatedAt: null, busy: false,
+          pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      },
+      {
+        id: 'workspace-fresh-b', name: 'Fresh B', root: '/fresh-b', sessions: [{
+          id: 'session-fresh-b', title: 'Session B', updatedAt: null, busy: false,
+          pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      }
+    ])
+
+    expect(store.projects.find((project) => project.id === 'workspace-fresh-a')?.expanded).toBe(true)
+    expect(store.projects.find((project) => project.id === 'workspace-fresh-b')?.expanded).toBe(false)
   })
 
   it('does not reorder projects or sessions when they are only selected or expanded', () => {

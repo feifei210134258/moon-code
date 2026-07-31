@@ -12,6 +12,9 @@ const VIEWED_SESSION_UPDATES_KEY = 'moon-code:viewed-session-updates'
 // v2 intentionally drops the old selection-based timestamps. Only accepted
 // conversation submissions are written to this activity store now.
 const NAVIGATION_ACTIVITY_KEY = 'moon-code:navigation-activity:v2'
+// Remembers which workspaces the user expanded, so a relaunch restores the
+// same sidebar instead of falling back to a fixed default.
+const PROJECT_EXPANSION_KEY = 'moon-code:project-expansion:v1'
 
 const initialProjects: ProjectItem[] = [
   {
@@ -87,18 +90,22 @@ export const useWorkbenchStore = defineStore('workbench', {
     transcriptHasMore: false,
     viewedSessionUpdates: loadViewedSessionUpdates(),
     navigationActivity: loadNavigationActivity(),
+    projectExpansion: loadProjectExpansion(),
     sessionUpdates: {} as Record<string, string | null>
   }),
   actions: {
     toggleProject(projectId: string) {
       const project = this.projects.find((item) => item.id === projectId)
-      if (project !== undefined) project.expanded = !project.expanded
+      if (project === undefined) return
+      project.expanded = !project.expanded
+      rememberProjectExpansion(this.projectExpansion, projectId, project.expanded)
     },
     selectWorkspace(workspaceId: string) {
       const workspace = this.projects.find((project) => project.id === workspaceId)
       if (workspace === undefined) return
       this.activeWorkspaceId = workspace.id
       workspace.expanded = true
+      rememberProjectExpansion(this.projectExpansion, workspaceId, true)
       if (!workspace.sessions.some((session) => session.id === this.activeSessionId)) {
         this.activeSessionId = workspace.sessions[0]?.id ?? ''
       }
@@ -141,10 +148,10 @@ export const useWorkbenchStore = defineStore('workbench', {
       this.sessionUpdates = Object.fromEntries(tree.flatMap((workspace) =>
         workspace.sessions.map((session) => [session.id, session.updatedAt])
       ))
-      const projects: ProjectItem[] = tree.map((workspace, index) => ({
+      const projects: ProjectItem[] = tree.map((workspace) => ({
         id: workspace.id,
         name: workspace.name,
-        expanded: expandedById.get(workspace.id) ?? index < 2,
+        expanded: expandedById.get(workspace.id) ?? this.projectExpansion[workspace.id] ?? false,
         sessions: [...workspace.sessions].sort((left, right) => compareNavigationItems(
           `session:${left.id}`,
           `session:${right.id}`,
@@ -177,6 +184,17 @@ export const useWorkbenchStore = defineStore('workbench', {
       )
       if (selectedWorkspace === undefined) {
         this.activeWorkspaceId = activeSessionWorkspace?.id ?? projects[0]?.id ?? ''
+      }
+      /* 从未手动展开/折叠过的项目默认收起，唯独展开当前会话所在的项目，
+       * 让重启后侧边栏停在退出前正在对话的位置。 */
+      const hostWorkspace = activeSessionWorkspace
+        ?? projects.find((project) => project.id === this.activeWorkspaceId)
+      if (
+        hostWorkspace !== undefined
+        && expandedById.get(hostWorkspace.id) === undefined
+        && this.projectExpansion[hostWorkspace.id] === undefined
+      ) {
+        hostWorkspace.expanded = true
       }
     },
     mergeSessionChildren(parentSessionId: string, children: WorkspaceNavigationItem['sessions']) {
@@ -266,6 +284,29 @@ function persistNavigationActivity(activity: Record<string, string>): void {
     window.localStorage.setItem(NAVIGATION_ACTIVITY_KEY, JSON.stringify(activity))
   } catch {
     // Sorting remains correct for the current renderer lifetime if storage is unavailable.
+  }
+}
+
+function loadProjectExpansion(): Record<string, boolean> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const value = JSON.parse(window.localStorage.getItem(PROJECT_EXPANSION_KEY) ?? '{}') as unknown
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, boolean] => (
+      typeof entry[1] === 'boolean'
+    )))
+  } catch {
+    return {}
+  }
+}
+
+function rememberProjectExpansion(expansion: Record<string, boolean>, projectId: string, expanded: boolean): void {
+  expansion[projectId] = expanded
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(PROJECT_EXPANSION_KEY, JSON.stringify(expansion))
+  } catch {
+    // Expansion remains correct for the current renderer lifetime if storage is unavailable.
   }
 }
 

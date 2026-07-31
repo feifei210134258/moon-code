@@ -269,7 +269,16 @@ export function installSettingsApiFixture(): void {
     onSessionStateChanged: () => () => {},
     onTerminalOutput: () => () => {},
     onTerminalExit: () => () => {},
-    onBrowserStateChanged: () => () => {}
+    onBrowserStateChanged: () => () => {},
+    getKimiUsage: async () => ({
+      phase: 'idle' as const, summary: null, limits: [], extraUsage: null,
+      updatedAt: null, nextRefreshAt: null, refreshing: false,
+      source: 'kimi-oauth-usage' as const, error: null,
+      preferences: { infoThreshold: 0.5, warningThreshold: 0.8, criticalThreshold: 0.95, systemNotifications: true }
+    }),
+    onKimiUsageStateChanged: () => () => {},
+    onPetOpenSession: () => () => {},
+    markPetSessionViewed: async () => undefined
   } as unknown as KimiAgentDesktopApi
   window.kimiAgent = api
 }
