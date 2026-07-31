@@ -664,13 +664,20 @@ select:focus-visible {
   padding: 0;
 }
 
-.extensions-toggle {
+.extensions-toggle,
+.terminal-toggle {
   position: relative;
 }
 
-.extensions-toggle.is-open {
+.extensions-toggle.is-open,
+.terminal-toggle.is-open {
   color: var(--text);
   background: var(--accent-soft);
+}
+
+.terminal-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .account-button {
@@ -2643,7 +2650,7 @@ select:focus-visible {
   margin-top: 0;
 }
 
-.composer-wrap.is-disabled .composer-primary-tools > button:not(.terminal-entry),
+.composer-wrap.is-disabled .composer-primary-tools,
 .composer-wrap.is-disabled .composer-settings {
   display: none;
 }
@@ -3298,6 +3305,18 @@ select:focus-visible {
   background: rgba(0,0,0,.045);
 }
 
+.advanced-trigger {
+  width: 31px;
+  height: 31px;
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.advanced-trigger:hover,
+.advanced-trigger[aria-expanded="true"] {
+  background: rgba(0,0,0,.045);
+}
+
 .slash-button {
   font-size: var(--type-headline-size);
 }
@@ -3517,16 +3536,14 @@ select:focus-visible {
 }
 
 .composer-model-row > span strong,
-.composer-control-heading strong,
-.composer-section-label strong {
+.composer-control-heading strong {
   color: var(--text);
   font-size: var(--type-caption-size);
   font-weight: 650;
 }
 
 .composer-model-row > span small,
-.composer-control-heading small,
-.composer-section-label small {
+.composer-control-heading small {
   color: var(--muted);
   font-size: var(--type-micro-size);
   line-height: 1.35;
@@ -3560,12 +3577,10 @@ select:focus-visible {
   border-top: 1px solid var(--border);
 }
 
-.composer-section-label {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 4px 2px;
+/* 高级执行拆成独立弹窗后由弹窗头部承担分隔，内部区块不再加顶部分隔线。 */
+.composer-advanced-popover .composer-advanced-controls {
+  padding-top: 7px;
+  border-top: 0;
 }
 
 .composer-control-block {

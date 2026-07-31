@@ -241,6 +241,31 @@ describe('TopBar usage', () => {
     expect(wrapper.get('.usage-popover').text()).toContain('尚未登录 Kimi')
   })
 
+  it('moves the terminal entry into the top bar with disabled and open states', async () => {
+    const wrapper = mount(TopBar, {
+      props: {
+        runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitBranches: null, branchesOpen: false, usage, sessionUsage,
+        contextOpen: false, usageOpen: false, extensionsOpen: false,
+        terminalEnabled: true, terminalOpen: true
+      }
+    })
+
+    const terminalButton = wrapper.get('[aria-label="打开终端"]')
+    expect(terminalButton.classes()).toContain('icon-button')
+    expect(terminalButton.classes()).toContain('terminal-toggle')
+    expect(terminalButton.classes()).toContain('is-open')
+    expect(terminalButton.attributes('title')).toBe('终端 · ⌘J')
+    expect(terminalButton.attributes('disabled')).toBeUndefined()
+    expect(terminalButton.element.nextElementSibling?.classList).toContain('extensions-toggle')
+    await terminalButton.trigger('click')
+    expect(wrapper.emitted('toggleTerminal')).toEqual([[]])
+
+    await wrapper.setProps({ terminalEnabled: false, terminalOpen: false })
+    expect(terminalButton.attributes('disabled')).toBeDefined()
+    expect(terminalButton.classes()).not.toContain('is-open')
+  })
+
   it('opens the branch list from the top bar and marks the current branch', async () => {
     const gitBranches = {
       available: true,

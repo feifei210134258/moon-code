@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow, Notification, shell } from 'electron'
+import { app, BrowserWindow, Notification, screen, shell } from 'electron'
 import { registerIpc } from './ipc.js'
 import { KimiSessionBridge } from './kimi/KimiSessionBridge.js'
 import { KimiSettingsBridge } from './kimi/KimiSettingsBridge.js'
@@ -11,6 +11,7 @@ import { KimiNotificationService } from './kimi/KimiNotificationService.js'
 import { KimiPetService } from './pet/KimiPetService.js'
 import { KimiPetWindowManager } from './pet/KimiPetWindowManager.js'
 import { PetPositionStore } from './pet/PetPositionStore.js'
+import { EMPTY_WINDOW_STATE, WindowStateStore, resolveWindowState, type StoredWindowState } from './WindowStateStore.js'
 import { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
 import { SecondaryModelPreferencesStore } from './runtime/SecondaryModelPreferencesStore.js'
 import { KimiCliUpdateService } from './runtime/KimiCliUpdateService.js'
@@ -57,16 +58,30 @@ const syncPetWindowPreference = (state: KimiUsageState): void => {
   petWindows?.setEnabled(state.preferences.petEnabled === true)
 }
 
+const MAIN_WINDOW_LIMITS = { defaultWidth: 1488, defaultHeight: 1040, minWidth: 920, minHeight: 680 } as const
+const windowStates = new WindowStateStore(() => join(app.getPath('userData'), 'window-state.json'))
+let lastWindowState: StoredWindowState = { ...EMPTY_WINDOW_STATE }
+
 function getTrustedRendererUrl(): string {
   return process.env.ELECTRON_RENDERER_URL ?? rendererEntryUrl(join(__dirname, '../renderer/index.html'))
 }
 
 function createMainWindow(): BrowserWindow {
+  // Restore the last closed window bounds when they still overlap a connected
+  // display; otherwise fall back to the default centered size.
+  const windowState = resolveWindowState(
+    lastWindowState,
+    screen.getAllDisplays().map((display) => display.bounds),
+    MAIN_WINDOW_LIMITS
+  )
   const window = new BrowserWindow({
-    width: 1488,
-    height: 1040,
-    minWidth: 920,
-    minHeight: 680,
+    width: windowState.bounds.width,
+    height: windowState.bounds.height,
+    ...(windowState.bounds.x !== undefined && windowState.bounds.y !== undefined
+      ? { x: windowState.bounds.x, y: windowState.bounds.y }
+      : {}),
+    minWidth: MAIN_WINDOW_LIMITS.minWidth,
+    minHeight: MAIN_WINDOW_LIMITS.minHeight,
     show: false,
     title: 'Moon Code',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
@@ -84,6 +99,36 @@ function createMainWindow(): BrowserWindow {
       sandbox: true,
       nodeIntegration: false,
       webSecurity: true
+    }
+  })
+
+  if (windowState.isMaximized) window.maximize()
+
+  // Persist the window state so the next launch reopens with the same size.
+  // Bounds are recorded debounced and only while the window is in its normal
+  // state; the maximized flag is tracked separately.
+  const saveWindowState = (patch: Partial<Pick<StoredWindowState, 'bounds' | 'isMaximized'>>): void => {
+    lastWindowState = { ...lastWindowState, ...patch }
+    void windowStates.save(lastWindowState).catch(() => undefined)
+  }
+  let boundsTimer: ReturnType<typeof setTimeout> | null = null
+  const recordWindowBounds = (): void => {
+    if (boundsTimer !== null) clearTimeout(boundsTimer)
+    boundsTimer = setTimeout(() => {
+      boundsTimer = null
+      if (window.isDestroyed() || window.isMaximized() || window.isFullScreen() || window.isMinimized()) return
+      saveWindowState({ bounds: window.getBounds(), isMaximized: false })
+    }, 300)
+  }
+  window.on('resize', recordWindowBounds)
+  window.on('move', recordWindowBounds)
+  window.on('maximize', () => saveWindowState({ isMaximized: true }))
+  window.on('unmaximize', recordWindowBounds)
+  window.on('close', () => {
+    if (boundsTimer !== null) clearTimeout(boundsTimer)
+    if (window.isMaximized()) saveWindowState({ isMaximized: true })
+    else if (!window.isMinimized() && !window.isFullScreen()) {
+      saveWindowState({ bounds: window.getBounds(), isMaximized: false })
     }
   })
 
@@ -176,7 +221,7 @@ if (process.argv.includes('--smoke-node-pty')) {
       app.exit(1)
     })
 } else {
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     usage.on('state-changed', syncPetWindowPreference)
     usage.start()
     pets.start()
@@ -188,6 +233,8 @@ if (process.argv.includes('--smoke-node-pty')) {
       onOpenSession: openMainWindowForPet
     })
     petWindows.start()
+    // Load the persisted window state before the first window is created.
+    lastWindowState = await windowStates.load()
     mainWindow = createMainWindow()
     // Moon Code uses the Kimi Code CLI installed by the user. Start it as
     // soon as the application opens so the renderer can use its sessions
@@ -211,7 +258,8 @@ app.on('before-quit', (event) => {
   quitting = true
   void Promise.all([
     sessions.close().catch(() => undefined),
-    browser.close().catch(() => undefined)
+    browser.close().catch(() => undefined),
+    windowStates.flush().catch(() => undefined)
   ])
     .then(async () => {
       usage.off('state-changed', syncPetWindowPreference)

@@ -7,7 +7,8 @@ import {
   PhSidebarSimple,
   PhArrowClockwise,
   PhArrowsInLineVertical,
-  PhSpinnerGap
+  PhSpinnerGap,
+  PhTerminalWindow
 } from '@phosphor-icons/vue'
 import type { KimiPlanUsageWindow, KimiUsageState, RuntimeStatus, SessionUsageSummary, WorkspaceGitBranches } from '@shared/contracts'
 import { rendererLocale } from '../i18n/rendererLocale'
@@ -26,6 +27,8 @@ const props = defineProps<{
   contextOpen: boolean
   usageOpen: boolean
   extensionsOpen: boolean
+  terminalEnabled?: boolean
+  terminalOpen?: boolean
   sessionReady?: boolean
   promptRunning?: boolean
   hasTurns?: boolean
@@ -43,6 +46,7 @@ const emit = defineEmits<{
   toggleContext: []
   toggleUsage: []
   toggleExtensions: []
+  toggleTerminal: []
   refreshUsage: []
   compact: [instruction?: string]
   undo: []
@@ -323,6 +327,18 @@ function resetDurationLabel(totalSeconds: number): string {
             <span v-if="displayUsageNotice" class="muted">{{ displayUsageNotice }}</span>
           </span>
         </Transition>
+      </button>
+      <button
+        class="icon-button terminal-toggle"
+        type="button"
+        :class="{ 'is-open': terminalOpen }"
+        aria-label="打开终端"
+        title="终端 · ⌘J"
+        :aria-pressed="terminalOpen === true"
+        :disabled="terminalEnabled !== true"
+        @click="$emit('toggleTerminal')"
+      >
+        <PhTerminalWindow :size="19" :weight="terminalOpen === true ? 'fill' : 'regular'" />
       </button>
       <button
         class="icon-button extensions-toggle"

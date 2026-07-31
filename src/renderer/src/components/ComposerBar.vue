@@ -8,9 +8,9 @@ import {
   PhImage,
   PhPaperclip,
   PhPaperPlaneTilt,
-  PhStopCircle,
-  PhTerminalWindow,
+  PhSlidersHorizontal,
   PhSpinnerGap,
+  PhStopCircle,
   PhX
 } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -25,7 +25,6 @@ import type {
 const props = defineProps<{
   disabled?: boolean
   disabledReason?: string
-  terminalEnabled?: boolean
   pending?: boolean
   running?: boolean
   skills: KimiSkill[]
@@ -47,7 +46,6 @@ const emit = defineEmits<{
     deliveryMode: 'queue' | 'steer'
   ]
   abort: []
-  toggleTerminal: []
   activateSkill: [skillName: string, args?: string]
   updateControls: [controls: KimiPromptControls]
   updateGoalMode: [enabled: boolean]
@@ -59,6 +57,7 @@ const attachments = ref<KimiUploadedFile[]>([])
 const attachmentPending = ref(false)
 const attachmentError = ref<string | null>(null)
 const optionsOpen = ref(false)
+const advancedOpen = ref(false)
 const commandOpen = ref(false)
 const mentionOpen = ref(false)
 const deliveryOpen = ref(false)
@@ -71,13 +70,15 @@ const commandActiveIndex = ref(0)
 const pendingPermissionMode = ref<KimiPromptControls['permissionMode'] | null>(null)
 const composerRoot = ref<HTMLElement | null>(null)
 const modelTrigger = ref<HTMLButtonElement | null>(null)
+const advancedTrigger = ref<HTMLButtonElement | null>(null)
 const commandTrigger = ref<HTMLButtonElement | null>(null)
 const mentionTrigger = ref<HTMLButtonElement | null>(null)
 const deliveryTrigger = ref<HTMLButtonElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
-type PopoverKind = 'options' | 'command' | 'mention' | 'delivery'
+type PopoverKind = 'options' | 'advanced' | 'command' | 'mention' | 'delivery'
 const popoverStyles = ref<Record<PopoverKind, Record<string, string>>>({
   options: {},
+  advanced: {},
   command: {},
   mention: {},
   delivery: {}
@@ -231,6 +232,7 @@ function toggleCommands(): void {
   if (commandOpen.value) {
     commandActiveIndex.value = 0
     optionsOpen.value = false
+    advancedOpen.value = false
     closeMention()
     void nextTick(() => positionPopover('command'))
   }
@@ -238,16 +240,27 @@ function toggleCommands(): void {
 
 function toggleSessionControls(): void {
   optionsOpen.value = !optionsOpen.value
+  advancedOpen.value = false
+  commandOpen.value = false
+  deliveryOpen.value = false
+  closeMention()
+  if (optionsOpen.value) void nextTick(() => positionPopover('options'))
+}
+
+function toggleAdvancedControls(): void {
+  advancedOpen.value = !advancedOpen.value
+  optionsOpen.value = false
   commandOpen.value = false
   deliveryOpen.value = false
   closeMention()
   pendingPermissionMode.value = null
-  if (optionsOpen.value) void nextTick(() => positionPopover('options'))
+  if (advancedOpen.value) void nextTick(() => positionPopover('advanced'))
 }
 
 function toggleDeliveryMenu(): void {
   deliveryOpen.value = !deliveryOpen.value
   optionsOpen.value = false
+  advancedOpen.value = false
   commandOpen.value = false
   closeMention()
   if (deliveryOpen.value) void nextTick(() => positionPopover('delivery'))
@@ -264,6 +277,7 @@ function onComposerInput(): void {
     commandOpen.value = true
     commandActiveIndex.value = 0
     optionsOpen.value = false
+    advancedOpen.value = false
     deliveryOpen.value = false
     closeMention()
     void nextTick(() => positionPopover('command'))
@@ -290,6 +304,7 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   attachments.value = [...files]
   commandOpen.value = false
   optionsOpen.value = false
+  advancedOpen.value = false
   deliveryOpen.value = false
   closeMention()
   await nextTick()
@@ -398,6 +413,7 @@ function queueMentionSearch(): void {
   mentionActiveIndex.value = 0
   commandOpen.value = false
   optionsOpen.value = false
+  advancedOpen.value = false
   deliveryOpen.value = false
   mentionTimer = setTimeout(() => {
     mentionTimer = null
@@ -464,6 +480,7 @@ function insertFileMention(path: string): void {
   value.value = `${value.value.slice(0, start)}${insertion}${suffix}`
   commandOpen.value = false
   optionsOpen.value = false
+  advancedOpen.value = false
   deliveryOpen.value = false
   closeMention()
   void nextTick(() => {
@@ -529,18 +546,22 @@ function clearSelectedSkill(): void {
 function positionPopover(kind: PopoverKind): void {
   const trigger = kind === 'options'
     ? modelTrigger.value
-    : kind === 'command'
-      ? commandTrigger.value
-      : kind === 'mention'
-        ? mentionTrigger.value
-        : deliveryTrigger.value
+    : kind === 'advanced'
+      ? advancedTrigger.value
+      : kind === 'command'
+        ? commandTrigger.value
+        : kind === 'mention'
+          ? mentionTrigger.value
+          : deliveryTrigger.value
   if (trigger === null) return
   const rect = trigger.getBoundingClientRect()
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
-  const preferredWidth = kind === 'options' ? 344 : kind === 'command' ? 420 : kind === 'mention' ? 460 : 250
+  const preferredWidth = kind === 'options' || kind === 'advanced'
+    ? 344
+    : kind === 'command' ? 420 : kind === 'mention' ? 460 : 250
   const width = Math.max(240, Math.min(preferredWidth, viewportWidth - 16))
-  const alignedLeft = kind === 'options' ? rect.right - width : rect.left
+  const alignedLeft = kind === 'options' || kind === 'advanced' ? rect.right - width : rect.left
   const left = Math.max(8, Math.min(alignedLeft, viewportWidth - width - 8))
   const spaceAbove = Math.max(0, rect.top - 8)
   const spaceBelow = Math.max(0, viewportHeight - rect.bottom - 8)
@@ -558,6 +579,7 @@ function positionPopover(kind: PopoverKind): void {
 
 function positionOpenPopovers(): void {
   if (optionsOpen.value) positionPopover('options')
+  if (advancedOpen.value) positionPopover('advanced')
   if (commandOpen.value) positionPopover('command')
   if (mentionOpen.value) positionPopover('mention')
   if (deliveryOpen.value) positionPopover('delivery')
@@ -565,6 +587,7 @@ function positionOpenPopovers(): void {
 
 function closeComposerPopovers(): void {
   optionsOpen.value = false
+  advancedOpen.value = false
   commandOpen.value = false
   deliveryOpen.value = false
   pendingPermissionMode.value = null
@@ -574,13 +597,13 @@ function closeComposerPopovers(): void {
 function onDocumentPointerdown(event: PointerEvent): void {
   const target = event.target
   if (!(target instanceof Node) || composerRoot.value?.contains(target)) return
-  if (optionsOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
+  if (optionsOpen.value || advancedOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
 function onDocumentFocusin(event: FocusEvent): void {
   const target = event.target
   if (!(target instanceof Node) || composerRoot.value?.contains(target)) return
-  if (optionsOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
+  if (optionsOpen.value || advancedOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
 defineExpose({ loadDraft, insertFileMention, addAttachments })
@@ -661,7 +684,7 @@ function onWindowKeydown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
   if (
     event.key !== 'Escape' ||
-    (!optionsOpen.value && !commandOpen.value && !mentionOpen.value && !deliveryOpen.value)
+    (!optionsOpen.value && !advancedOpen.value && !commandOpen.value && !mentionOpen.value && !deliveryOpen.value)
   ) return
   event.preventDefault()
   closeComposerPopovers()
@@ -756,9 +779,6 @@ watch(() => props.running, (running) => {
           :disabled="disabled"
           @click="toggleCommands"
         >/</button>
-        <button class="terminal-entry" type="button" aria-label="打开终端" title="终端 · ⌘J" :disabled="terminalEnabled !== true" @click="emit('toggleTerminal')">
-          <PhTerminalWindow :size="19" />
-        </button>
       </div>
       <div class="composer-settings">
         <div v-if="controls?.planMode || goalMode || controls?.swarmMode" class="composer-mode-chips" aria-label="已启用模式">
@@ -773,6 +793,20 @@ watch(() => props.running, (running) => {
           </button>
         </div>
         <button
+          ref="advancedTrigger"
+          class="advanced-trigger"
+          type="button"
+          :disabled="disabled"
+          :aria-expanded="advancedOpen"
+          aria-haspopup="dialog"
+          aria-controls="composer-advanced-controls"
+          aria-label="高级执行设置"
+          title="高级执行设置"
+          @click="toggleAdvancedControls"
+        >
+          <PhSlidersHorizontal :size="17" />
+        </button>
+        <button
           ref="modelTrigger"
           class="model-summary"
           type="button"
@@ -780,7 +814,7 @@ watch(() => props.running, (running) => {
           :aria-expanded="optionsOpen"
           aria-haspopup="dialog"
           aria-controls="composer-session-controls"
-          aria-label="会话模型与执行设置"
+          aria-label="会话模型与思考设置"
           @click="toggleSessionControls"
         >
           <span>{{ selectedModel?.displayName ?? controls?.model ?? (controlsPending ? '读取模型…' : '未配置模型') }}</span>
@@ -857,11 +891,11 @@ watch(() => props.running, (running) => {
       id="composer-session-controls"
       class="composer-popover"
       role="dialog"
-      aria-label="会话模型与执行设置"
+      aria-label="会话模型与思考设置"
       :style="popoverStyles.options"
     >
       <header class="composer-popover-header">
-        <div><strong>模型与执行</strong><small>应用于当前 Session</small></div>
+        <div><strong>模型与思考</strong><small>应用于当前 Session</small></div>
       </header>
       <div class="composer-popover-section">
         <label class="composer-model-row">
@@ -871,7 +905,7 @@ watch(() => props.running, (running) => {
           </select>
         </label>
         <div v-if="visibleThinkingOptions.length > 0" class="composer-control-block">
-          <div class="composer-control-heading"><strong>思考强度</strong><small>更高强度适合复杂任务</small></div>
+          <div class="composer-control-heading"><strong>思考强度</strong><small>中途切换影响效果</small></div>
           <div class="composer-segments" role="radiogroup" aria-label="思考强度">
             <button
               v-for="effort in visibleThinkingOptions"
@@ -886,8 +920,19 @@ watch(() => props.running, (running) => {
           </div>
         </div>
       </div>
-      <div id="composer-advanced-controls" class="composer-advanced-controls">
-        <div class="composer-section-label"><strong>高级执行</strong><small>无需展开，直接调整</small></div>
+    </div>
+    <div
+      v-if="advancedOpen"
+      id="composer-advanced-controls"
+      class="composer-popover composer-advanced-popover"
+      role="dialog"
+      aria-label="高级执行设置"
+      :style="popoverStyles.advanced"
+    >
+      <header class="composer-popover-header">
+        <div><strong>高级执行</strong><small>应用于当前 Session</small></div>
+      </header>
+      <div class="composer-advanced-controls">
         <div class="composer-control-block composer-permission-row">
           <div class="composer-control-heading"><strong>执行审批</strong><small>{{ permissionDescription }}</small></div>
           <div class="composer-segments" role="radiogroup" aria-label="执行审批">

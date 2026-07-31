@@ -41,7 +41,6 @@ function sessionState(sessionId: string): SessionViewState {
 
 afterEach(() => {
   delete window.kimiAgent
-  window.localStorage.removeItem('moon-code:last-thinking-effort:v1')
 })
 
 describe('useRuntimeBridge session races', () => {
@@ -254,12 +253,14 @@ describe('useRuntimeBridge session races', () => {
     vi.useRealTimers()
   })
 
-  it('uses a valid model default instead of off and persists the user thinking choice for new tasks', async () => {
+  it('inherits the default thinking effort from settings for new sessions', async () => {
     const model = {
       id: 'kimi-for-coding', providerId: 'managed:kimi-code', displayName: 'Kimi for Coding',
       maxContextSize: 262_144, capabilities: ['thinking'],
       supportEfforts: ['off', 'low', 'high'], defaultEffort: 'high'
     }
+    let runtimeThinking = 'off'
+    let settingsThinkingEffort: string | null = 'LOW'
     const api = {
       getBootstrapState: vi.fn(async () => ({
         appVersion: '0.2.2', platform: 'darwin',
@@ -283,48 +284,66 @@ describe('useRuntimeBridge session races', () => {
         branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
       })),
       getSessionRuntimeStatus: vi.fn(async () => ({
-        busy: false, model: model.id, thinking: 'off', permissionMode: 'manual' as const,
+        busy: false, model: model.id, thinking: runtimeThinking, permissionMode: 'manual' as const,
         planMode: false, swarmMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
       })),
       getKimiSettings: vi.fn(async () => ({
         models: [model],
-        preferences: { defaultModel: model.id }
+        preferences: { defaultModel: model.id, thinkingEffort: settingsThinkingEffort }
       }))
     } as unknown as KimiAgentDesktopApi
     window.kimiAgent = api
 
-    let firstBridge!: ReturnType<typeof useRuntimeBridge>
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+
+    // 设置值生效：大小写不敏感，并按 supportEfforts 校验
     const firstWrapper = mount(defineComponent({
       setup() {
-        firstBridge = useRuntimeBridge()
+        bridge = useRuntimeBridge()
         return () => null
       }
     }))
     await flushPromises()
-    await firstBridge.openSession('session-first')
+    await bridge.openSession('session-settings')
     await flushPromises()
-    expect(firstBridge.promptControls.value?.thinking).toBe('high')
+    expect(bridge.promptControls.value?.thinking).toBe('low')
 
-    firstBridge.setPromptControls({
-      ...firstBridge.promptControls.value!,
-      thinking: 'low'
+    // 用户切换思考强度只影响当前会话，不再写入 localStorage 继承给下个会话
+    bridge.setPromptControls({
+      ...bridge.promptControls.value!,
+      thinking: 'high'
     })
+    expect(window.localStorage.getItem('moon-code:last-thinking-effort:v1')).toBe(null)
     firstWrapper.unmount()
 
-    let secondBridge!: ReturnType<typeof useRuntimeBridge>
+    // 设置为 'off'/空时视为未设置，回退到模型默认值
+    settingsThinkingEffort = 'off'
     const secondWrapper = mount(defineComponent({
       setup() {
-        secondBridge = useRuntimeBridge()
+        bridge = useRuntimeBridge()
         return () => null
       }
     }))
     await flushPromises()
-    await secondBridge.openSession('session-new')
+    await bridge.openSession('session-model-default')
     await flushPromises()
-
-    expect(secondBridge.promptControls.value?.thinking).toBe('low')
-    expect(window.localStorage.getItem('moon-code:last-thinking-effort:v1')).toBe('low')
+    expect(bridge.promptControls.value?.thinking).toBe('high')
     secondWrapper.unmount()
+
+    // 已有会话 runtime 上报的思考强度仍然优先
+    runtimeThinking = 'high'
+    settingsThinkingEffort = 'low'
+    const thirdWrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-runtime')
+    await flushPromises()
+    expect(bridge.promptControls.value?.thinking).toBe('high')
+    thirdWrapper.unmount()
   })
 
   it('applies plan mode toggles immediately as session config and rolls back on failure', async () => {

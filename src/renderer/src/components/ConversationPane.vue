@@ -108,7 +108,6 @@ const emit = defineEmits<{
   openSystem: [path: string]
   trashEntry: [path: string]
   closeTerminal: []
-  toggleTerminal: []
   activateSkill: [skillName: string, args?: string]
   updatePromptControls: [controls: KimiPromptControls]
   controlGoal: [control: 'pause' | 'resume' | 'cancel']
@@ -594,7 +593,6 @@ watch(
       <ComposerBar
         ref="composer"
         :disabled="!composerEnabled || promptControls === null"
-        :terminal-enabled="terminalEnabled"
         :pending="promptPending"
         :running="promptRunning"
         :skills="skills"
@@ -608,7 +606,6 @@ watch(
         :disabled-reason="controlsPending ? '正在读取 Kimi 会话控制…' : '连接 Kimi 并选择一个会话后即可输入'"
         @submit="(text, attachments, controls, goalMode, deliveryMode) => emit('submit', text, attachments, controls, goalMode, deliveryMode)"
         @abort="emit('abort')"
-        @toggle-terminal="emit('toggleTerminal')"
         @activate-skill="(skillName, args) => emit('activateSkill', skillName, args)"
         @update-controls="emit('updatePromptControls', $event)"
         @update-goal-mode="emit('updateGoalMode', $event)"

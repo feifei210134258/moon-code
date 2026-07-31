@@ -144,33 +144,28 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.emitted('abort')).toEqual([[]])
   })
 
-  it('keeps the Terminal entry usable independently from Prompt controls', async () => {
-    const wrapper = mount(ComposerBar, {
-      props: { skills: [], models, controls: null, disabled: true, terminalEnabled: true }
-    })
-    const terminalButton = wrapper.get('[aria-label="打开终端"]')
-    expect(wrapper.get('.composer-wrap').classes()).toContain('is-disabled')
-    expect(terminalButton.classes()).toContain('terminal-entry')
-    expect(terminalButton.attributes('disabled')).toBeUndefined()
-    await terminalButton.trigger('click')
-    expect(wrapper.emitted('toggleTerminal')).toEqual([[]])
-  })
-
-  it('keeps model controls primary with visible thinking and execution controls', async () => {
+  it('keeps model controls primary and moves execution controls into the advanced popover', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('.model-summary').trigger('click')
-    const popover = wrapper.get('.composer-popover')
+    const popover = wrapper.get('#composer-session-controls')
     expect(popover.text()).toContain('Kimi for Coding')
     expect(popover.text()).toContain('模型')
     expect(popover.text()).toContain('思考强度')
-    expect(popover.text()).toContain('高级执行')
-    expect(popover.text()).toContain('执行审批')
+    expect(popover.text()).toContain('中途切换影响效果')
+    expect(popover.text()).not.toContain('高级执行')
+    expect(popover.text()).not.toContain('执行审批')
     expect(popover.get('[aria-label="思考强度"]').attributes('role')).toBe('radiogroup')
-    expect(popover.get('[aria-label="执行审批"]').attributes('role')).toBe('radiogroup')
-    expect(popover.text()).toContain('规划模式')
-    expect(popover.text()).toContain('目标模式')
-    expect(popover.text()).toContain('协作模式')
-    const toggles = wrapper.findAll('.composer-toggle-row')
+
+    await wrapper.get('.advanced-trigger').trigger('click')
+    expect(wrapper.find('#composer-session-controls').exists()).toBe(false)
+    const advanced = wrapper.get('#composer-advanced-controls')
+    expect(advanced.text()).toContain('高级执行')
+    expect(advanced.text()).toContain('执行审批')
+    expect(advanced.get('[aria-label="执行审批"]').attributes('role')).toBe('radiogroup')
+    expect(advanced.text()).toContain('规划模式')
+    expect(advanced.text()).toContain('目标模式')
+    expect(advanced.text()).toContain('协作模式')
+    const toggles = advanced.findAll('.composer-toggle-row')
     expect(toggles[0]!.attributes('role')).toBe('switch')
     await toggles[0]!.trigger('click')
     await toggles[2]!.trigger('click')
@@ -207,7 +202,8 @@ describe('ComposerBar Skills menu', () => {
     expect(chips.text()).toContain('目标')
     expect(chips.text()).toContain('协作')
     expect(settings.element.firstElementChild).toBe(chips.element)
-    expect(chips.element.nextElementSibling?.classList).toContain('model-summary')
+    expect(chips.element.nextElementSibling?.classList).toContain('advanced-trigger')
+    expect(chips.element.nextElementSibling?.nextElementSibling?.classList).toContain('model-summary')
 
     await wrapper.get('[aria-label="关闭规划模式"]').trigger('click')
     await wrapper.get('[aria-label="关闭目标模式"]').trigger('click')
@@ -221,7 +217,7 @@ describe('ComposerBar Skills menu', () => {
 
   it('requires an explicit confirmation before enabling fully automatic approval', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
-    await wrapper.get('.model-summary').trigger('click')
+    await wrapper.get('.advanced-trigger').trigger('click')
     await wrapper.get('.composer-permission-row .composer-segments button:last-child').trigger('click')
 
     expect(wrapper.emitted('updateControls')).toBeUndefined()

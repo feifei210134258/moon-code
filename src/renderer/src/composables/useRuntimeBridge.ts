@@ -53,8 +53,6 @@ const stoppedState: RuntimePublicState = {
   error: null
 }
 
-const LAST_THINKING_EFFORT_KEY = 'moon-code:last-thinking-effort:v1'
-
 export function useRuntimeBridge() {
   const runtime = ref<RuntimePublicState>({ ...stoppedState })
   const discovery = ref<RuntimeDiscovery | null>(null)
@@ -153,7 +151,6 @@ export function useRuntimeBridge() {
      App.vue 的 [activeSessionId, status] watcher 在 stopped→running 落入同一
      Vue flush 时会被合并掉，不能依赖它完成重连。 */
   let detachedSessionId: string | null = null
-  let lastThinkingEffort = loadLastThinkingEffort()
   const awaitingPromptCycleAt = new Map<string, number>()
   const localPromptQueue = computed(() => {
     const sessionId = activeQueueSessionId.value
@@ -1195,7 +1192,7 @@ export function useRuntimeBridge() {
       const model = status.model ?? settings.preferences.defaultModel ?? settings.models[0]?.id ?? null
       if (model === null) throw new Error('Kimi 没有可用模型，请先在设置中配置 Provider 与默认模型')
       const descriptor = settings.models.find((item) => item.id === model)
-      const thinking = resolveSessionThinkingEffort(status.thinking, descriptor, lastThinkingEffort)
+      const thinking = resolveSessionThinkingEffort(status.thinking, descriptor, settings.preferences.thinkingEffort)
       sessionRuntimeStatus.value = status
       sessionModels.value = settings.models
       promptControls.value = {
@@ -1220,11 +1217,6 @@ export function useRuntimeBridge() {
   const setPromptControls = (controls: KimiPromptControls): void => {
     const previous = promptControls.value
     promptControls.value = { ...controls }
-    const selectedThinking = selectableThinkingEffort(controls.thinking)
-    if (selectedThinking !== null) {
-      lastThinkingEffort = selectedThinking
-      persistLastThinkingEffort(selectedThinking)
-    }
     // Plan mode is session-level config on the runtime; the per-prompt field is
     // ignored by recent servers. Apply the toggle immediately so the next
     // prompt actually runs in plan mode, and roll back if the write fails.
@@ -1543,10 +1535,12 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+// 思考强度回退顺序：runtime 上报 → 设置中的默认值 → 模型默认 → 第一个支持的档位。
+// 设置值需通过 supportEfforts 校验（大小写不敏感），'off'/空视为未设置。
 function resolveSessionThinkingEffort(
   runtimeEffort: string,
   model: KimiModelCatalogItem | undefined,
-  inheritedEffort: string | null
+  settingsEffort: string | null
 ): string {
   const supported = (model?.supportEfforts ?? []).filter((effort) => selectableThinkingEffort(effort) !== null)
   const matchSupported = (candidate: string | null): string | null => {
@@ -1556,8 +1550,8 @@ function resolveSessionThinkingEffort(
   }
   const runtime = matchSupported(selectableThinkingEffort(runtimeEffort))
   if (runtime !== null) return runtime
-  const inherited = matchSupported(selectableThinkingEffort(inheritedEffort))
-  if (inherited !== null) return inherited
+  const preferred = matchSupported(selectableThinkingEffort(settingsEffort))
+  if (preferred !== null) return preferred
   const modelDefault = matchSupported(selectableThinkingEffort(model?.defaultEffort))
   if (modelDefault !== null) return modelDefault
   return supported[0] ?? (runtimeEffort.trim() || 'off')
@@ -1566,22 +1560,6 @@ function resolveSessionThinkingEffort(
 function selectableThinkingEffort(value: string | null | undefined): string | null {
   const effort = value?.trim() ?? ''
   return effort.length < 1 || effort.toLocaleLowerCase() === 'off' ? null : effort
-}
-
-function loadLastThinkingEffort(): string | null {
-  try {
-    return selectableThinkingEffort(window.localStorage.getItem(LAST_THINKING_EFFORT_KEY))
-  } catch {
-    return null
-  }
-}
-
-function persistLastThinkingEffort(effort: string): void {
-  try {
-    window.localStorage.setItem(LAST_THINKING_EFFORT_KEY, effort)
-  } catch {
-    // A blocked or full local store must not prevent the session control from changing.
-  }
 }
 
 function mergeWorkspacePages(
