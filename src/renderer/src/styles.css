@@ -4123,7 +4123,7 @@ body.is-panel-resizing {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-/* 右栏三类事项保持为独立卡片，底色与左侧栏卡片底色一致而非白底。
+/* 右栏三类事项保持为独立卡片，用极浅的中性灰与白色面板区分。
    卡片只靠底色和细边界分组，不叠加阴影；内部列表保持线性，避免嵌套卡片。 */
 .changes-view {
   display: grid;
@@ -4138,7 +4138,7 @@ body.is-panel-resizing {
   padding: 11px 12px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--sidebar-bg);
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .changes-view .extension-state {
@@ -4363,7 +4363,7 @@ body.is-panel-resizing {
 }
 
 .todo-panel li {
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
   gap: 8px;
   padding: 4px 0;
   font-size: var(--type-caption-size);
@@ -4385,10 +4385,15 @@ body.is-panel-resizing {
 }
 
 .todo-status-dot {
+  justify-self: center;
   width: 7px;
   height: 7px;
   border: 1px solid var(--border-strong);
   border-radius: 50%;
+}
+
+.todo-check {
+  color: var(--green);
 }
 
 .todo-panel li.is-in_progress .todo-status-dot {
@@ -4397,13 +4402,7 @@ body.is-panel-resizing {
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
 }
 
-.todo-panel li.is-done .todo-status-dot {
-  border-color: var(--green);
-  background: var(--green);
-}
-
 .todo-panel li.is-in_progress em { color: var(--accent); background: var(--accent-soft); }
-.todo-panel li.is-done em { color: var(--green); background: var(--green-soft); }
 
 .todo-panel li.is-done > span:nth-child(2) { color: var(--muted); text-decoration: line-through; }
 

@@ -129,7 +129,7 @@ components:
     rounded: "{rounded.xl}"
     padding: "0"
   right-sidebar-card:
-    backgroundColor: "{colors.sidebar-bg}"
+    backgroundColor: "#F7F7F7"
     textColor: "{colors.text}"
     typography: "{typography.body}"
     rounded: "{rounded.lg}"
@@ -178,7 +178,7 @@ The palette is a restrained warm-neutral system: white content cards float on a 
 - **Sidebar Field** (#ECECEC): The frosted sidebar card surface, one step lighter than the window field so navigation reads as a separate layer. The settings navigation reuses the same card treatment.
 - **Surface White** (#FFFFFF): Transcript, composer, menus, dialogs, and content cards.
 - **Quiet Surface** (#ECECECD9): Secondary cells, token summaries, and low-emphasis grouping.
-- **Panel Surface** (#ECECEC): The three right-sidebar cards share the sidebar field color; it separates work categories without adding decorative shadows.
+- **Panel Surface** (#F7F7F7): A barely-there neutral fill for the three right-sidebar cards; it separates work categories from the white panel without reading as heavy gray blocks.
 - **Ink** (#1D1D1F): Primary text and high-confidence labels.
 - **Muted Ink** (#6E6E73): Supporting text, metadata, and secondary labels.
 - **Faint Ink** (#8E8E93): Lowest-emphasis readable text on white and near-white surfaces. Reserve it for non-essential chrome; meaningful body copy should still use Muted Ink or Ink.

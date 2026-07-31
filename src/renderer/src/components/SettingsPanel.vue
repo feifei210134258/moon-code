@@ -9,7 +9,6 @@ import {
   PhChartDonut,
   PhDownloadSimple,
   PhGearSix,
-  PhKey,
   PhMagicWand,
   PhPencilSimple,
   PhPlus,
@@ -44,9 +43,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: []; sessionRestored: [sessionId: string] }>()
 
-type SettingsTab = 'account' | 'models' | 'skills' | 'tools' | 'usage' | 'archives' | 'general'
+type SettingsTab = 'general' | 'models' | 'skills' | 'tools' | 'usage' | 'archives'
 type ModelSettingsView = 'primary' | 'secondary'
-const activeTab = ref<SettingsTab>('account')
+const activeTab = ref<SettingsTab>('general')
 const modelSettingsView = ref<ModelSettingsView>('secondary')
 const snapshot = ref<KimiSettingsSnapshot | null>(null)
 const pending = ref(false)
@@ -916,7 +915,8 @@ watch(
       void loadArchivedSessions()
       if (activeTab.value === 'general' && cliUpdate.value === null) void checkCliUpdate()
     }
-  }
+  },
+  { immediate: true }
 )
 
 watch(
@@ -966,8 +966,8 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
         <PhArrowLeft :size="16" />返回
       </button>
       <div class="settings-nav-divider" />
-      <button class="settings-tab" :class="{ 'is-active': activeTab === 'account' }" type="button" @click="activeTab = 'account'">
-        <PhKey :size="17" />账号
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'general' }" type="button" @click="activeTab = 'general'">
+        <PhGearSix :size="17" />通用
       </button>
       <button class="settings-tab" :class="{ 'is-active': activeTab === 'models' }" type="button" @click="activeTab = 'models'">
         <PhCpu :size="17" />模型
@@ -983,9 +983,6 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
       </button>
       <button class="settings-tab" :class="{ 'is-active': activeTab === 'archives' }" type="button" @click="activeTab = 'archives'">
         <PhArchive :size="17" />已归档任务
-      </button>
-      <button class="settings-tab" :class="{ 'is-active': activeTab === 'general' }" type="button" @click="activeTab = 'general'">
-        <PhGearSix :size="17" />通用
       </button>
     </nav>
 
@@ -1034,6 +1031,38 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
               <p v-else class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
             </section>
 
+            <section v-if="activeTab === 'general' && snapshot !== null" class="settings-section">
+              <div class="settings-title"><div><h2>Kimi 账号</h2><p>使用官方 device-code 登录流程。</p></div></div>
+              <div class="settings-row account-row">
+                <div><strong>{{ managedProviderName }}</strong><span>{{ accountStatusLabel }}</span></div>
+                <button
+                  v-if="snapshot.auth.managedProvider?.status === 'authenticated'"
+                  class="secondary-button"
+                  type="button"
+                  :disabled="actionPending !== null"
+                  @click="logoutOAuth"
+                ><PhSignOut :size="15" />退出登录</button>
+                <button
+                  v-else
+                  class="primary-button"
+                  type="button"
+                  :disabled="actionPending !== null"
+                  @click="startOAuthLogin"
+                >登录 Kimi</button>
+              </div>
+              <div v-if="oauthFlow?.status === 'pending'" class="oauth-device-panel">
+                <span>在浏览器完成授权</span>
+                <strong>{{ oauthFlow.userCode }}</strong>
+                <a
+                  v-if="oauthFlow.verificationUriComplete"
+                  :href="oauthFlow.verificationUriComplete"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >打开 Kimi 授权页</a>
+                <button type="button" @click="cancelOAuthLogin">取消登录</button>
+              </div>
+            </section>
+
             <div v-else-if="!runtimeRunning" class="settings-empty">
               <strong>需要先连接 Kimi Runtime</strong>
               <span>设置直接来自 Kimi，不会读取或维护第二份配置。</span>
@@ -1043,39 +1072,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
             </div>
 
             <template v-else-if="snapshot">
-              <section v-if="activeTab === 'account'" class="settings-section">
-                <div class="settings-title"><div><h2>Kimi 账号</h2><p>使用官方 device-code 登录流程。</p></div></div>
-                <div class="settings-row account-row">
-                  <div><strong>{{ managedProviderName }}</strong><span>{{ accountStatusLabel }}</span></div>
-                  <button
-                    v-if="snapshot.auth.managedProvider?.status === 'authenticated'"
-                    class="secondary-button"
-                    type="button"
-                    :disabled="actionPending !== null"
-                    @click="logoutOAuth"
-                  ><PhSignOut :size="15" />退出登录</button>
-                  <button
-                    v-else
-                    class="primary-button"
-                    type="button"
-                    :disabled="actionPending !== null"
-                    @click="startOAuthLogin"
-                  >登录 Kimi</button>
-                </div>
-                <div v-if="oauthFlow?.status === 'pending'" class="oauth-device-panel">
-                  <span>在浏览器完成授权</span>
-                  <strong>{{ oauthFlow.userCode }}</strong>
-                  <a
-                    v-if="oauthFlow.verificationUriComplete"
-                    :href="oauthFlow.verificationUriComplete"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >打开 Kimi 授权页</a>
-                  <button type="button" @click="cancelOAuthLogin">取消登录</button>
-                </div>
-              </section>
-
-              <section v-else-if="activeTab === 'models'" class="settings-section model-settings-page">
+              <section v-if="activeTab === 'models'" class="settings-section model-settings-page">
                 <div class="settings-title model-page-title">
                   <div>
                     <h2>模型设置</h2>

@@ -5,6 +5,7 @@ import {
   PhArrowUp,
   PhCaretRight,
   PhChatCircleText,
+  PhCheckCircle,
   PhFile,
   PhFileCss,
   PhFileHtml,
@@ -293,9 +294,10 @@ onBeforeUnmount(() => {
         </header>
         <ol v-if="todoItems.length > 0" aria-label="Kimi Todo 计划">
           <li v-for="(todo, index) in todoItems" :key="`${activeTodo?.todoId}:${index}:${todo.title}`" :class="`is-${todo.status}`">
-            <span class="todo-status-dot" aria-hidden="true" />
+            <PhCheckCircle v-if="todo.status === 'done'" class="todo-check" :size="14" weight="bold" aria-hidden="true" />
+            <span v-else class="todo-status-dot" aria-hidden="true" />
             <span>{{ todo.title }}</span>
-            <em>{{ todoStatusLabel(todo.status) }}</em>
+            <em v-if="todo.status !== 'done'">{{ todoStatusLabel(todo.status) }}</em>
           </li>
         </ol>
         <p v-else class="plan-empty">Kimi 生成计划后会在这里实时显示。</p>

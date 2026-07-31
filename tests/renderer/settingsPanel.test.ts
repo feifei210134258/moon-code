@@ -928,7 +928,7 @@ describe('SettingsPanel', () => {
     const notificationToggles = wrapper.findAll('.preference-row input[type="checkbox"]')
     await notificationToggles[1]!.setValue(false)
     await notificationToggles[2]!.setValue(false)
-    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[0]!.trigger('click')
     await wrapper.get('.preference-row select').setValue('en-US')
     await flushPromises()
 
@@ -951,7 +951,7 @@ describe('SettingsPanel', () => {
     await flushPromises()
     vi.useFakeTimers()
 
-    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[0]!.trigger('click')
     const petToggle = wrapper.find('.settings-section input[type="checkbox"]')
     expect((petToggle.element as HTMLInputElement).checked).toBe(false)
     await petToggle.setValue(true)
@@ -989,7 +989,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
 
-    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[0]!.trigger('click')
     await flushPromises()
     expect(api.checkKimiCliUpdate).toHaveBeenCalledOnce()
     expect(wrapper.get('.cli-update-card').text()).toContain('发现 0.29.1，当前版本为 0.29.0')
@@ -1017,7 +1017,7 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
 
-    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await wrapper.findAll('.settings-tab')[0]!.trigger('click')
     await flushPromises()
     expect(api.getKimiSettings).not.toHaveBeenCalled()
     expect(api.checkKimiCliUpdate).toHaveBeenCalledOnce()
