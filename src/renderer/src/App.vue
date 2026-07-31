@@ -656,7 +656,7 @@ onBeforeUnmount(() => {
     />
 
     <main class="workbench" :style="{ '--sidebar-width': `${leftPanelWidth}px` }">
-      <template v-if="!settingsOpen">
+      <div v-show="!settingsOpen" class="workbench-body">
       <ProjectSidebar
         :projects="projects"
         :active-workspace-id="activeWorkspaceId"
@@ -835,9 +835,9 @@ onBeforeUnmount(() => {
           @cancel-task="cancelTask"
         />
       </template>
-      </template>
+      </div>
       <SettingsPanel
-        v-else
+        v-if="settingsOpen"
         :open="settingsOpen"
         :runtime-running="runtimeBridge.runtime.value.status === 'running'"
         :active-session-id="activeSessionId"

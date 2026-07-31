@@ -687,6 +687,12 @@ select:focus-visible {
   padding: 0 12px 12px 0;
 }
 
+/* 设置页打开时主区用 v-show 隐藏而非卸载，保留输入草稿与队列等组件态；
+   display: contents 让子项继续直接参与 .workbench 的网格布局。 */
+.workbench-body {
+  display: contents;
+}
+
 .glass-panel {
   background: var(--glass);
   backdrop-filter: blur(26px) saturate(1.05);
