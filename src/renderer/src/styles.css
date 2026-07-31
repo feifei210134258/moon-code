@@ -5848,6 +5848,23 @@ body.is-panel-resizing {
   background: rgba(0, 0, 0, 0.04);
 }
 
+/* 通用页合并账号后，账号区块用卡片与上方偏好行明确区隔。 */
+.settings-section.account-section {
+  margin-top: 18px;
+  padding: 8px 16px 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.account-section .settings-title {
+  min-height: 0;
+}
+
+.account-section .settings-row {
+  border-bottom: 0;
+}
+
 .cli-update-card.is-error {
   border-color: rgba(226, 85, 85, 0.2);
   background: rgba(255, 244, 244, 0.7);

@@ -1031,7 +1031,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
               <p v-else class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
             </section>
 
-            <section v-if="activeTab === 'general' && snapshot !== null" class="settings-section">
+            <section v-if="activeTab === 'general' && snapshot !== null" class="settings-section account-section">
               <div class="settings-title"><div><h2>Kimi 账号</h2><p>使用官方 device-code 登录流程。</p></div></div>
               <div class="settings-row account-row">
                 <div><strong>{{ managedProviderName }}</strong><span>{{ accountStatusLabel }}</span></div>
