@@ -111,6 +111,13 @@ export class KimiSessionBridge extends EventEmitter {
     await this.#runtime.createRestClient().setSessionPlanMode(sessionId, enabled)
   }
 
+  async setSessionSwarmMode(sessionId: string, enabled: boolean): Promise<void> {
+    this.#assertActiveSession(sessionId)
+    // Same as plan mode: per-prompt swarm_mode is ignored by recent runtimes;
+    // apply it as session-level config through the profile endpoint.
+    await this.#runtime.createRestClient().setSessionSwarmMode(sessionId, enabled)
+  }
+
   async getOperationalState(sessionId: string): Promise<KimiSessionOperationalState> {
     this.#assertActiveSession(sessionId)
     const client = this.#runtime.createRestClient()

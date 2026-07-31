@@ -1243,6 +1243,23 @@ export function useRuntimeBridge() {
         sessionControlsError.value = errorMessage(error)
       })
     }
+    // Swarm mode has the same runtime behavior as plan mode: the per-prompt
+    // field is ignored, so apply the toggle immediately as session config.
+    if (
+      previous !== null &&
+      previous.swarmMode !== controls.swarmMode &&
+      requestedSessionId !== null &&
+      window.kimiAgent !== undefined
+    ) {
+      const sessionId = requestedSessionId
+      const enabled = controls.swarmMode
+      void window.kimiAgent.setSessionSwarmMode(sessionId, enabled).catch((error: unknown) => {
+        if (promptControls.value !== null && promptControls.value.swarmMode === enabled) {
+          promptControls.value = { ...promptControls.value, swarmMode: !enabled }
+        }
+        sessionControlsError.value = errorMessage(error)
+      })
+    }
   }
 
   const refreshSessionRuntimeStatus = async (sessionId: string): Promise<void> => {

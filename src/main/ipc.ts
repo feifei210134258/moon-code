@@ -324,6 +324,15 @@ export function registerIpc(
     }
   )
   ipcMain.handle(
+    ipcChannels.sessionSwarmModeSet,
+    async (event, sessionId?: unknown, enabled?: unknown): Promise<void> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      if (typeof enabled !== 'boolean') throw new Error('Invalid swarm mode value')
+      await sessions.setSessionSwarmMode(sessionId, enabled)
+    }
+  )
+  ipcMain.handle(
     ipcChannels.sessionOperationalGet,
     async (event, sessionId?: unknown): Promise<KimiSessionOperationalState> => {
       assertTrustedSender(event)

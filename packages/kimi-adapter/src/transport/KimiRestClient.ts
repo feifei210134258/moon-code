@@ -563,6 +563,14 @@ export class KimiRestClient {
     )
   }
 
+  setSessionSwarmMode(sessionId: string, swarmMode: boolean): Promise<SessionSummary> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/profile`,
+      { method: 'POST', body: JSON.stringify({ agent_config: { swarm_mode: swarmMode } }) },
+      sessionSummarySchema
+    )
+  }
+
   archiveSession(sessionId: string): Promise<SessionArchiveResult> {
     return this.request(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}:archive`,

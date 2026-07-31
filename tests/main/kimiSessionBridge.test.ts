@@ -48,6 +48,7 @@ class FakeRuntime extends EventEmitter {
   }))
   readonly updateSessionGoalObjective = vi.fn(async () => ({}))
   readonly setSessionPlanMode = vi.fn(async (_sessionId: string, _planMode: boolean) => ({}))
+  readonly setSessionSwarmMode = vi.fn(async (_sessionId: string, _swarmMode: boolean) => ({}))
   readonly compactSession = vi.fn(async () => undefined)
   readonly undoSession = vi.fn(async () => undefined)
   readonly startSideChat = vi.fn(async () => ({ agent_id: 'agent-btw-1' }))
@@ -98,6 +99,7 @@ class FakeRuntime extends EventEmitter {
       steerPrompts: this.steerPrompts,
       updateSessionGoalObjective: this.updateSessionGoalObjective,
       setSessionPlanMode: this.setSessionPlanMode,
+      setSessionSwarmMode: this.setSessionSwarmMode,
       compactSession: this.compactSession,
       undoSession: this.undoSession,
       startSideChat: this.startSideChat,
@@ -513,6 +515,15 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.openSession('session-1')
     await bridge.setSessionPlanMode('session-1', true)
     expect(runtime.setSessionPlanMode).toHaveBeenCalledWith('session-1', true)
+    await bridge.close()
+  })
+
+  it('applies swarm mode as session-level config through the profile route', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    await bridge.setSessionSwarmMode('session-1', true)
+    expect(runtime.setSessionSwarmMode).toHaveBeenCalledWith('session-1', true)
     await bridge.close()
   })
 
