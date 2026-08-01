@@ -6613,6 +6613,51 @@ body.is-panel-resizing {
   white-space: nowrap;
 }
 
+.provider-card-model-toggle {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--type-ui-small-size);
+}
+
+.provider-card-model-toggle:hover {
+  border-color: rgba(0, 0, 0, 0.32);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.provider-card-model-toggle.is-expanded {
+  color: var(--accent);
+  border-color: rgba(0, 0, 0, 0.32);
+  background: var(--accent-soft);
+}
+
+.provider-card-model-toggle span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-card-model-toggle svg {
+  flex: none;
+  transition: transform 150ms ease;
+}
+
+.provider-card-model-toggle.is-expanded svg {
+  transform: rotate(180deg);
+}
+
 .provider-card-models {
   max-height: 252px;
   display: grid;
@@ -6940,6 +6985,73 @@ body.is-panel-resizing {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #ffffff;
+}
+
+/* ---------- 子 Agent：模型服务编辑弹窗 ---------- */
+
+.provider-editor-backdrop {
+  position: fixed;
+  z-index: 300;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: provider-backdrop-in 150ms ease;
+}
+
+.provider-editor-dialog {
+  width: min(560px, 100%);
+  max-height: min(640px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 20px 22px 22px;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22), 0 4px 16px rgba(0, 0, 0, 0.08);
+  animation: provider-dialog-in 170ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes provider-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes provider-dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.provider-dialog-close {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.provider-dialog-close:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.provider-editor-dialog .provider-picker-field {
+  margin-top: 14px;
+}
+
+.provider-editor-dialog .provider-form-grid {
+  margin-top: 2px;
+}
+
+.provider-editor-dialog .provider-form-actions {
+  margin-top: 16px;
 }
 
 .provider-catalog-hint {

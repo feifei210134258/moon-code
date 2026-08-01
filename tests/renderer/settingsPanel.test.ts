@@ -213,8 +213,9 @@ describe('SettingsPanel', () => {
     expect(wrapper.find('.provider-model-item.is-selected').exists()).toBe(false)
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeDefined()
 
-    await wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
-      .get('.provider-model-item').trigger('click')
+    const openaiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
+    await openaiCard.get('.provider-card-model-toggle').trigger('click')
+    await openaiCard.get('.provider-model-item').trigger('click')
     expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('gpt-5-mini')
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeUndefined()
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
@@ -245,7 +246,9 @@ describe('SettingsPanel', () => {
     expect(wrapper.text()).toContain('Kimi Fast')
     expect(wrapper.text()).toContain('独立模型已启用')
     expect(wrapper.text()).toContain('Config API does not accept secondary_model yet')
-    expect(wrapper.findAll('.provider-model-item')).toHaveLength(3)
+    expect(wrapper.findAll('.provider-card-model-toggle')).toHaveLength(2)
+    expect((wrapper.get('.provider-card-model-toggle').element as HTMLButtonElement).disabled).toBe(true)
+    expect(wrapper.findAll('.provider-model-item')).toHaveLength(0)
     wrapper.unmount()
   })
 
@@ -478,7 +481,9 @@ describe('SettingsPanel', () => {
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     /* 已配置独立模型时，“跟随主模型”按钮未选中，当前模型行选中；点击跟随按钮后直接切回 */
-    expect(wrapper.find('.provider-model-item.is-selected').text()).toContain('Kimi Fast')
+    const kimiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('Kimi'))!
+    await kimiCard.get('.provider-card-model-toggle').trigger('click')
+    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('Kimi Fast')
     await wrapper.get('.secondary-settings-selection .secondary-button').trigger('click')
     await flushPromises()
 
@@ -630,8 +635,9 @@ describe('SettingsPanel', () => {
       apiKey: 'sk-ant-secret'
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
-    await wrapper.findAll('.provider-card').find((card) => card.text().includes('anthropic-main'))!
-      .get('.provider-model-item').trigger('click')
+    const anthropicCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('anthropic-main'))!
+    await anthropicCard.get('.provider-card-model-toggle').trigger('click')
+    await anthropicCard.get('.provider-model-item').trigger('click')
     expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('claude-sonnet-4-5')
     expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
     wrapper.unmount()
@@ -982,14 +988,62 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
-      .get('.provider-model-item').trigger('click')
+    const openaiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
+    await openaiCard.get('.provider-card-model-toggle').trigger('click')
+    await openaiCard.get('.provider-model-item').trigger('click')
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
     await flushPromises()
 
     // Switching model keeps the previously applied effort (gpt-5-mini supports 'low').
     expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'low' })
     expect(wrapper.text()).toContain('子 Agent 模型已保存')
+    wrapper.unmount()
+  })
+
+  it('closes the provider editor dialog via its close button, backdrop, and Escape', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await wrapper.get('.provider-add-card').trigger('click')
+    await flushPromises()
+
+    // Open with the close button; Escape closes the dialog instead of the panel.
+    expect(wrapper.find('.provider-editor-dialog').exists()).toBe(true)
+    await wrapper.get('.provider-dialog-close').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.provider-editor-dialog').exists()).toBe(false)
+
+    await wrapper.get('.provider-add-card').trigger('click')
+    await flushPromises()
+    await window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('.provider-editor-dialog').exists()).toBe(false)
+    expect(wrapper.find('.settings-page').exists()).toBe(true)
+
+    await wrapper.get('.provider-add-card').trigger('click')
+    await flushPromises()
+    await wrapper.get('.provider-editor-backdrop').trigger('mousedown')
+    await flushPromises()
+    expect(wrapper.find('.provider-editor-dialog').exists()).toBe(false)
     wrapper.unmount()
   })
 
