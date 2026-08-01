@@ -10,14 +10,12 @@ const petChannels = {
   stateChanged: 'pet:state-changed',
   dragStart: 'pet:drag-start',
   dragMove: 'pet:drag-move',
-  dragEnd: 'pet:drag-end',
-  hoverChanged: 'pet:hover-changed'
+  dragEnd: 'pet:drag-end'
 } as const
 
 const api: KimiPetWindowApi = {
   getState: () => ipcRenderer.invoke(petChannels.bootstrap),
   openSession: (sessionId) => ipcRenderer.send(petChannels.openSession, sessionId),
-  setHovered: (hovered) => ipcRenderer.invoke(petChannels.hoverChanged, hovered),
   beginDrag: (position) => ipcRenderer.send(petChannels.dragStart, position),
   moveDrag: (position) => ipcRenderer.send(petChannels.dragMove, position),
   endDrag: (position) => ipcRenderer.send(petChannels.dragEnd, position),

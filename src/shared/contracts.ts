@@ -123,8 +123,7 @@ export const ipcChannels = {
   petStateChanged: 'pet:state-changed',
   petDragStart: 'pet:drag-start',
   petDragMove: 'pet:drag-move',
-  petDragEnd: 'pet:drag-end',
-  petHoverChanged: 'pet:hover-changed'
+  petDragEnd: 'pet:drag-end'
 } as const
 
 export type RuntimeStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'error'
@@ -1092,21 +1091,9 @@ export interface PetPointerPosition {
   screenY: number
 }
 
-/**
- * 悬停展开后，折叠态宠物窗口在展开窗口坐标系内的矩形。
- * 渲染层用它把宠物本体钉在原屏幕位置，并把会话浮层锚在本体正上方。
- */
-export interface PetExpandedGeometry {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
 export interface KimiPetWindowApi {
   getState(): Promise<PetRosterState>
   openSession(sessionId?: string): void
-  setHovered(hovered: boolean): Promise<PetExpandedGeometry | null>
   beginDrag(position: PetPointerPosition): void
   moveDrag(position: PetPointerPosition): void
   endDrag(position: PetPointerPosition): void

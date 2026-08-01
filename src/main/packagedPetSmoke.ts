@@ -54,7 +54,8 @@ export async function runPackagedPetSmoke(timeoutMs = 15_000): Promise<void> {
       kimiPet: typeof window.kimiPet,
       process: typeof process,
       require: typeof require,
-      text: document.body.innerText
+      label: document.querySelector('.pet-root')?.getAttribute('aria-label') ?? '',
+      badge: document.querySelector('.pet-badge')?.textContent ?? ''
     })`) as Record<string, string>
     if (
       diagnostics.kimiAgent !== 'undefined' ||
@@ -62,10 +63,13 @@ export async function runPackagedPetSmoke(timeoutMs = 15_000): Promise<void> {
       diagnostics.process !== 'undefined' ||
       diagnostics.require !== 'undefined'
     ) throw new Error(`Pet preload boundary failed: ${JSON.stringify(diagnostics)}`)
-    const visibleText = diagnostics.text ?? ''
-    if (!visibleText.includes('Pet smoke task') || !visibleText.includes('等待授权')) {
-      throw new Error(`Pet Renderer did not project the assigned state: ${visibleText}`)
-    }
+    const label = diagnostics.label ?? ''
+    const badge = diagnostics.badge ?? ''
+    if (
+      !label.includes('Pet smoke task') ||
+      !label.includes('等待授权') ||
+      badge !== '1'
+    ) throw new Error(`Pet Renderer did not project the assigned state: ${JSON.stringify(diagnostics)}`)
     if (!petWindow.isAlwaysOnTop() || petWindow.isResizable() || petWindow.isFocusable()) {
       throw new Error('Pet BrowserWindow lost its always-on-top, non-focusable, or fixed-size contract')
     }

@@ -9,7 +9,6 @@ import {
 } from 'electron'
 import {
   ipcChannels,
-  type PetExpandedGeometry,
   type PetOpenSessionIntent,
   type PetPointerPosition,
   type PetRosterState,
@@ -28,8 +27,6 @@ interface PetWindowRecord {
   window: BrowserWindow
   roster: PetRosterState
   drag: DragState | null
-  /** Bounds before the hover expansion; restores the pet footprint on leave. */
-  collapsedBounds: Rectangle | null
 }
 
 export interface KimiPetWindowManagerOptions {
@@ -41,9 +38,6 @@ export interface KimiPetWindowManagerOptions {
 }
 
 const DEFAULT_SIZE = { width: 112, height: 140 }
-// The session overlay is shown above the pet when hovered; the window grows
-// towards the screen centre so the pet body itself never moves.
-const EXPANDED_SIZE = { width: 240, height: 340 }
 const EDGE_MARGIN = 8
 
 export class KimiPetWindowManager {
@@ -88,7 +82,6 @@ export class KimiPetWindowManager {
   readonly #onDragStart = (event: IpcMainEvent, input?: unknown): void => {
     const record = this.#recordForSender(event)
     const pointer = validatePointer(input)
-    this.#collapse(record)
     record.drag = { pointer, bounds: record.window.getBounds() }
   }
 
@@ -115,29 +108,6 @@ export class KimiPetWindowManager {
     void this.#snapAndSave(record)
   }
 
-  readonly #onHoverChanged = (event: IpcMainInvokeEvent, input?: unknown): PetExpandedGeometry | null => {
-    const record = this.#recordForSender(event)
-    if (input === true) {
-      if (record.collapsedBounds === null) {
-        record.collapsedBounds = record.window.getBounds()
-        this.#expand(record)
-      }
-      const collapsed = record.collapsedBounds
-      const expanded = record.window.getBounds()
-      // 折叠态窗口在展开窗口坐标系内的矩形：渲染层据此钉住宠物本体，
-      // 否则窗口向屏幕内侧放大时本体会随居中布局发生位移。
-      return {
-        x: collapsed.x - expanded.x,
-        y: collapsed.y - expanded.y,
-        width: collapsed.width,
-        height: collapsed.height
-      }
-    }
-    if (input !== false) throw new TypeError('Invalid pet hover state')
-    this.#collapse(record)
-    return null
-  }
-
   constructor(service: KimiPetService, options: KimiPetWindowManagerOptions) {
     this.#service = service
     this.#trustedRendererUrl = options.trustedRendererUrl
@@ -155,7 +125,6 @@ export class KimiPetWindowManager {
     ipcMain.on(ipcChannels.petDragStart, this.#onDragStart)
     ipcMain.on(ipcChannels.petDragMove, this.#onDragMove)
     ipcMain.on(ipcChannels.petDragEnd, this.#onDragEnd)
-    ipcMain.handle(ipcChannels.petHoverChanged, this.#onHoverChanged)
     this.#service.on('state-changed', this.#onRosterChanged)
     this.#latestRoster = this.#service.state
     void this.#reconcile(this.#latestRoster)
@@ -178,7 +147,6 @@ export class KimiPetWindowManager {
     this.#started = false
     this.#service.off('state-changed', this.#onRosterChanged)
     ipcMain.removeHandler(ipcChannels.petBootstrap)
-    ipcMain.removeHandler(ipcChannels.petHoverChanged)
     ipcMain.off(ipcChannels.petOpenSession, this.#onOpen)
     ipcMain.off(ipcChannels.petDragStart, this.#onDragStart)
     ipcMain.off(ipcChannels.petDragMove, this.#onDragMove)
@@ -240,7 +208,7 @@ export class KimiPetWindowManager {
         webSecurity: true
       }
     })
-    const record: PetWindowRecord = { window, roster, drag: null, collapsedBounds: null }
+    const record: PetWindowRecord = { window, roster, drag: null }
     this.#window = record
 
     window.setAlwaysOnTop(true, process.platform === 'darwin' ? 'floating' : 'normal')
@@ -291,36 +259,6 @@ export class KimiPetWindowManager {
       width: this.#windowSize.width,
       height: this.#windowSize.height
     }
-  }
-
-  /** Grows the window towards the screen centre so the pet body stays put. */
-  #expand(record: PetWindowRecord): void {
-    const current = record.window.getBounds()
-    const display = screen.getDisplayMatching(current)
-    const centerX = current.x + current.width / 2
-    const displayCenter = display.workArea.x + display.workArea.width / 2
-    const x = centerX < displayCenter
-      ? current.x
-      : current.x + current.width - EXPANDED_SIZE.width
-    const y = Math.max(display.workArea.y, current.y + current.height - EXPANDED_SIZE.height)
-    record.window.setBounds({
-      x: clamp(x, display.workArea.x, display.workArea.x + Math.max(0, display.workArea.width - EXPANDED_SIZE.width)),
-      y: clamp(y, display.workArea.y, display.workArea.y + Math.max(0, display.workArea.height - EXPANDED_SIZE.height)),
-      width: EXPANDED_SIZE.width,
-      height: EXPANDED_SIZE.height
-    })
-  }
-
-  #collapse(record: PetWindowRecord): void {
-    const bounds = record.collapsedBounds
-    record.collapsedBounds = null
-    if (bounds === null || record.window.isDestroyed()) return
-    const display = screen.getDisplayMatching(bounds)
-    record.window.setBounds({
-      ...bounds,
-      x: clamp(bounds.x, display.workArea.x, display.workArea.x + Math.max(0, display.workArea.width - bounds.width)),
-      y: clamp(bounds.y, display.workArea.y, display.workArea.y + Math.max(0, display.workArea.height - bounds.height))
-    })
   }
 
   async #snapAndSave(record: PetWindowRecord): Promise<void> {
