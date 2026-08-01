@@ -714,7 +714,7 @@ select:focus-visible {
   overflow: hidden;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(236, 236, 236, 0.92);
+  background: #ececec;
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
@@ -4171,7 +4171,7 @@ body.is-panel-resizing {
   padding: 11px 12px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: #ececec;
 }
 
 .changes-view .extension-state {
@@ -5764,7 +5764,7 @@ body.is-panel-resizing {
   overflow: auto;
   border: 1px solid var(--card-border);
   border-radius: var(--radius-card);
-  background: rgba(236, 236, 236, 0.92);
+  background: #ececec;
   backdrop-filter: blur(30px) saturate(1.08);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }

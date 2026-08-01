@@ -129,7 +129,7 @@ components:
     rounded: "{rounded.xl}"
     padding: "0"
   right-sidebar-card:
-    backgroundColor: "#F7F7F7"
+    backgroundColor: "#ECECEC"
     textColor: "{colors.text}"
     typography: "{typography.body}"
     rounded: "{rounded.lg}"
@@ -178,7 +178,7 @@ The palette is a restrained warm-neutral system: white content cards float on a 
 - **Sidebar Field** (#ECECEC): The frosted sidebar card surface, one step lighter than the window field so navigation reads as a separate layer. The settings navigation reuses the same card treatment.
 - **Surface White** (#FFFFFF): Transcript, composer, menus, dialogs, and content cards.
 - **Quiet Surface** (#ECECECD9): Secondary cells, token summaries, and low-emphasis grouping.
-- **Panel Surface** (#F7F7F7): A barely-there neutral fill for the three right-sidebar cards; it separates work categories from the white panel without reading as heavy gray blocks.
+- **Panel Surface** (#ECECEC): A neutral fill for the three right-sidebar cards; it separates work categories from the white panel without reading as heavy gray blocks.
 - **Ink** (#1D1D1F): Primary text and high-confidence labels.
 - **Muted Ink** (#6E6E73): Supporting text, metadata, and secondary labels.
 - **Faint Ink** (#8E8E93): Lowest-emphasis readable text on white and near-white surfaces. Reserve it for non-essential chrome; meaningful body copy should still use Muted Ink or Ink.
@@ -280,7 +280,7 @@ The TOC rail is the homepage's distinctive component. Keep it as a quiet, scroll
 
 ### Right Sidebar Category Cards
 
-Changes, Plan, and Background Tasks remain three separate cards because they represent distinct operational concerns. Each uses Panel Surface (`#EDEDED`), a 12px radius, an 11–12px inset, and a neutral hairline with no shadow. Lists inside stay borderless and linear so the categories read as cards without becoming nested card stacks.
+Changes, Plan, and Background Tasks remain three separate cards because they represent distinct operational concerns. Each uses Panel Surface (`#ECECEC`), a 12px radius, an 11–12px inset, and a neutral hairline with no shadow. Lists inside stay borderless and linear so the categories read as cards without becoming nested card stacks.
 
 ## 6. Do's and Don'ts
 
