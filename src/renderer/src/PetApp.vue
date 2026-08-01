@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type {
+  PetExpandedGeometry,
   PetPointerPosition,
   PetRosterState,
   PetSessionState,
@@ -15,10 +16,14 @@ const fixtureStatus = import.meta.env.DEV
 const now = ref(Date.now())
 const dragging = ref(false)
 const overlayOpen = ref(false)
-const windowExpanded = ref(false)
+// 展开窗口后折叠态窗口的相对矩形：宠物本体按它钉在原地，浮层锚在本体上方。
+const petRect = ref<PetExpandedGeometry | null>(null)
+const expandedSize = ref<{ width: number; height: number } | null>(null)
 let startPointer: PetPointerPosition | null = null
 let lastPointer: PetPointerPosition | null = null
 let hoverTimer: ReturnType<typeof setTimeout> | null = null
+let hoverGeneration = 0
+let hoverPending = false
 let stopStateListener: (() => void) | null = null
 let clock: ReturnType<typeof setInterval> | null = null
 
@@ -98,17 +103,26 @@ function pointer(event: PointerEvent): PetPointerPosition {
   return { screenX: event.screenX, screenY: event.screenY }
 }
 
-// 展开窗口先于浮层展示（窗口放大的 IPC 与重绘需要几毫秒），
-// 避免浮层先被折叠窗口裁切出闪烁。
-function onMouseEnter(): void {
+// 展开窗口由主进程完成并把折叠态矩形带回来（IPC 返回时窗口已放大），
+// 浮层晚一拍再淡入，避免被旧窗口尺寸的渲染帧裁切。
+async function onMouseEnter(): Promise<void> {
   const api = window.kimiPet
-  if (api === undefined) return
-  if (!windowExpanded.value) {
-    windowExpanded.value = true
-    api.setHovered(true)
+  if (api === undefined || petRect.value !== null || hoverPending) return
+  hoverPending = true
+  const generation = ++hoverGeneration
+  try {
+    const geometry = await api.setHovered(true)
+    // 等 IPC 期间鼠标可能已移出：丢弃过期几何，避免本体在折叠窗口里错位。
+    if (generation !== hoverGeneration || geometry === null) return
+    petRect.value = geometry
+    expandedSize.value = { width: window.innerWidth, height: window.innerHeight }
+    if (hoverTimer !== null) clearTimeout(hoverTimer)
+    hoverTimer = setTimeout(() => {
+      if (generation === hoverGeneration) overlayOpen.value = true
+    }, 50)
+  } finally {
+    hoverPending = false
   }
-  if (hoverTimer !== null) clearTimeout(hoverTimer)
-  hoverTimer = setTimeout(() => { overlayOpen.value = true }, 60)
 }
 
 function onMouseLeave(): void {
@@ -116,16 +130,46 @@ function onMouseLeave(): void {
 }
 
 function collapse(): void {
+  hoverGeneration += 1
   if (hoverTimer !== null) {
     clearTimeout(hoverTimer)
     hoverTimer = null
   }
   overlayOpen.value = false
-  if (windowExpanded.value) {
-    windowExpanded.value = false
-    window.kimiPet?.setHovered(false)
+  if (petRect.value !== null) {
+    petRect.value = null
+    expandedSize.value = null
+    void window.kimiPet?.setHovered(false)
   }
 }
+
+const anchorStyle = computed(() => {
+  const rect = petRect.value
+  if (rect === null) return undefined
+  return {
+    left: `${rect.x}px`,
+    top: `${rect.y}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`
+  }
+})
+
+// 浮层底边贴着折叠态窗口顶边，水平以宠物本体为中心并夹取在窗口内。
+const overlayStyle = computed(() => {
+  const rect = petRect.value
+  const size = expandedSize.value
+  if (rect === null || size === null) return undefined
+  const overlayWidth = 224
+  const center = rect.x + rect.width / 2
+  const left = Math.min(
+    Math.max(center - overlayWidth / 2, 8),
+    Math.max(8, size.width - overlayWidth - 8)
+  )
+  return {
+    left: `${Math.round(left)}px`,
+    bottom: `${Math.round(size.height - rect.y + 6)}px`
+  }
+})
 
 function onEntryClick(item: PetSessionState): void {
   const api = window.kimiPet
@@ -220,8 +264,10 @@ onBeforeUnmount(() => {
     @contextmenu.prevent
   >
     <div
+      v-if="petRect !== null"
       class="pet-overlay"
       :class="{ 'is-open': overlayOpen }"
+      :style="overlayStyle"
       role="list"
       aria-label="进行中的任务会话"
     >
@@ -240,17 +286,19 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div
-      class="pet-body"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerCancel"
-    >
-      <LumiSprite
-        :status="bodyStatus"
-      />
-      <div v-if="(roster?.overflow ?? 0) > 0" class="pet-overflow">+{{ roster?.overflow }}</div>
+    <div class="pet-anchor" :class="{ 'is-anchored': petRect !== null }" :style="anchorStyle">
+      <div
+        class="pet-body"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerCancel"
+      >
+        <LumiSprite
+          :status="bodyStatus"
+        />
+        <div v-if="(roster?.overflow ?? 0) > 0" class="pet-overflow">+{{ roster?.overflow }}</div>
+      </div>
     </div>
   </main>
 </template>
@@ -267,13 +315,9 @@ onBeforeUnmount(() => {
 .pet-root {
   --pet-accent: #7c93ad;
   --pet-soft: rgba(124, 147, 173, 0.18);
+  position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  padding: 5px 5px 7px;
   touch-action: none;
 }
 
@@ -281,11 +325,23 @@ onBeforeUnmount(() => {
 .pet-root.is-running { --pet-accent: #2563eb; --pet-soft: rgba(37, 99, 235, 0.18); }
 .pet-root:not(.is-running) { --pet-accent: #16a36a; --pet-soft: rgba(22, 163, 106, 0.18); }
 
+.pet-anchor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 5px 5px 7px;
+}
+
+/* 展开后锚在折叠态窗口原矩形内：宠物本体在屏幕上保持纹丝不动。 */
+.pet-anchor.is-anchored {
+  position: absolute;
+}
+
 .pet-overlay {
   position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%) translateY(4px);
   z-index: 5;
   width: 224px;
   max-height: 196px;
@@ -298,13 +354,14 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(16px) saturate(1.08);
   opacity: 0;
   pointer-events: none;
+  transform: translateY(4px);
   transition: opacity 140ms ease, transform 140ms ease;
 }
 
 .pet-overlay.is-open {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 
 .pet-entry {

@@ -9,6 +9,7 @@ import {
 } from 'electron'
 import {
   ipcChannels,
+  type PetExpandedGeometry,
   type PetOpenSessionIntent,
   type PetPointerPosition,
   type PetRosterState,
@@ -114,16 +115,27 @@ export class KimiPetWindowManager {
     void this.#snapAndSave(record)
   }
 
-  readonly #onHoverChanged = (event: IpcMainEvent, input?: unknown): void => {
+  readonly #onHoverChanged = (event: IpcMainInvokeEvent, input?: unknown): PetExpandedGeometry | null => {
     const record = this.#recordForSender(event)
     if (input === true) {
-      if (record.collapsedBounds !== null) return
-      record.collapsedBounds = record.window.getBounds()
-      this.#expand(record)
-      return
+      if (record.collapsedBounds === null) {
+        record.collapsedBounds = record.window.getBounds()
+        this.#expand(record)
+      }
+      const collapsed = record.collapsedBounds
+      const expanded = record.window.getBounds()
+      // 折叠态窗口在展开窗口坐标系内的矩形：渲染层据此钉住宠物本体，
+      // 否则窗口向屏幕内侧放大时本体会随居中布局发生位移。
+      return {
+        x: collapsed.x - expanded.x,
+        y: collapsed.y - expanded.y,
+        width: collapsed.width,
+        height: collapsed.height
+      }
     }
     if (input !== false) throw new TypeError('Invalid pet hover state')
     this.#collapse(record)
+    return null
   }
 
   constructor(service: KimiPetService, options: KimiPetWindowManagerOptions) {
@@ -143,7 +155,7 @@ export class KimiPetWindowManager {
     ipcMain.on(ipcChannels.petDragStart, this.#onDragStart)
     ipcMain.on(ipcChannels.petDragMove, this.#onDragMove)
     ipcMain.on(ipcChannels.petDragEnd, this.#onDragEnd)
-    ipcMain.on(ipcChannels.petHoverChanged, this.#onHoverChanged)
+    ipcMain.handle(ipcChannels.petHoverChanged, this.#onHoverChanged)
     this.#service.on('state-changed', this.#onRosterChanged)
     this.#latestRoster = this.#service.state
     void this.#reconcile(this.#latestRoster)
@@ -166,11 +178,11 @@ export class KimiPetWindowManager {
     this.#started = false
     this.#service.off('state-changed', this.#onRosterChanged)
     ipcMain.removeHandler(ipcChannels.petBootstrap)
+    ipcMain.removeHandler(ipcChannels.petHoverChanged)
     ipcMain.off(ipcChannels.petOpenSession, this.#onOpen)
     ipcMain.off(ipcChannels.petDragStart, this.#onDragStart)
     ipcMain.off(ipcChannels.petDragMove, this.#onDragMove)
     ipcMain.off(ipcChannels.petDragEnd, this.#onDragEnd)
-    ipcMain.off(ipcChannels.petHoverChanged, this.#onHoverChanged)
     this.#window?.window.destroy()
     this.#window = null
     this.#creating = false
