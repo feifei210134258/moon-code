@@ -4,6 +4,7 @@ import {
   PhArrowClockwise,
   PhArrowCounterClockwise,
   PhArrowLeft,
+  PhCaretDown,
   PhCheck,
   PhCpu,
   PhChartDonut,
@@ -83,6 +84,7 @@ const catalogSearch = ref('')
 const selectedCatalogId = ref<string | null>(null)
 const catalogDetail = ref<KimiCatalogProviderDetail | null>(null)
 const catalogDetailLoading = ref(false)
+const providerPickerOpen = ref(false)
 const secondaryProviderTypes: Array<{ value: KimiProviderType; label: string }> = [
   { value: 'openai', label: 'OpenAI Chat Completions' },
   { value: 'openai_responses', label: 'OpenAI Responses' },
@@ -166,12 +168,6 @@ const secondaryProviders = computed(() => [...(snapshot.value?.providers ?? [])]
   const rightManaged = right.id === managedProviderName.value ? 0 : 1
   return leftManaged - rightManaged || left.id.localeCompare(right.id)
 }))
-const selectedSecondaryProvider = computed(() =>
-  secondaryProviders.value.find((provider) => provider.id === secondaryProviderId.value) ?? null
-)
-const secondaryProviderModels = computed(() =>
-  snapshot.value?.secondaryModelOptions.filter((model) => model.providerId === secondaryProviderId.value) ?? []
-)
 const secondaryProviderIdExists = computed(() => {
   const id = secondaryProviderDraft.value.id.trim()
   return id.length > 0 && secondaryProviders.value.some((provider) =>
@@ -207,15 +203,21 @@ const catalogApiKeyPlaceholder = computed(() => {
   }
   return providerEditorIsEditing.value ? '留空以保留当前 API Key' : 'sk-…'
 })
-const selectedSecondaryProviderTitle = computed(() => {
-  const provider = selectedSecondaryProvider.value
-  if (provider === null) return '模型服务'
-  return provider.id === managedProviderName.value ? 'Kimi' : provider.id
+const secondarySettingsModelLabel = computed(() => {
+  if (secondaryModelDraft.value.model.length < 1) return '跟随主模型'
+  return secondaryModelDraftDescriptor.value?.displayName ?? secondaryModelDraft.value.model
 })
-const selectedSecondaryProviderProtocol = computed(() => {
-  const type = selectedSecondaryProvider.value?.type
-  return secondaryProviderTypes.find((item) => item.value === type)?.label ?? type ?? '未知协议'
+const providerPickerLabel = computed(() => {
+  if (providerEditorMode.value === 'manual') return '手动配置'
+  const selected = catalogSelectedSummary.value
+  return selected !== null ? selected.name : '选择供应商…'
 })
+function providerModelsOf(providerId: string): KimiSettingsSnapshot['secondaryModelOptions'] {
+  return snapshot.value?.secondaryModelOptions.filter((model) => model.providerId === providerId) ?? []
+}
+function providerCardInUse(providerId: string): boolean {
+  return currentSecondaryProviderId.value === providerId
+}
 const currentSecondaryProviderId = computed(() => secondaryModelDescriptor.value?.providerId ?? null)
 const primaryModelDescriptor = computed(() => {
   const settings = snapshot.value
@@ -397,6 +399,38 @@ function switchProviderEditorMode(mode: 'catalog' | 'manual'): void {
   }
 }
 
+function toggleProviderPicker(): void {
+  if (actionPending.value !== null) return
+  providerPickerOpen.value = !providerPickerOpen.value
+  if (providerPickerOpen.value && catalogSummaries.value.length < 1 && catalogError.value === null) {
+    void loadCatalogSummaries()
+  }
+}
+
+function closeProviderPicker(): void {
+  providerPickerOpen.value = false
+}
+
+function chooseManualProvider(): void {
+  if (actionPending.value !== null) return
+  providerEditorMode.value = 'manual'
+  selectedCatalogId.value = null
+  catalogDetail.value = null
+  catalogSearch.value = ''
+  if (editingProviderId.value === null) {
+    secondaryProviderDraft.value = {
+      id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '', defaultModelContextSize: ''
+    }
+  }
+  providerPickerOpen.value = false
+}
+
+async function chooseCatalogProvider(item: KimiCatalogProviderSummary): Promise<void> {
+  providerEditorMode.value = 'catalog'
+  await selectCatalogProvider(item)
+  providerPickerOpen.value = false
+}
+
 async function selectCatalogProvider(item: KimiCatalogProviderSummary): Promise<void> {
   const api = window.kimiAgent
   if (api === undefined || item.rejected || item.id === selectedCatalogId.value) return
@@ -430,11 +464,11 @@ function beginAddSecondaryProvider(): void {
   void loadCatalogSummaries()
 }
 
-function beginEditSecondaryProvider(): void {
-  const provider = selectedSecondaryProvider.value
+function beginEditProvider(providerId: string): void {
   const settings = snapshot.value
+  const provider = settings?.providers.find((item) => item.id === providerId)
   if (
-    provider === null ||
+    provider === undefined ||
     settings === null ||
     !settings.capabilities.canEditProvider ||
     provider.id === managedProviderName.value
@@ -728,9 +762,8 @@ async function refreshModels(): Promise<void> {
   }
 }
 
-async function refreshSecondaryProvider(): Promise<void> {
+async function refreshProviderModels(providerId: string): Promise<void> {
   const api = window.kimiAgent
-  const providerId = secondaryProviderId.value
   if (api === undefined || providerId.length < 1 || actionPending.value !== null) return
   actionPending.value = `refresh:provider:${providerId}`
   error.value = null
@@ -799,8 +832,8 @@ async function saveSecondaryProvider(): Promise<void> {
     resetCatalogState()
     selectSecondaryProvider(id)
     showNotice(oldId === null
-      ? (secondaryProviderModels.value.length > 0
-        ? `${id} 已连接并读取到 ${secondaryProviderModels.value.length} 个模型。`
+      ? (providerModelsOf(id).length > 0
+        ? `${id} 已连接并读取到 ${providerModelsOf(id).length} 个模型。`
         : `${id} 已连接，但暂未获取到模型；可检查凭据或 Base URL 后重试刷新。`)
       : `${id} 的模型服务设置已保存。`)
   } catch (reason) {
@@ -812,23 +845,22 @@ async function saveSecondaryProvider(): Promise<void> {
   }
 }
 
-async function deleteSecondaryProvider(): Promise<void> {
+async function deleteProvider(providerId: string): Promise<void> {
   const api = window.kimiAgent
   const settings = snapshot.value
-  const provider = selectedSecondaryProvider.value
+  const provider = settings?.providers.find((item) => item.id === providerId)
   if (
     api === undefined ||
     settings === null ||
-    provider === null ||
+    provider === undefined ||
     provider.id === managedProviderName.value ||
     !settings.capabilities.canDeleteProvider ||
     actionPending.value !== null
   ) return
-  const modelWarning = secondaryProviderModels.value.length > 0
-    ? `这会同时移除 ${secondaryProviderModels.value.length} 个模型别名，已选择的子 Agent 模型也会失效。`
+  const modelWarning = providerModelsOf(providerId).length > 0
+    ? `这会同时移除 ${providerModelsOf(providerId).length} 个模型别名，已选择的子 Agent 模型也会失效。`
     : '这会同时移除该服务的模型别名。'
   if (!window.confirm(`确定删除模型服务“${providerTitle(provider.id)}”？${modelWarning}`)) return
-  const providerId = provider.id
   actionPending.value = `secondary-provider:delete:${providerId}`
   error.value = null
   notice.value = null
@@ -1038,12 +1070,20 @@ function onWindowKeydown(event: KeyboardEvent): void {
   emit('close')
 }
 
-onMounted(() => window.addEventListener('keydown', onWindowKeydown))
+function onWindowMousedown(): void {
+  if (providerPickerOpen.value) providerPickerOpen.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown)
+  window.addEventListener('mousedown', onWindowMousedown)
+})
 onBeforeUnmount(() => {
   clearOAuthPoll()
   clearNoticeTimer()
   resetSecondaryProviderDraft()
   window.removeEventListener('keydown', onWindowKeydown)
+  window.removeEventListener('mousedown', onWindowMousedown)
 })
 
 function errorMessage(reason: unknown): string {
@@ -1253,249 +1293,198 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                     <span class="secondary-outcome-state">{{ secondaryOutcomeState }}</span>
                   </div>
 
-                  <div class="provider-manager">
-                    <aside class="provider-catalog" aria-label="模型服务">
-                      <header>
-                        <strong>模型服务</strong>
-                        <span>{{ secondaryProviders.length }} 个</span>
+                  <div class="secondary-model-settings-bar">
+                    <div class="secondary-settings-selection">
+                      <span>当前选用</span>
+                      <strong>{{ secondarySettingsModelLabel }}</strong>
+                      <button v-if="!secondaryFollowsPrimary && snapshot.capabilities.secondaryModel.canDisable" class="secondary-button" type="button" :disabled="actionPending !== null" @click="selectFollowPrimaryModel">跟随主模型</button>
+                    </div>
+                    <div v-if="snapshot.capabilities.secondaryModel.writable" class="provider-form secondary-model-form">
+                      <label>
+                        <span>推理强度</span>
+                        <select v-if="(secondaryModelDraftDescriptor?.supportEfforts.length ?? 0) > 0" v-model="secondaryModelDraft.defaultEffort" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1">
+                          <option value="">使用模型默认值</option>
+                          <option v-for="effort in secondaryModelDraftDescriptor?.supportEfforts ?? []" :key="effort" :value="effort">{{ effort }}</option>
+                        </select>
+                        <input v-else v-model="secondaryModelDraft.defaultEffort" type="text" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
+                      </label>
+                      <label v-if="snapshot.capabilities.secondaryModel.maxOutputSizeWritable">
+                        <span>最大输出 Token</span>
+                        <input v-model="secondaryModelDraft.maxOutputSize" type="number" min="1" max="16777216" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
+                      </label>
+                    </div>
+                    <div v-if="snapshot.capabilities.secondaryModel.writable" class="secondary-model-actions">
+                      <button class="primary-button" type="button" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" @click="setSecondaryModel">保存设置</button>
+                    </div>
+                  </div>
+                  <p v-if="!snapshot.capabilities.secondaryModel.writable" class="secondary-readonly-note">{{ snapshot.capabilities.secondaryModel.unavailableReason ?? '当前 Runtime 只能读取这项设置。' }}</p>
+
+                  <p v-if="snapshot.capabilities.providerManagementUnavailableReason" class="provider-management-note">
+                    {{ snapshot.capabilities.providerManagementUnavailableReason }}
+                  </p>
+                  <div class="provider-card-grid">
+                    <article v-for="provider in secondaryProviders" :key="provider.id" class="provider-card">
+                      <header class="provider-card-header">
+                        <span class="provider-catalog-icon" :class="{ 'is-kimi': provider.id === managedProviderName }">
+                          <PhCpu v-if="provider.id === managedProviderName" :size="18" />
+                          <PhPlugsConnected v-else :size="18" />
+                        </span>
+                        <div class="provider-card-copy">
+                          <strong>{{ providerTitle(provider.id) }}</strong>
+                          <small>{{ provider.id === managedProviderName ? '内置' : provider.type }} · {{ providerStatusLabel(provider.status) }}</small>
+                        </div>
+                        <span v-if="providerCardInUse(provider.id)" class="provider-card-current-badge">当前选用</span>
+                        <span class="provider-catalog-status" :class="`is-${provider.status}`" :title="providerStatusLabel(provider.status)" />
                       </header>
-                      <p v-if="snapshot.capabilities.providerManagementUnavailableReason" class="provider-management-note">
-                        {{ snapshot.capabilities.providerManagementUnavailableReason }}
-                      </p>
-                      <div class="provider-catalog-list">
+                      <div class="provider-card-meta">
+                        <span>{{ provider.hasCredential ? 'API Key 已保存' : 'API Key 未配置' }}</span>
+                        <span>{{ provider.baseUrl ?? 'Kimi 默认地址' }}</span>
+                        <span>{{ provider.models.length }} 个模型</span>
+                      </div>
+                      <div class="provider-card-models">
                         <button
-                          v-for="provider in secondaryProviders"
-                          :key="provider.id"
-                          class="provider-catalog-item"
-                          :class="{ 'is-selected': !showSecondaryProviderForm && secondaryProviderId === provider.id }"
+                          v-for="model in providerModelsOf(provider.id)"
+                          :key="model.id"
+                          class="provider-model-item"
+                          :class="{ 'is-selected': secondaryModelDraft.model === model.id }"
+                          type="button"
+                          :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
+                          @click="secondaryModelDraft.model = model.id; onSecondaryModelDraftChange()"
+                        >
+                          <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model === model.id" :size="12" /></span>
+                          <span><strong>{{ model.displayName }}</strong><small>{{ model.id }}</small></span>
+                          <span v-if="currentSecondaryProviderId === provider.id && secondaryModelDescriptor?.id === model.id" class="model-current-badge">当前选用</span>
+                          <small v-else>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                        </button>
+                        <p v-if="providerModelsOf(provider.id).length < 1" class="provider-model-empty">这个服务暂时没有可用模型。</p>
+                      </div>
+                      <footer class="provider-card-actions">
+                        <button class="provider-refresh-link" type="button" :disabled="actionPending !== null" @click="refreshProviderModels(provider.id)">
+                          <PhArrowClockwise :class="{ spin: actionPending === `refresh:provider:${provider.id}` }" :size="15" />获取模型列表
+                        </button>
+                        <span class="provider-card-action-spacer" />
+                        <button
+                          v-if="snapshot.capabilities.canEditProvider && provider.id !== managedProviderName"
+                          class="provider-icon-button"
                           type="button"
                           :disabled="actionPending !== null"
-                          @click="cancelProviderEditor(); selectSecondaryProvider(provider.id)"
-                        >
-                          <span class="provider-catalog-icon" :class="{ 'is-kimi': provider.id === managedProviderName }">
-                            <PhCpu v-if="provider.id === managedProviderName" :size="18" />
-                            <PhPlugsConnected v-else :size="18" />
-                          </span>
-                          <span class="provider-catalog-copy">
-                            <strong>{{ providerTitle(provider.id) }}</strong>
-                            <small>{{ provider.id === managedProviderName ? '内置' : provider.type }} · {{ providerStatusLabel(provider.status) }}</small>
-                          </span>
-                          <span class="provider-catalog-status" :class="`is-${provider.status}`" :title="providerStatusLabel(provider.status)" />
-                        </button>
-                      </div>
-                      <button
-                        v-if="snapshot.capabilities.canAddProvider"
-                        class="provider-add-button"
-                        :class="{ 'is-active': showSecondaryProviderForm }"
-                        type="button"
-                        :disabled="actionPending !== null"
-                        @click="beginAddSecondaryProvider"
-                      ><PhPlus :size="16" />添加模型服务</button>
-                    </aside>
+                          :aria-label="`编辑 ${providerTitle(provider.id)}`"
+                          title="编辑模型服务"
+                          @click="beginEditProvider(provider.id)"
+                        ><PhPencilSimple :size="15" /></button>
+                        <button
+                          v-if="snapshot.capabilities.canDeleteProvider && provider.id !== managedProviderName"
+                          class="provider-icon-button is-danger"
+                          type="button"
+                          :disabled="actionPending !== null"
+                          :aria-label="`删除 ${providerTitle(provider.id)}`"
+                          title="删除模型服务"
+                          @click="deleteProvider(provider.id)"
+                        ><PhTrash :size="15" /></button>
+                      </footer>
+                    </article>
 
-                    <div class="provider-detail">
-                      <form
-                        v-if="showSecondaryProviderForm && (snapshot.capabilities.canAddProvider || (providerEditorIsEditing && snapshot.capabilities.canEditProvider))"
-                        class="secondary-provider-form"
-                        @submit.prevent="saveSecondaryProvider"
-                      >
-                        <header class="provider-detail-header">
-                          <div>
-                            <span class="provider-detail-icon"><PhPlus :size="20" /></span>
-                            <div><h3>{{ providerEditorTitle }}</h3><p>{{ providerEditorIsEditing ? '更新连接名称、协议或地址；留空 API Key 将保留已保存凭据。' : '连接 OpenAI、Anthropic、Google 或任何兼容接口，凭据由 Kimi 官方配置保存。' }}</p></div>
-                          </div>
-                        </header>
-                        <div v-if="!providerEditorIsEditing" class="provider-mode-switch">
-                          <button type="button" :class="{ 'is-active': providerEditorMode === 'catalog' }" :disabled="actionPending !== null" @click="switchProviderEditorMode('catalog')">从 Kimi 目录选择</button>
-                          <button type="button" :class="{ 'is-active': providerEditorMode === 'manual' }" :disabled="actionPending !== null" @click="switchProviderEditorMode('manual')">手动配置</button>
-                        </div>
-                        <div v-if="providerEditorIsCatalogMode" class="provider-catalog-picker">
-                          <p v-if="catalogLoading" class="provider-catalog-hint">正在加载 Kimi 供应商目录…</p>
-                          <p v-else-if="catalogError" class="field-error">{{ catalogError }}</p>
-                          <template v-else>
-                            <input v-model="catalogSearch" type="search" placeholder="搜索供应商（名称或 ID）…" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
-                            <div class="provider-catalog-picker-list">
-                              <button
-                                v-for="item in catalogSearchResults"
-                                :key="item.id"
-                                class="provider-catalog-picker-item"
-                                :class="{ 'is-selected': item.id === selectedCatalogId, 'is-rejected': item.rejected }"
-                                type="button"
-                                :disabled="actionPending !== null || item.rejected"
-                                :title="item.rejected ? (item.rejectReason ?? '该供应商无法导入') : undefined"
-                                @click="selectCatalogProvider(item)"
-                              >
-                                <span class="provider-catalog-copy">
-                                  <strong>{{ item.name }}</strong>
-                                  <small>{{ item.id }} · {{ item.modelCount }} 个模型{{ item.needsBaseUrl ? ' · 需填写服务地址' : '' }}{{ item.rejected ? ' · 无法导入' : '' }}</small>
-                                </span>
-                              </button>
-                              <p v-if="catalogSearchResults.length < 1" class="provider-catalog-hint">没有匹配的供应商。</p>
-                            </div>
-                            <p v-if="catalogDetailLoading" class="provider-catalog-hint">正在读取 {{ catalogSelectedSummary?.name }} 的模型目录…</p>
-                            <p v-else-if="catalogDetail" class="provider-catalog-hint">已带入 {{ catalogDetail.name }} 的服务信息，模型与上下文从 Kimi 目录自动识别。</p>
-                          </template>
-                        </div>
-                        <div class="provider-form-grid">
-                          <label>
-                            <span>连接名称</span>
-                            <input v-model="secondaryProviderDraft.id" type="text" maxlength="128" placeholder="例如 openai-main" autocomplete="off" :disabled="actionPending !== null" />
-                          </label>
-                          <label>
-                            <span>接口协议</span>
-                            <select v-model="secondaryProviderDraft.type" :disabled="actionPending !== null">
-                              <option v-for="providerType in secondaryProviderTypes" :key="providerType.value" :value="providerType.value">{{ providerType.label }}</option>
-                            </select>
-                          </label>
-                          <label v-if="!providerEditorIsCatalogMode || catalogRequiresBaseUrl" class="provider-form-wide">
-                            <span>API Base URL</span>
-                            <input v-model="secondaryProviderDraft.baseUrl" type="url" maxlength="2048" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
-                          </label>
-                          <label class="provider-form-wide">
-                            <span>API Key</span>
-                            <input v-model="secondaryProviderDraft.apiKey" type="password" maxlength="8192" :placeholder="catalogApiKeyPlaceholder" autocomplete="new-password" spellcheck="false" :disabled="actionPending !== null" />
-                          </label>
-                          <label v-if="providerEditorIsCatalogMode" class="provider-form-wide">
-                            <span>默认模型</span>
-                            <select v-model="secondaryProviderDraft.defaultModel" :disabled="actionPending !== null || catalogDetail === null">
-                              <option value="" disabled>{{ catalogDetail === null ? '请先在上方选择一个供应商' : '选择默认模型（必选）' }}</option>
-                              <option v-for="model in catalogDetail?.models ?? []" :key="model.id" :value="model.id" :title="`${model.maxContextSize.toLocaleString()} tokens`">
-                                {{ model.name ?? model.id }}{{ model.maxContextSize > 0 ? ` · ${model.maxContextSize.toLocaleString()} tokens` : '' }}
-                              </option>
-                            </select>
-                          </label>
-                          <label v-else class="provider-form-wide">
-                            <span>首个 / 默认模型别名</span>
-                            <input v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="例如 gpt-5-mini" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
-                          </label>
-                          <label v-if="!providerEditorIsCatalogMode" class="provider-form-wide">
-                            <span>模型上下文 Token（私有或未知服务时填写）</span>
-                            <input v-model="secondaryProviderDraft.defaultModelContextSize" type="number" min="1" max="16777216" placeholder="已知服务会从 Kimi 模型目录自动识别" autocomplete="off" :disabled="actionPending !== null" />
-                          </label>
-                        </div>
-                        <p v-if="secondaryProviderIdExists" class="field-error">这个连接名称已存在。</p>
-                        <p class="credential-note">API Key 交给 Kimi 官方配置保存，Moon Code 不会回读或另存。</p>
-                        <div class="provider-form-actions">
-                          <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="cancelProviderEditor">取消</button>
-                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists || (providerEditorIsCatalogMode && secondaryProviderDraft.defaultModel.trim().length < 1) || (catalogRequiresBaseUrl && secondaryProviderDraft.baseUrl.trim().length < 1)">{{ providerEditorSubmitLabel }}</button>
-                        </div>
-                      </form>
+                    <button
+                      v-if="snapshot.capabilities.canAddProvider"
+                      class="provider-add-card"
+                      :class="{ 'is-active': showSecondaryProviderForm }"
+                      type="button"
+                      :disabled="actionPending !== null"
+                      @click="beginAddSecondaryProvider"
+                    ><PhPlus :size="16" />添加模型服务</button>
 
-                      <template v-else-if="selectedSecondaryProvider">
-                        <header class="provider-detail-header">
-                          <div>
-                            <span class="provider-detail-icon" :class="{ 'is-kimi': selectedSecondaryProvider.id === managedProviderName }">
-                              <PhCpu v-if="selectedSecondaryProvider.id === managedProviderName" :size="20" />
-                              <PhPlugsConnected v-else :size="20" />
-                            </span>
-                            <div>
-                              <h3>{{ selectedSecondaryProviderTitle }}</h3>
-                              <p>{{ selectedSecondaryProviderProtocol }}</p>
-                            </div>
-                          </div>
-                          <div class="provider-detail-actions">
-                            <span
-                              class="provider-enabled-badge"
-                              :class="{
-                                'is-error': selectedSecondaryProvider.status === 'error',
-                                'is-unconfigured': selectedSecondaryProvider.status !== 'connected' && selectedSecondaryProvider.status !== 'error'
-                              }"
-                            >
-                              {{ providerStatusLabel(selectedSecondaryProvider.status) }}
-                            </span>
-                            <button
-                              v-if="snapshot.capabilities.canEditProvider && selectedSecondaryProvider.id !== managedProviderName"
-                              class="provider-icon-button"
-                              type="button"
-                              :disabled="actionPending !== null"
-                              :aria-label="`编辑 ${selectedSecondaryProviderTitle}`"
-                              title="编辑模型服务"
-                              @click="beginEditSecondaryProvider"
-                            ><PhPencilSimple :size="15" /></button>
-                            <button
-                              v-if="snapshot.capabilities.canDeleteProvider && selectedSecondaryProvider.id !== managedProviderName"
-                              class="provider-icon-button is-danger"
-                              type="button"
-                              :disabled="actionPending !== null"
-                              :aria-label="`删除 ${selectedSecondaryProviderTitle}`"
-                              title="删除模型服务"
-                              @click="deleteSecondaryProvider"
-                            ><PhTrash :size="15" /></button>
-                          </div>
-                        </header>
-
-                        <div class="provider-connection-summary">
-                          <div>
-                            <span>API Key</span>
-                            <strong>{{ selectedSecondaryProvider.hasCredential ? '已由 Kimi 安全保存' : '未配置' }}</strong>
-                          </div>
-                          <div>
-                            <span>API Base URL</span>
-                            <strong>{{ selectedSecondaryProvider.baseUrl ?? 'Kimi 默认地址' }}</strong>
-                          </div>
+                    <form
+                      v-if="showSecondaryProviderForm && (snapshot.capabilities.canAddProvider || (providerEditorIsEditing && snapshot.capabilities.canEditProvider))"
+                      class="secondary-provider-form provider-form-embedded"
+                      @submit.prevent="saveSecondaryProvider"
+                    >
+                      <header class="provider-detail-header">
+                        <div>
+                          <span class="provider-detail-icon"><PhPlus :size="20" /></span>
+                          <div><h3>{{ providerEditorTitle }}</h3><p>{{ providerEditorIsEditing ? '更新连接名称、协议或地址；留空 API Key 将保留已保存凭据。' : '先选择供应商，其余信息会自动带入；也可以手动配置私有或目录外的兼容接口。' }}</p></div>
                         </div>
-
-                        <div class="provider-models-heading">
-                          <div><strong>可用模型</strong><span>{{ secondaryProviderModels.length }} 个</span></div>
-                          <button class="provider-refresh-link" type="button" :disabled="actionPending !== null" @click="refreshSecondaryProvider">
-                            <PhArrowClockwise :class="{ spin: actionPending === `refresh:provider:${secondaryProviderId}` }" :size="15" />获取模型列表
+                      </header>
+                      <label v-if="!providerEditorIsEditing" class="provider-picker-field">
+                        <span>供应商选择</span>
+                        <div class="provider-picker">
+                          <button type="button" class="provider-picker-trigger" :disabled="actionPending !== null" @mousedown.stop @click="toggleProviderPicker">
+                            <span>{{ providerPickerLabel }}</span><PhCaretDown :size="14" />
                           </button>
-                        </div>
-
-                        <div class="provider-model-list">
-                          <button
-                            class="provider-model-item provider-model-follow"
-                            :class="{ 'is-selected': secondaryModelDraft.model.length < 1 }"
-                            type="button"
-                            :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
-                            title="新建子 Agent 使用当前主模型"
-                            @click="selectFollowPrimaryModel"
-                          >
-                            <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model.length < 1" :size="12" /></span>
-                            <span><strong>跟随主模型</strong><small>新建子 Agent 使用当前主模型</small></span>
-                          </button>
-                          <template v-if="secondaryProviderModels.length > 0">
-                            <button
-                              v-for="model in secondaryProviderModels"
-                              :key="model.id"
-                              class="provider-model-item"
-                              :class="{ 'is-selected': secondaryModelDraft.model === model.id }"
-                              type="button"
-                              :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
-                              @click="secondaryModelDraft.model = model.id; onSecondaryModelDraftChange()"
-                            >
-                              <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model === model.id" :size="12" /></span>
-                              <span><strong>{{ model.displayName }}</strong><small>{{ model.id }}</small></span>
-                              <span v-if="currentSecondaryProviderId === model.providerId && secondaryModelDescriptor?.id === model.id" class="model-current-badge">当前使用</span>
-                              <small v-else>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                          <div v-if="providerPickerOpen" class="provider-picker-popover" @mousedown.stop>
+                            <input v-model="catalogSearch" type="search" placeholder="搜索供应商（名称或 ID）…" autocomplete="off" spellcheck="false" />
+                            <p v-if="catalogLoading" class="provider-catalog-hint">正在加载 Kimi 供应商目录…</p>
+                            <p v-else-if="catalogError" class="field-error">{{ catalogError }}</p>
+                            <template v-else>
+                              <div class="provider-picker-options">
+                                <button
+                                  v-for="item in catalogSearchResults"
+                                  :key="item.id"
+                                  type="button"
+                                  class="provider-picker-option"
+                                  :class="{ 'is-selected': item.id === selectedCatalogId, 'is-rejected': item.rejected }"
+                                  :disabled="item.rejected"
+                                  :title="item.rejected ? (item.rejectReason ?? '该供应商无法导入') : undefined"
+                                  @click="chooseCatalogProvider(item)"
+                                >
+                                  <span class="provider-catalog-copy">
+                                    <strong>{{ item.name }}</strong>
+                                    <small>{{ item.id }} · {{ item.modelCount }} 个模型{{ item.needsBaseUrl ? ' · 需填写服务地址' : '' }}</small>
+                                  </span>
+                                </button>
+                                <p v-if="catalogSearchResults.length < 1" class="provider-catalog-hint">没有匹配的供应商。</p>
+                              </div>
+                            </template>
+                            <div class="provider-picker-divider" />
+                            <button type="button" class="provider-picker-option provider-picker-manual" :class="{ 'is-selected': providerEditorMode === 'manual' }" @click="chooseManualProvider">
+                              <span class="provider-catalog-copy"><strong>手动配置</strong><small>自定义协议、地址与模型别名</small></span>
                             </button>
-                          </template>
-                        </div>
-                        <div v-if="secondaryProviderModels.length < 1" class="provider-model-empty">这个服务暂时没有可用模型。</div>
-
-                        <div v-if="snapshot.capabilities.secondaryModel.writable" class="secondary-model-footer">
-                          <div class="provider-form secondary-model-form">
-                            <label>
-                              <span>推理强度</span>
-                              <select v-if="(secondaryModelDraftDescriptor?.supportEfforts.length ?? 0) > 0" v-model="secondaryModelDraft.defaultEffort" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1">
-                                <option value="">使用模型默认值</option>
-                                <option v-for="effort in secondaryModelDraftDescriptor?.supportEfforts ?? []" :key="effort" :value="effort">{{ effort }}</option>
-                              </select>
-                              <input v-else v-model="secondaryModelDraft.defaultEffort" type="text" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
-                            </label>
-                            <label v-if="snapshot.capabilities.secondaryModel.maxOutputSizeWritable">
-                              <span>最大输出 Token</span>
-                              <input v-model="secondaryModelDraft.maxOutputSize" type="number" min="1" max="16777216" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
-                            </label>
-                          </div>
-                          <div class="secondary-model-actions">
-                            <button v-if="snapshot.capabilities.secondaryModel.canDisable && !secondaryFollowsPrimary" class="secondary-button" type="button" :disabled="actionPending !== null" @click="disableSecondaryModel">跟随主模型</button>
-                            <button class="primary-button" type="button" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" @click="setSecondaryModel">保存设置</button>
                           </div>
                         </div>
-                        <p v-else class="secondary-readonly-note">{{ snapshot.capabilities.secondaryModel.unavailableReason ?? '当前 Runtime 只能读取这项设置。' }}</p>
-                      </template>
-                    </div>
+                      </label>
+                      <div class="provider-form-grid">
+                        <label>
+                          <span>连接名称</span>
+                          <input v-model="secondaryProviderDraft.id" type="text" maxlength="128" placeholder="例如 openai-main" autocomplete="off" :disabled="actionPending !== null" />
+                        </label>
+                        <label>
+                          <span>接口协议</span>
+                          <select v-model="secondaryProviderDraft.type" :disabled="actionPending !== null">
+                            <option v-for="providerType in secondaryProviderTypes" :key="providerType.value" :value="providerType.value">{{ providerType.label }}</option>
+                          </select>
+                        </label>
+                        <label v-if="!providerEditorIsCatalogMode || catalogRequiresBaseUrl" class="provider-form-wide">
+                          <span>API Base URL</span>
+                          <input v-model="secondaryProviderDraft.baseUrl" type="url" maxlength="2048" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
+                        </label>
+                        <label class="provider-form-wide">
+                          <span>API Key</span>
+                          <input v-model="secondaryProviderDraft.apiKey" type="password" maxlength="8192" :placeholder="catalogApiKeyPlaceholder" autocomplete="new-password" spellcheck="false" :disabled="actionPending !== null" />
+                        </label>
+                        <label v-if="providerEditorIsCatalogMode" class="provider-form-wide">
+                          <span>默认模型</span>
+                          <select v-model="secondaryProviderDraft.defaultModel" :disabled="actionPending !== null || catalogDetail === null">
+                            <option value="" disabled>{{ catalogDetail === null ? '请先在上方选择一个供应商' : '选择默认模型（必选）' }}</option>
+                            <option v-for="model in catalogDetail?.models ?? []" :key="model.id" :value="model.id" :title="`${model.maxContextSize.toLocaleString()} tokens`">
+                              {{ model.name ?? model.id }}{{ model.maxContextSize > 0 ? ` · ${model.maxContextSize.toLocaleString()} tokens` : '' }}
+                            </option>
+                          </select>
+                        </label>
+                        <label v-else class="provider-form-wide">
+                          <span>首个 / 默认模型别名</span>
+                          <input v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="例如 gpt-5-mini" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
+                        </label>
+                        <label v-if="!providerEditorIsCatalogMode" class="provider-form-wide">
+                          <span>模型上下文 Token（私有或未知服务时填写）</span>
+                          <input v-model="secondaryProviderDraft.defaultModelContextSize" type="number" min="1" max="16777216" placeholder="已知服务会从 Kimi 模型目录自动识别" autocomplete="off" :disabled="actionPending !== null" />
+                        </label>
+                      </div>
+                      <p v-if="secondaryProviderIdExists" class="field-error">这个连接名称已存在。</p>
+                      <p class="credential-note">API Key 交给 Kimi 官方配置保存，Moon Code 不会回读或另存。</p>
+                      <div class="provider-form-actions">
+                        <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="cancelProviderEditor">取消</button>
+                        <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists || (providerEditorIsCatalogMode && secondaryProviderDraft.defaultModel.trim().length < 1) || (catalogRequiresBaseUrl && secondaryProviderDraft.baseUrl.trim().length < 1)">{{ providerEditorSubmitLabel }}</button>
+                      </div>
+                    </form>
                   </div>
 
                   <div v-if="snapshot.secondaryModelControl.requiresRestart" class="secondary-restart-notice">

@@ -209,13 +209,13 @@ describe('SettingsPanel', () => {
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
     expect(wrapper.text()).toContain('跟随主模型')
-    expect(wrapper.get('.provider-model-follow.is-selected').text()).toContain('跟随主模型')
-    expect(wrapper.find('.provider-model-item:not(.provider-model-follow).is-selected').exists()).toBe(false)
+    expect(wrapper.get('.secondary-settings-selection strong').text()).toBe('跟随主模型')
+    expect(wrapper.find('.provider-model-item.is-selected').exists()).toBe(false)
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeDefined()
 
-    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
-    await wrapper.get('.provider-model-item:not(.provider-model-follow)').trigger('click')
-    expect(wrapper.get('.provider-model-item:not(.provider-model-follow).is-selected').text()).toContain('gpt-5-mini')
+    await wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
+      .get('.provider-model-item').trigger('click')
+    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('gpt-5-mini')
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeUndefined()
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
     await flushPromises()
@@ -245,7 +245,7 @@ describe('SettingsPanel', () => {
     expect(wrapper.text()).toContain('Kimi Fast')
     expect(wrapper.text()).toContain('独立模型已启用')
     expect(wrapper.text()).toContain('Config API does not accept secondary_model yet')
-    expect(wrapper.findAll('.provider-model-item:not(.provider-model-follow)')).toHaveLength(2)
+    expect(wrapper.findAll('.provider-model-item')).toHaveLength(3)
     wrapper.unmount()
   })
 
@@ -416,7 +416,7 @@ describe('SettingsPanel', () => {
     expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'kimi-fast', defaultEffort: 'low' })
     expect(wrapper.text()).toContain('等待重启生效')
 
-    const disableButton = wrapper.findAll('.secondary-model-actions .secondary-button')
+    const disableButton = wrapper.findAll('.secondary-settings-selection .secondary-button')
       .find((button) => button.text().includes('跟随主模型'))
     expect(disableButton).toBeDefined()
     await disableButton!.trigger('click')
@@ -477,15 +477,14 @@ describe('SettingsPanel', () => {
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
 
-    /* 已配置独立模型时，“跟随主模型”行未选中，当前模型行选中；点击跟随行后直接切回 */
-    expect(wrapper.find('.provider-model-follow.is-selected').exists()).toBe(false)
-    expect(wrapper.get('.provider-model-item:not(.provider-model-follow).is-selected').text()).toContain('Kimi Fast')
-    await wrapper.get('.provider-model-follow').trigger('click')
+    /* 已配置独立模型时，“跟随主模型”按钮未选中，当前模型行选中；点击跟随按钮后直接切回 */
+    expect(wrapper.find('.provider-model-item.is-selected').text()).toContain('Kimi Fast')
+    await wrapper.get('.secondary-settings-selection .secondary-button').trigger('click')
     await flushPromises()
 
     expect(api.disableSecondaryModel).toHaveBeenCalledOnce()
-    expect(wrapper.get('.provider-model-follow.is-selected').text()).toContain('跟随主模型')
-    expect(wrapper.find('.provider-model-item:not(.provider-model-follow).is-selected').exists()).toBe(false)
+    expect(wrapper.get('.secondary-settings-selection strong').text()).toBe('跟随主模型')
+    expect(wrapper.find('.provider-model-item.is-selected').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -558,8 +557,8 @@ describe('SettingsPanel', () => {
 
     expect(wrapper.findAll('.settings-tab').map((button) => button.text())).not.toContain('Provider')
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    expect(wrapper.findAll('.provider-catalog-item')).toHaveLength(2)
-    expect(wrapper.find('.secondary-model-footer').exists()).toBe(false)
+    expect(wrapper.findAll('.provider-card')).toHaveLength(2)
+    expect(wrapper.find('.secondary-model-form').exists()).toBe(false)
     expect(wrapper.text()).toContain('新子 Agent 将使用')
     expect(wrapper.text()).toContain('子 Agent 模型')
     wrapper.unmount()
@@ -607,11 +606,14 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    const addButton = wrapper.findAll('.provider-manager button')
+    const addButton = wrapper.findAll('.provider-add-card')
       .find((button) => button.text().includes('添加模型服务'))
     expect(addButton).toBeDefined()
     await addButton!.trigger('click')
+    await flushPromises()
 
+    // The catalog is not mocked, so the picker degrades to manual mode.
+    expect(wrapper.get('.provider-picker-trigger').text()).toContain('手动配置')
     const form = wrapper.get('.secondary-provider-form')
     const inputs = form.findAll('input')
     await inputs[0]!.setValue('anthropic-main')
@@ -628,8 +630,9 @@ describe('SettingsPanel', () => {
       apiKey: 'sk-ant-secret'
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
-    await wrapper.get('.provider-model-item:not(.provider-model-follow)').trigger('click')
-    expect(wrapper.get('.provider-model-item:not(.provider-model-follow).is-selected').text()).toContain('claude-sonnet-4-5')
+    await wrapper.findAll('.provider-card').find((card) => card.text().includes('anthropic-main'))!
+      .get('.provider-model-item').trigger('click')
+    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('claude-sonnet-4-5')
     expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
     wrapper.unmount()
   })
@@ -682,15 +685,16 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    const addButton = wrapper.findAll('.provider-manager button')
+    const addButton = wrapper.findAll('.provider-add-card')
       .find((button) => button.text().includes('添加模型服务'))
     await addButton!.trigger('click')
     await flushPromises()
 
-    // Catalog mode is the default: the picker lists the directory entry.
+    // The picker is the primary field: open it and pick the directory entry.
     expect(api.listKimiCatalogProviders).toHaveBeenCalledOnce()
-    expect(wrapper.get('.provider-mode-switch button.is-active').text()).toContain('从 Kimi 目录选择')
-    const pickerItem = wrapper.get('.provider-catalog-picker-item')
+    expect(wrapper.get('.provider-picker-trigger').text()).toContain('选择供应商…')
+    await wrapper.get('.provider-picker-trigger').trigger('click')
+    const pickerItem = wrapper.get('.provider-picker-option')
     expect(pickerItem.text()).toContain('OpenCode Go')
     await pickerItem.trigger('click')
     await flushPromises()
@@ -746,13 +750,13 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    const addButton = wrapper.findAll('.provider-manager button')
+    const addButton = wrapper.findAll('.provider-add-card')
       .find((button) => button.text().includes('添加模型服务'))
     await addButton!.trigger('click')
     await flushPromises()
 
     // The form degrades to manual mode and still exposes the full manual fields.
-    expect(wrapper.get('.provider-mode-switch button.is-active').text()).toContain('手动配置')
+    expect(wrapper.get('.provider-picker-trigger').text()).toContain('手动配置')
     const form = wrapper.get('.secondary-provider-form')
     expect(form.text()).toContain('API Base URL')
     await form.find('input').setValue('private-manual')
@@ -801,10 +805,12 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    const addButton = wrapper.findAll('.provider-manager button')
+    const addButton = wrapper.findAll('.provider-add-card')
       .find((button) => button.text().includes('添加模型服务'))
     await addButton!.trigger('click')
+    await flushPromises()
 
+    // The catalog is not mocked, so the form degrades to manual mode.
     const form = wrapper.get('.secondary-provider-form')
     const inputs = form.findAll('input')
     await inputs[0]!.setValue('opencode-go')
@@ -867,7 +873,6 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
 
     await wrapper.get('.provider-icon-button[aria-label="编辑 openai-main"]').trigger('click')
     const form = wrapper.get('.secondary-provider-form')
@@ -927,7 +932,6 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('pixel'))!.trigger('click')
     await wrapper.get('.provider-icon-button[aria-label="编辑 pixel"]').trigger('click')
 
     const form = wrapper.get('.secondary-provider-form')
@@ -978,12 +982,13 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.findAll('.provider-catalog-item').find((item) => item.text().includes('openai-main'))!.trigger('click')
-    await wrapper.get('.provider-model-item:not(.provider-model-follow)').trigger('click')
+    await wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
+      .get('.provider-model-item').trigger('click')
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
     await flushPromises()
 
-    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'medium' })
+    // Switching model keeps the previously applied effort (gpt-5-mini supports 'low').
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'low' })
     expect(wrapper.text()).toContain('子 Agent 模型已保存')
     wrapper.unmount()
   })
