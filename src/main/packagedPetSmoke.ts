@@ -68,7 +68,7 @@ export async function runPackagedPetSmoke(timeoutMs = 15_000): Promise<void> {
     if (
       !label.includes('Pet smoke task') ||
       !label.includes('等待授权') ||
-      badge !== '1'
+      badge !== '0'
     ) throw new Error(`Pet Renderer did not project the assigned state: ${JSON.stringify(diagnostics)}`)
     if (!petWindow.isAlwaysOnTop() || petWindow.isResizable() || petWindow.isFocusable()) {
       throw new Error('Pet BrowserWindow lost its always-on-top, non-focusable, or fixed-size contract')

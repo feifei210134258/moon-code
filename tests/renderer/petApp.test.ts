@@ -96,13 +96,14 @@ async function mountPet(expectedLabel: string): Promise<VueWrapper> {
 }
 
 describe('PetApp', () => {
-  it('shows the session count badge and opens the single Session on body click', async () => {
+  it('shows the running-task count badge and opens the single Session on body click', async () => {
     const api = installPetApi(rosterOf(waitingState))
     const current = await mountPet('实现桌面宠物')
 
     expect(current.get('.pet-root').attributes('aria-label')).toContain('等待授权')
     expect(current.get('.lumi-sprite').attributes('data-row')).toBe('1')
-    expect(current.get('.pet-badge').text()).toBe('1')
+    // 等待授权的会话不是运行中任务，徽标为 0。
+    expect(current.get('.pet-badge').text()).toBe('0')
     // 会话任务内容不再展示，没有浮层条目。
     expect(current.findAll('.pet-entry')).toHaveLength(0)
 
@@ -112,18 +113,28 @@ describe('PetApp', () => {
     expect(api.openSession).toHaveBeenCalledWith('session-1')
   })
 
-  it('counts concurrent Sessions in the badge and opens the top-priority one on click', async () => {
+  it('counts only running Sessions in the badge and opens the top-priority one on click', async () => {
     const api = installPetApi(rosterOf(runningState, waitingState))
     const current = await mountPet('2 个任务')
 
-    expect(current.get('.pet-badge').text()).toBe('2')
+    // 两个被追踪会话里只有一个是运行中任务。
+    expect(current.get('.pet-badge').text()).toBe('1')
     // 聚合状态取优先级更高的 waiting。
     expect(current.get('.lumi-sprite').attributes('data-row')).toBe('1')
+
+    api.emitState(rosterOf(runningState, { ...runningState, sessionId: 'session-3' }, waitingState))
+    await vi.waitFor(() => expect(current.get('.pet-badge').text()).toBe('2'))
 
     await current.get('.pet-body').trigger('pointerdown', { button: 0, screenX: 100, screenY: 100 })
     await current.get('.pet-body').trigger('pointerup', { button: 0, screenX: 101, screenY: 101 })
     // 多会话时点击本体打开最需要关注的会话。
     expect(api.openSession).toHaveBeenCalledWith('session-1')
+  })
+
+  it('shows zero in the badge when only finished Sessions remain tracked', async () => {
+    installPetApi(rosterOf({ ...waitingState, status: 'review', pendingInteraction: 'none' }))
+    const current = await mountPet('等待查看')
+    expect(current.get('.pet-badge').text()).toBe('0')
   })
 
   it('derives the aggregate body status from the running Sessions', async () => {

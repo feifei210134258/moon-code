@@ -29,6 +29,9 @@ const STATUS_PRIORITY: Record<PetVisualState, number> = {
 
 const items = computed(() => roster.value?.items ?? [])
 
+// 徽标只统计运行中的任务；完成/待查看等残留追踪的会话不计入。
+const runningCount = computed(() => items.value.filter((item) => item.status === 'running').length)
+
 // 最需要关注的会话：与宠物本体聚合状态取同一个优先级。
 const primaryItem = computed(() => {
   let best: PetSessionState | null = null
@@ -165,8 +168,8 @@ onBeforeUnmount(() => {
       <LumiSprite
         :status="bodyStatus"
       />
-      <!-- 移入宠物时通过 :hover 显示的会话数量徽标 -->
-      <div v-if="items.length > 0" class="pet-badge" aria-hidden="true">{{ items.length }}</div>
+      <!-- 移入宠物时通过 :hover 显示的运行中任务数量徽标 -->
+      <div v-if="items.length > 0" class="pet-badge" aria-hidden="true">{{ runningCount }}</div>
       <div v-if="(roster?.overflow ?? 0) > 0" class="pet-overflow">+{{ roster?.overflow }}</div>
     </div>
   </main>
