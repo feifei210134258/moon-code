@@ -4156,7 +4156,7 @@ body.is-panel-resizing {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-/* 右栏三类事项保持为独立卡片，用极浅的中性灰与白色面板区分。
+/* 右栏三类事项保持为独立卡片，用半透明浅灰毛玻璃与白色面板区分。
    卡片只靠底色和细边界分组，不叠加阴影；内部列表保持线性，避免嵌套卡片。 */
 .changes-view {
   display: grid;
@@ -4171,7 +4171,8 @@ body.is-panel-resizing {
   padding: 11px 12px 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #ececec;
+  background: rgba(236, 236, 236, 0.55);
+  backdrop-filter: blur(18px) saturate(1.05);
 }
 
 .changes-view .extension-state {
