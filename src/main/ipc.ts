@@ -24,6 +24,8 @@ import {
   type KimiSessionGoal,
   type KimiSessionOperationalState,
   type KimiProviderRefreshResult,
+  type KimiCatalogProviderDetail,
+  type KimiCatalogProviderSummary,
   type KimiSettingsPreferences,
   type KimiSettingsSnapshot,
   type KimiSkill,
@@ -90,6 +92,7 @@ import {
 import { isTrustedRendererUrl } from './security/trustedRenderer.js'
 import {
   validateAddProviderInput,
+  validateCatalogId,
   validateModelId,
   validatePreferencesPatch,
   validateProviderId,
@@ -845,6 +848,20 @@ export function registerIpc(
     async (event, input?: unknown): Promise<KimiProviderRefreshResult> => {
       assertTrustedSender(event)
       return await settings.refreshProviders(validateProviderRefreshInput(input))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.catalogProvidersList,
+    async (event): Promise<KimiCatalogProviderSummary[]> => {
+      assertTrustedSender(event)
+      return await settings.listCatalogProviders()
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.catalogProviderGet,
+    async (event, catalogId?: unknown): Promise<KimiCatalogProviderDetail> => {
+      assertTrustedSender(event)
+      return await settings.getCatalogProvider(validateCatalogId(catalogId))
     }
   )
   ipcMain.handle(

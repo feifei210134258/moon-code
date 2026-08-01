@@ -19,6 +19,8 @@ import {
 } from '@phosphor-icons/vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
+  KimiCatalogProviderDetail,
+  KimiCatalogProviderSummary,
   KimiOAuthFlow,
   KimiMcpServer,
   KimiCliUpdateState,
@@ -70,9 +72,17 @@ const secondaryProviderDraft = ref<{
   baseUrl: string
   apiKey: string
   defaultModel: string
-  defaultModelContextSize: string
+  defaultModelContextSize: string | number
 }>({ id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '', defaultModelContextSize: '' })
 const editingProviderId = ref<string | null>(null)
+const providerEditorMode = ref<'catalog' | 'manual'>('catalog')
+const catalogSummaries = ref<KimiCatalogProviderSummary[]>([])
+const catalogLoading = ref(false)
+const catalogError = ref<string | null>(null)
+const catalogSearch = ref('')
+const selectedCatalogId = ref<string | null>(null)
+const catalogDetail = ref<KimiCatalogProviderDetail | null>(null)
+const catalogDetailLoading = ref(false)
 const secondaryProviderTypes: Array<{ value: KimiProviderType; label: string }> = [
   { value: 'openai', label: 'OpenAI Chat Completions' },
   { value: 'openai_responses', label: 'OpenAI Responses' },
@@ -170,7 +180,33 @@ const secondaryProviderIdExists = computed(() => {
 })
 const providerEditorIsEditing = computed(() => editingProviderId.value !== null)
 const providerEditorTitle = computed(() => providerEditorIsEditing.value ? '编辑模型服务' : '添加模型服务')
-const providerEditorSubmitLabel = computed(() => providerEditorIsEditing.value ? '保存模型服务' : '连接并读取模型')
+const providerEditorSubmitLabel = computed(() => {
+  if (providerEditorIsEditing.value) return '保存模型服务'
+  return providerEditorMode.value === 'catalog' ? '保存模型服务' : '连接并读取模型'
+})
+const providerEditorIsCatalogMode = computed(() =>
+  !providerEditorIsEditing.value && providerEditorMode.value === 'catalog'
+)
+const catalogSearchResults = computed(() => {
+  const query = catalogSearch.value.trim().toLowerCase()
+  if (query.length < 1) return catalogSummaries.value
+  return catalogSummaries.value.filter((item) =>
+    item.id.toLowerCase().includes(query) || item.name.toLowerCase().includes(query)
+  )
+})
+const catalogSelectedSummary = computed(() =>
+  catalogSummaries.value.find((item) => item.id === selectedCatalogId.value) ?? null
+)
+const catalogRequiresBaseUrl = computed(() =>
+  providerEditorIsCatalogMode.value && catalogDetail.value?.needsBaseUrl === true
+)
+const catalogApiKeyPlaceholder = computed(() => {
+  if (providerEditorIsCatalogMode.value && catalogSelectedSummary.value !== null) {
+    const envKey = catalogSelectedSummary.value.envKey
+    return envKey === null ? 'sk-…' : `对应 ${envKey} 的 API Key`
+  }
+  return providerEditorIsEditing.value ? '留空以保留当前 API Key' : 'sk-…'
+})
 const selectedSecondaryProviderTitle = computed(() => {
   const provider = selectedSecondaryProvider.value
   if (provider === null) return '模型服务'
@@ -324,9 +360,74 @@ function resetSecondaryProviderDraft(): void {
   editingProviderId.value = null
 }
 
+function resetCatalogState(): void {
+  providerEditorMode.value = 'catalog'
+  catalogSummaries.value = []
+  catalogLoading.value = false
+  catalogError.value = null
+  catalogSearch.value = ''
+  selectedCatalogId.value = null
+  catalogDetail.value = null
+  catalogDetailLoading.value = false
+}
+
+async function loadCatalogSummaries(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || api.listKimiCatalogProviders === undefined) {
+    providerEditorMode.value = 'manual'
+    return
+  }
+  catalogLoading.value = true
+  catalogError.value = null
+  try {
+    catalogSummaries.value = await api.listKimiCatalogProviders()
+  } catch (reason) {
+    catalogError.value = errorMessage(reason)
+    providerEditorMode.value = 'manual'
+  } finally {
+    catalogLoading.value = false
+  }
+}
+
+function switchProviderEditorMode(mode: 'catalog' | 'manual'): void {
+  if (mode === providerEditorMode.value || actionPending.value !== null) return
+  providerEditorMode.value = mode
+  if (mode === 'catalog' && catalogSummaries.value.length < 1 && catalogError.value === null) {
+    void loadCatalogSummaries()
+  }
+}
+
+async function selectCatalogProvider(item: KimiCatalogProviderSummary): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || item.rejected || item.id === selectedCatalogId.value) return
+  selectedCatalogId.value = item.id
+  catalogDetail.value = null
+  catalogDetailLoading.value = true
+  catalogError.value = null
+  try {
+    const detail = await api.getKimiCatalogProvider(item.id)
+    catalogDetail.value = detail
+    secondaryProviderDraft.value = {
+      id: detail.id,
+      type: detail.wireType ?? 'openai',
+      baseUrl: '',
+      apiKey: '',
+      defaultModel: '',
+      defaultModelContextSize: ''
+    }
+  } catch (reason) {
+    catalogError.value = errorMessage(reason)
+    selectedCatalogId.value = null
+  } finally {
+    catalogDetailLoading.value = false
+  }
+}
+
 function beginAddSecondaryProvider(): void {
   resetSecondaryProviderDraft()
+  resetCatalogState()
   showSecondaryProviderForm.value = true
+  void loadCatalogSummaries()
 }
 
 function beginEditSecondaryProvider(): void {
@@ -353,6 +454,7 @@ function beginEditSecondaryProvider(): void {
 function cancelProviderEditor(): void {
   showSecondaryProviderForm.value = false
   resetSecondaryProviderDraft()
+  resetCatalogState()
 }
 
 function providerTitle(providerId: string): string {
@@ -670,8 +772,9 @@ async function saveSecondaryProvider(): Promise<void> {
     const baseUrl = secondaryProviderDraft.value.baseUrl.trim()
     const apiKey = secondaryProviderDraft.value.apiKey.trim()
     const defaultModel = secondaryProviderDraft.value.defaultModel.trim()
-    const defaultModelContextSize = Number(secondaryProviderDraft.value.defaultModelContextSize)
-    const hasDefaultModelContextSize = secondaryProviderDraft.value.defaultModelContextSize.trim().length > 0
+    const defaultModelContextSizeText = String(secondaryProviderDraft.value.defaultModelContextSize ?? '')
+    const defaultModelContextSize = Number(defaultModelContextSizeText)
+    const hasDefaultModelContextSize = defaultModelContextSizeText.trim().length > 0
     const next = oldId === null
       ? await api.addKimiProvider({
         id,
@@ -693,6 +796,7 @@ async function saveSecondaryProvider(): Promise<void> {
     snapshot.value = next
     showSecondaryProviderForm.value = false
     resetSecondaryProviderDraft()
+    resetCatalogState()
     selectSecondaryProvider(id)
     showNotice(oldId === null
       ? (secondaryProviderModels.value.length > 0
@@ -1201,6 +1305,37 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                             <div><h3>{{ providerEditorTitle }}</h3><p>{{ providerEditorIsEditing ? '更新连接名称、协议或地址；留空 API Key 将保留已保存凭据。' : '连接 OpenAI、Anthropic、Google 或任何兼容接口，凭据由 Kimi 官方配置保存。' }}</p></div>
                           </div>
                         </header>
+                        <div v-if="!providerEditorIsEditing" class="provider-mode-switch">
+                          <button type="button" :class="{ 'is-active': providerEditorMode === 'catalog' }" :disabled="actionPending !== null" @click="switchProviderEditorMode('catalog')">从 Kimi 目录选择</button>
+                          <button type="button" :class="{ 'is-active': providerEditorMode === 'manual' }" :disabled="actionPending !== null" @click="switchProviderEditorMode('manual')">手动配置</button>
+                        </div>
+                        <div v-if="providerEditorIsCatalogMode" class="provider-catalog-picker">
+                          <p v-if="catalogLoading" class="provider-catalog-hint">正在加载 Kimi 供应商目录…</p>
+                          <p v-else-if="catalogError" class="field-error">{{ catalogError }}</p>
+                          <template v-else>
+                            <input v-model="catalogSearch" type="search" placeholder="搜索供应商（名称或 ID）…" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
+                            <div class="provider-catalog-picker-list">
+                              <button
+                                v-for="item in catalogSearchResults"
+                                :key="item.id"
+                                class="provider-catalog-picker-item"
+                                :class="{ 'is-selected': item.id === selectedCatalogId, 'is-rejected': item.rejected }"
+                                type="button"
+                                :disabled="actionPending !== null || item.rejected"
+                                :title="item.rejected ? (item.rejectReason ?? '该供应商无法导入') : undefined"
+                                @click="selectCatalogProvider(item)"
+                              >
+                                <span class="provider-catalog-copy">
+                                  <strong>{{ item.name }}</strong>
+                                  <small>{{ item.id }} · {{ item.modelCount }} 个模型{{ item.needsBaseUrl ? ' · 需填写服务地址' : '' }}{{ item.rejected ? ' · 无法导入' : '' }}</small>
+                                </span>
+                              </button>
+                              <p v-if="catalogSearchResults.length < 1" class="provider-catalog-hint">没有匹配的供应商。</p>
+                            </div>
+                            <p v-if="catalogDetailLoading" class="provider-catalog-hint">正在读取 {{ catalogSelectedSummary?.name }} 的模型目录…</p>
+                            <p v-else-if="catalogDetail" class="provider-catalog-hint">已带入 {{ catalogDetail.name }} 的服务信息，模型与上下文从 Kimi 目录自动识别。</p>
+                          </template>
+                        </div>
                         <div class="provider-form-grid">
                           <label>
                             <span>连接名称</span>
@@ -1212,19 +1347,28 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                               <option v-for="providerType in secondaryProviderTypes" :key="providerType.value" :value="providerType.value">{{ providerType.label }}</option>
                             </select>
                           </label>
-                          <label class="provider-form-wide">
+                          <label v-if="!providerEditorIsCatalogMode || catalogRequiresBaseUrl" class="provider-form-wide">
                             <span>API Base URL</span>
                             <input v-model="secondaryProviderDraft.baseUrl" type="url" maxlength="2048" placeholder="https://api.example.com/v1" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
                           </label>
                           <label class="provider-form-wide">
                             <span>API Key</span>
-                            <input v-model="secondaryProviderDraft.apiKey" type="password" maxlength="8192" :placeholder="providerEditorIsEditing ? '留空以保留当前 API Key' : 'sk-…'" autocomplete="new-password" spellcheck="false" :disabled="actionPending !== null" />
+                            <input v-model="secondaryProviderDraft.apiKey" type="password" maxlength="8192" :placeholder="catalogApiKeyPlaceholder" autocomplete="new-password" spellcheck="false" :disabled="actionPending !== null" />
                           </label>
-                          <label class="provider-form-wide">
+                          <label v-if="providerEditorIsCatalogMode" class="provider-form-wide">
+                            <span>默认模型</span>
+                            <select v-model="secondaryProviderDraft.defaultModel" :disabled="actionPending !== null || catalogDetail === null">
+                              <option value="" disabled>{{ catalogDetail === null ? '请先在上方选择一个供应商' : '选择默认模型（必选）' }}</option>
+                              <option v-for="model in catalogDetail?.models ?? []" :key="model.id" :value="model.id" :title="`${model.maxContextSize.toLocaleString()} tokens`">
+                                {{ model.name ?? model.id }}{{ model.maxContextSize > 0 ? ` · ${model.maxContextSize.toLocaleString()} tokens` : '' }}
+                              </option>
+                            </select>
+                          </label>
+                          <label v-else class="provider-form-wide">
                             <span>首个 / 默认模型别名</span>
                             <input v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="例如 gpt-5-mini" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
                           </label>
-                          <label class="provider-form-wide">
+                          <label v-if="!providerEditorIsCatalogMode" class="provider-form-wide">
                             <span>模型上下文 Token（私有或未知服务时填写）</span>
                             <input v-model="secondaryProviderDraft.defaultModelContextSize" type="number" min="1" max="16777216" placeholder="已知服务会从 Kimi 模型目录自动识别" autocomplete="off" :disabled="actionPending !== null" />
                           </label>
@@ -1233,7 +1377,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                         <p class="credential-note">API Key 交给 Kimi 官方配置保存，Moon Code 不会回读或另存。</p>
                         <div class="provider-form-actions">
                           <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="cancelProviderEditor">取消</button>
-                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists">{{ providerEditorSubmitLabel }}</button>
+                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists || (providerEditorIsCatalogMode && secondaryProviderDraft.defaultModel.trim().length < 1) || (catalogRequiresBaseUrl && secondaryProviderDraft.baseUrl.trim().length < 1)">{{ providerEditorSubmitLabel }}</button>
                         </div>
                       </form>
 

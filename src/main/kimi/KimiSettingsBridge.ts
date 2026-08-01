@@ -1,6 +1,8 @@
 import type { KimiRuntimeManager } from '../runtime/KimiRuntimeManager.js'
 import type {
   AddKimiProviderInput,
+  KimiCatalogProviderDetail,
+  KimiCatalogProviderSummary,
   KimiOAuthCancelResult,
   KimiOAuthFlow,
   KimiPreferencesPatch,
@@ -18,6 +20,7 @@ import type {
   OAuthFlowSnapshot,
   OAuthFlowStart,
   ProviderCatalogItem,
+  ProviderDirectoryItem,
   ProviderRefreshResult
 } from '../../../packages/kimi-adapter/src/wire/schemas.js'
 import { isSupportedKimiVersion } from '../runtime/version.js'
@@ -491,6 +494,38 @@ export class KimiSettingsBridge {
   async logoutOAuth(provider?: string): Promise<{ loggedOut: true; provider: string }> {
     const result = await this.runtime.createRestClient().logoutOAuth(provider)
     return { loggedOut: true, provider: result.provider }
+  }
+
+  async listCatalogProviders(): Promise<KimiCatalogProviderSummary[]> {
+    const items = await this.runtime.createRestClient().listCatalogProviders()
+    return items.map(mapCatalogProviderSummary)
+  }
+
+  async getCatalogProvider(catalogId: string): Promise<KimiCatalogProviderDetail> {
+    const item = await this.runtime.createRestClient().getCatalogProvider(catalogId)
+    return {
+      ...mapCatalogProviderSummary(item),
+      models: item.models.map((model) => ({
+        id: model.id,
+        name: model.name ?? null,
+        maxContextSize: model.max_context_size,
+        capabilities: model.capabilities ?? [],
+        reasoning: model.reasoning
+      }))
+    }
+  }
+}
+
+function mapCatalogProviderSummary(item: ProviderDirectoryItem): KimiCatalogProviderSummary {
+  return {
+    id: item.id,
+    name: item.name,
+    wireType: item.wire_type,
+    needsBaseUrl: item.needs_base_url,
+    envKey: item.env_key,
+    modelCount: item.models.length,
+    rejected: item.rejected,
+    rejectReason: item.reject_reason
   }
 }
 

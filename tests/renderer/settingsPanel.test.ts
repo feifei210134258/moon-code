@@ -634,6 +634,200 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
+  it('adds a Provider from the Kimi catalog directory with auto-filled fields', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const catalogSummary = {
+      id: 'opencode-go', name: 'OpenCode Go', wireType: 'openai', needsBaseUrl: false,
+      envKey: 'OPENCODE_API_KEY', modelCount: 2, rejected: false, rejectReason: null
+    }
+    const catalogDetail = {
+      ...catalogSummary,
+      models: [
+        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', maxContextSize: 1_000_000, capabilities: ['thinking'], reasoning: true },
+        { id: 'kimi-k3', name: 'Kimi K3', maxContextSize: 1_048_576, capabilities: ['tool_use'], reasoning: true }
+      ]
+    }
+    const connected: KimiSettingsSnapshot = {
+      ...writableSnapshot,
+      auth: { ...writableSnapshot.auth, providersCount: 3 },
+      providers: [
+        ...writableSnapshot.providers,
+        {
+          id: 'opencode-go', type: 'openai', baseUrl: null, defaultModel: 'opencode-go/deepseek-v4-flash',
+          hasCredential: true, status: 'connected', models: ['opencode-go/deepseek-v4-flash']
+        }
+      ]
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      listKimiCatalogProviders: vi.fn(async () => [catalogSummary]),
+      getKimiCatalogProvider: vi.fn(async () => catalogDetail),
+      addKimiProvider: vi.fn(async () => connected)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    const addButton = wrapper.findAll('.provider-manager button')
+      .find((button) => button.text().includes('添加模型服务'))
+    await addButton!.trigger('click')
+    await flushPromises()
+
+    // Catalog mode is the default: the picker lists the directory entry.
+    expect(api.listKimiCatalogProviders).toHaveBeenCalledOnce()
+    expect(wrapper.get('.provider-mode-switch button.is-active').text()).toContain('从 Kimi 目录选择')
+    const pickerItem = wrapper.get('.provider-catalog-picker-item')
+    expect(pickerItem.text()).toContain('OpenCode Go')
+    await pickerItem.trigger('click')
+    await flushPromises()
+
+    // Selecting the entry auto-fills id/type and hides Base URL when not needed.
+    expect(api.getKimiCatalogProvider).toHaveBeenCalledWith('opencode-go')
+    const form = wrapper.get('.secondary-provider-form')
+    expect((form.get('.provider-form-grid input').element as HTMLInputElement).value).toBe('opencode-go')
+    expect((form.get('select').element as HTMLSelectElement).value).toBe('openai')
+    expect(form.text()).not.toContain('API Base URL')
+    expect(form.get('input[type="password"]').attributes('placeholder')).toBe('对应 OPENCODE_API_KEY 的 API Key')
+
+    // The default model select is required before submitting.
+    const submit = form.get('.provider-form-actions .primary-button')
+    expect((submit.element as HTMLButtonElement).disabled).toBe(true)
+    await form.get('label.provider-form-wide select').setValue('deepseek-v4-flash')
+    await form.get('input[type="password"]').setValue('sk-opencode-secret')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(api.addKimiProvider).toHaveBeenCalledWith({
+      id: 'opencode-go',
+      type: 'openai',
+      apiKey: 'sk-opencode-secret',
+      defaultModel: 'deepseek-v4-flash'
+    })
+    expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('falls back to the manual provider form when the catalog is unavailable', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      listKimiCatalogProviders: vi.fn(async () => { throw new Error('catalog unavailable') }),
+      addKimiProvider: vi.fn(async () => writableSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    const addButton = wrapper.findAll('.provider-manager button')
+      .find((button) => button.text().includes('添加模型服务'))
+    await addButton!.trigger('click')
+    await flushPromises()
+
+    // The form degrades to manual mode and still exposes the full manual fields.
+    expect(wrapper.get('.provider-mode-switch button.is-active').text()).toContain('手动配置')
+    const form = wrapper.get('.secondary-provider-form')
+    expect(form.text()).toContain('API Base URL')
+    await form.find('input').setValue('private-manual')
+    await form.get('input[type="url"]').setValue('https://private.example.com/v1')
+    await form.trigger('submit')
+    await flushPromises()
+    expect(api.addKimiProvider).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'private-manual', type: 'openai',
+      baseUrl: 'https://private.example.com/v1'
+    }))
+    wrapper.unmount()
+  })
+
+  it('adds a Provider with a typed context size (number-cast input) and submits it as a number', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const connected: KimiSettingsSnapshot = {
+      ...writableSnapshot,
+      auth: { ...writableSnapshot.auth, providersCount: 3 },
+      providers: [
+        ...writableSnapshot.providers,
+        {
+          id: 'opencode-go', type: 'openai', baseUrl: 'https://opencode.example.com/v1', defaultModel: 'opencode-go/latest',
+          hasCredential: true, status: 'connected', models: ['opencode-go/latest']
+        }
+      ]
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      addKimiProvider: vi.fn(async () => connected)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    const addButton = wrapper.findAll('.provider-manager button')
+      .find((button) => button.text().includes('添加模型服务'))
+    await addButton!.trigger('click')
+
+    const form = wrapper.get('.secondary-provider-form')
+    const inputs = form.findAll('input')
+    await inputs[0]!.setValue('opencode-go')
+    await form.get('select').setValue('openai')
+    await inputs[1]!.setValue('https://opencode.example.com/v1')
+    await inputs[2]!.setValue('sk-opencode-secret')
+    await inputs[3]!.setValue('opencode-go/latest')
+    await inputs[4]!.setValue('200000')
+    await form.trigger('submit')
+    await flushPromises()
+
+    expect(api.addKimiProvider).toHaveBeenCalledWith({
+      id: 'opencode-go',
+      type: 'openai',
+      baseUrl: 'https://opencode.example.com/v1',
+      apiKey: 'sk-opencode-secret',
+      defaultModel: 'opencode-go/latest',
+      defaultModelContextSize: 200_000
+    })
+    expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('edits and deletes a custom Provider from the model service detail', async () => {
     const managementSnapshot: KimiSettingsSnapshot = {
       ...snapshot,

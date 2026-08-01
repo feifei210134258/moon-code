@@ -56,6 +56,13 @@ export function validateProviderId(value: unknown, optional = false): string | u
   return value
 }
 
+export function validateCatalogId(value: unknown): string {
+  if (typeof value !== 'string' || !PROVIDER_ID_PATTERN.test(value)) {
+    throw new TypeError('Invalid Kimi catalog id')
+  }
+  return value
+}
+
 export function validateAddProviderInput(value: unknown): AddKimiProviderInput {
   if (!isRecord(value)) throw new TypeError('Invalid Kimi provider input')
   const id = validateProviderId(value.id)

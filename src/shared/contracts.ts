@@ -82,6 +82,8 @@ export const ipcChannels = {
   providerUpdate: 'provider:update',
   providerDelete: 'provider:delete',
   providersRefresh: 'providers:refresh',
+  catalogProvidersList: 'catalog:providers:list',
+  catalogProviderGet: 'catalog:provider:get',
   oauthLoginStart: 'oauth:login:start',
   oauthLoginPoll: 'oauth:login:poll',
   oauthLoginCancel: 'oauth:login:cancel',
@@ -763,6 +765,29 @@ export interface KimiProviderCatalogItem {
   models: string[]
 }
 
+export interface KimiCatalogModel {
+  id: string
+  name: string | null
+  maxContextSize: number
+  capabilities: string[]
+  reasoning: boolean
+}
+
+export interface KimiCatalogProviderSummary {
+  id: string
+  name: string
+  wireType: KimiProviderType | null
+  needsBaseUrl: boolean
+  envKey: string | null
+  modelCount: number
+  rejected: boolean
+  rejectReason: string | null
+}
+
+export interface KimiCatalogProviderDetail extends KimiCatalogProviderSummary {
+  models: KimiCatalogModel[]
+}
+
 export interface KimiSettingsPreferences {
   defaultProvider: string | null
   defaultModel: string | null
@@ -1191,6 +1216,8 @@ export interface KimiAgentDesktopApi {
   updateKimiProvider(input: UpdateKimiProviderInput): Promise<KimiSettingsSnapshot>
   deleteKimiProvider(providerId: string): Promise<KimiSettingsSnapshot>
   refreshKimiProviders(input: { scope: 'all' | 'oauth' | 'provider'; providerId?: string }): Promise<KimiProviderRefreshResult>
+  listKimiCatalogProviders(): Promise<KimiCatalogProviderSummary[]>
+  getKimiCatalogProvider(catalogId: string): Promise<KimiCatalogProviderDetail>
   startOAuthLogin(provider?: string): Promise<KimiOAuthFlow>
   pollOAuthLogin(provider?: string): Promise<KimiOAuthFlow | null>
   cancelOAuthLogin(provider?: string): Promise<KimiOAuthCancelResult>

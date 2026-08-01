@@ -34,7 +34,7 @@ afterEach(async () => {
   }))
 })
 
-describe.skipIf(!runIntegration)('Kimi 0.29.2 secondary model Runtime behavior', () => {
+describe.skipIf(!runIntegration)('Kimi 0.31.0 secondary model Runtime behavior', () => {
   it('binds Agent to secondary by default and honors an explicit primary override', async () => {
     const fake = await startFakeOpenAiServer()
     const runtime = await startIsolatedRuntime(fake.origin, {
@@ -268,7 +268,7 @@ async function startIsolatedRuntime(
   const ready = await waitForRuntimeReady(child)
   const client = new KimiRestClient({ origin: ready.origin, token: ready.token })
   const meta = await client.getMeta()
-  expect(meta.server_version).toBe('0.29.2')
+  expect(meta.server_version).toBe('0.31.0')
   expect(meta.backend).toBe('v2')
   return { child, client, workspaceRoot }
 }

@@ -30,6 +30,7 @@ import {
   providerCatalogItemSchema,
   providerCatalogListSchema,
   providerDirectoryItemSchema,
+  providerDirectoryListSchema,
   providerMutationResultSchema,
   providerRefreshResultSchema,
   questionDismissResultSchema,
@@ -298,6 +299,14 @@ export class KimiRestClient {
       {},
       providerDirectoryItemSchema
     )
+  }
+
+  listCatalogProviders(): Promise<ProviderDirectoryItem[]> {
+    return this.request(
+      '/api/v1/catalog/providers',
+      {},
+      providerDirectoryListSchema
+    ).then((data) => data.items)
   }
 
   async supportsProviderManagement(): Promise<boolean> {

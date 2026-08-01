@@ -889,6 +889,27 @@ describe('KimiRestClient', () => {
     )
   })
 
+  it('lists providers from the Kimi model directory', async () => {
+    const directory = {
+      id: 'opencode-go', name: 'OpenCode Go', wire_type: 'openai', guessed: false,
+      needs_base_url: false, rejected: false, reject_reason: null, env_key: 'OPENCODE_API_KEY',
+      models: [
+        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', max_context_size: 1_000_000, reasoning: true },
+        { id: 'kimi-k3', name: 'Kimi K3', max_context_size: 1_048_576, reasoning: true }
+      ]
+    }
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      code: 0, msg: 'ok', data: { items: [directory] }
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.listCatalogProviders()).resolves.toEqual([directory])
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/catalog/providers',
+      expect.any(Object)
+    )
+  })
+
   it('uses the pinned Skills, Tools and MCP management routes', async () => {
     const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
       status: 200,

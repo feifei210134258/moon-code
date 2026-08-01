@@ -507,6 +507,8 @@ export const providerDirectoryItemSchema = z.object({
   models: z.array(providerDirectoryModelSchema)
 })
 
+export const providerDirectoryListSchema = z.object({ items: z.array(providerDirectoryItemSchema) })
+
 export const setDefaultModelResultSchema = z.object({
   default_model: z.string().min(1),
   model: modelCatalogItemSchema
@@ -744,6 +746,7 @@ export type ModelCatalogItem = z.infer<typeof modelCatalogItemSchema>
 export type ProviderCatalogItem = z.infer<typeof providerCatalogItemSchema>
 export type ProviderMutationResult = z.infer<typeof providerMutationResultSchema>
 export type ProviderDirectoryItem = z.infer<typeof providerDirectoryItemSchema>
+export type ProviderDirectoryModel = z.infer<typeof providerDirectoryModelSchema>
 export type SetDefaultModelResult = z.infer<typeof setDefaultModelResultSchema>
 export type ProviderRefreshResult = z.infer<typeof providerRefreshResultSchema>
 export type KimiConfigSnapshot = z.infer<typeof kimiConfigSnapshotSchema>
