@@ -3319,6 +3319,32 @@ select:focus-visible {
 
 .slash-button {
   font-size: var(--type-headline-size);
+  line-height: 1;
+  padding-bottom: 2px;
+}
+
+.description-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.description-clamp.is-expanded {
+  -webkit-line-clamp: unset;
+}
+
+.description-toggle {
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--type-caption-size);
+}
+
+.description-toggle:hover {
+  color: var(--accent-strong);
 }
 
 .model-summary {

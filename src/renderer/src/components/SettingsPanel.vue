@@ -19,7 +19,7 @@ import {
   PhSpinnerGap,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   KimiCatalogProviderDetail,
   KimiCatalogProviderSummary,
@@ -87,6 +87,9 @@ const catalogDetail = ref<KimiCatalogProviderDetail | null>(null)
 const catalogDetailLoading = ref(false)
 const providerPickerOpen = ref(false)
 const expandedProviderId = ref<string | null>(null)
+const expandedDescriptions = ref(new Set<string>())
+const descriptionOverflow = ref(new Set<string>())
+const rootRef = ref<HTMLElement | null>(null)
 const secondaryProviderTypes: Array<{ value: KimiProviderType; label: string }> = [
   { value: 'openai', label: 'OpenAI Chat Completions' },
   { value: 'openai_responses', label: 'OpenAI Responses' },
@@ -1078,6 +1081,25 @@ watch(
   }
 )
 
+function toggleDescription(key: string): void {
+  const next = new Set(expandedDescriptions.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedDescriptions.value = next
+}
+
+function measureDescriptionOverflow(): void {
+  const root = rootRef.value
+  if (root === null) return
+  const overflow = new Set(expandedDescriptions.value)
+  for (const element of root.querySelectorAll<HTMLElement>('.description-clamp')) {
+    const key = element.dataset.key
+    if (key === undefined || expandedDescriptions.value.has(key)) continue
+    if (element.scrollHeight > element.clientHeight + 1) overflow.add(key)
+  }
+  descriptionOverflow.value = overflow
+}
+
 function onWindowKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || !props.open) return
   event.preventDefault()
@@ -1099,6 +1121,7 @@ function onWindowMousedown(): void {
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeydown, true)
   window.addEventListener('mousedown', onWindowMousedown)
+  void nextTick(measureDescriptionOverflow)
 })
 onBeforeUnmount(() => {
   clearOAuthPoll()
@@ -1107,6 +1130,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onWindowKeydown, true)
   window.removeEventListener('mousedown', onWindowMousedown)
 })
+watch([skills, tools, mcpServers], () => void nextTick(measureDescriptionOverflow))
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason)
@@ -1126,7 +1150,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
 </script>
 
 <template>
-  <section v-if="open" class="settings-page" aria-label="Moon Code 设置">
+  <section v-if="open" ref="rootRef" class="settings-page" aria-label="Moon Code 设置">
     <nav class="settings-nav" aria-label="设置分类">
       <button class="settings-back" type="button" @click="emit('close')">
         <PhArrowLeft :size="16" />返回
@@ -1571,7 +1595,10 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 </div>
                 <div v-else class="skill-list">
                   <article v-for="skill in skills" :key="skill.name" class="skill-row">
-                    <div><strong>/{{ skill.name }}</strong><small>{{ skill.description || '无描述' }}</small></div>
+                    <div><strong>/{{ skill.name }}</strong>
+                      <small class="description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(skill.name) }" :data-key="skill.name">{{ skill.description || '无描述' }}</small>
+                      <button v-if="descriptionOverflow.has(skill.name)" type="button" class="description-toggle" @click="toggleDescription(skill.name)">{{ expandedDescriptions.has(skill.name) ? '收起' : '展开' }}</button>
+                    </div>
                     <div class="capability-tags">
                       <span>{{ skill.source }}</span>
                       <span v-if="skill.type">{{ skill.type }}</span>
@@ -1597,7 +1624,9 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 <div v-else class="mcp-list">
                   <article v-for="server in mcpServers" :key="server.id" class="mcp-row">
                     <span class="mcp-status" :class="`is-${server.status}`" />
-                    <div><strong>{{ server.name }}</strong><small>{{ server.transport }} · {{ server.toolCount }} tools</small><small v-if="server.lastError" class="is-error">{{ server.lastError }}</small></div>
+                    <div><strong>{{ server.name }}</strong><small>{{ server.transport }} · {{ server.toolCount }} tools</small><small v-if="server.lastError" class="is-error description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(server.id) }" :data-key="server.id">{{ server.lastError }}</small>
+                      <button v-if="server.lastError && descriptionOverflow.has(server.id)" type="button" class="description-toggle" @click="toggleDescription(server.id)">{{ expandedDescriptions.has(server.id) ? '收起' : '展开' }}</button>
+                    </div>
                     <span>{{ server.status }}</span>
                     <button type="button" :disabled="actionPending !== null" :aria-label="`重启 ${server.name}`" @click="restartMcpServer(server.id)">
                       <PhArrowClockwise :class="{ spin: actionPending === `mcp:${server.id}` }" :size="14" />
@@ -1608,7 +1637,10 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 <div v-if="tools.length === 0" class="settings-inline-empty">当前 Agent 尚未公布工具。</div>
                 <div v-else class="tool-list">
                   <article v-for="tool in tools" :key="tool.name" class="tool-row" :class="{ 'is-disabled': !tool.active }">
-                    <div><strong>{{ tool.name }}</strong><small>{{ tool.description || '无描述' }}</small></div>
+                    <div><strong>{{ tool.name }}</strong>
+                      <small class="description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(tool.name) }" :data-key="tool.name">{{ tool.description || '无描述' }}</small>
+                      <button v-if="descriptionOverflow.has(tool.name)" type="button" class="description-toggle" @click="toggleDescription(tool.name)">{{ expandedDescriptions.has(tool.name) ? '收起' : '展开' }}</button>
+                    </div>
                     <div class="capability-tags"><span>{{ tool.source }}</span><span v-if="tool.mcpServerId">{{ tool.mcpServerId }}</span><span>{{ tool.active ? '可用' : '已禁用' }}</span></div>
                   </article>
                 </div>
