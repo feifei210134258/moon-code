@@ -1596,8 +1596,10 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 <div v-else class="skill-list">
                   <article v-for="skill in skills" :key="skill.name" class="skill-row">
                     <div><strong>/{{ skill.name }}</strong>
-                      <small class="description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(skill.name) }" :data-key="skill.name">{{ skill.description || '无描述' }}</small>
-                      <button v-if="descriptionOverflow.has(skill.name)" type="button" class="description-toggle" @click="toggleDescription(skill.name)">{{ expandedDescriptions.has(skill.name) ? '收起' : '展开' }}</button>
+                      <span class="description-line">
+                        <small class="description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(skill.name) }" :data-key="skill.name">{{ skill.description || '无描述' }}</small>
+                        <button v-if="descriptionOverflow.has(skill.name)" type="button" class="description-toggle" @click="toggleDescription(skill.name)">{{ expandedDescriptions.has(skill.name) ? '收起' : '展开' }}</button>
+                      </span>
                     </div>
                     <div class="capability-tags">
                       <span>{{ skill.source }}</span>
@@ -1624,8 +1626,11 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 <div v-else class="mcp-list">
                   <article v-for="server in mcpServers" :key="server.id" class="mcp-row">
                     <span class="mcp-status" :class="`is-${server.status}`" />
-                    <div><strong>{{ server.name }}</strong><small>{{ server.transport }} · {{ server.toolCount }} tools</small><small v-if="server.lastError" class="is-error description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(server.id) }" :data-key="server.id">{{ server.lastError }}</small>
-                      <button v-if="server.lastError && descriptionOverflow.has(server.id)" type="button" class="description-toggle" @click="toggleDescription(server.id)">{{ expandedDescriptions.has(server.id) ? '收起' : '展开' }}</button>
+                    <div><strong>{{ server.name }}</strong><small>{{ server.transport }} · {{ server.toolCount }} tools</small>
+                      <span v-if="server.lastError" class="description-line">
+                        <small class="is-error description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(server.id) }" :data-key="server.id">{{ server.lastError }}</small>
+                        <button v-if="descriptionOverflow.has(server.id)" type="button" class="description-toggle" @click="toggleDescription(server.id)">{{ expandedDescriptions.has(server.id) ? '收起' : '展开' }}</button>
+                      </span>
                     </div>
                     <span>{{ server.status }}</span>
                     <button type="button" :disabled="actionPending !== null" :aria-label="`重启 ${server.name}`" @click="restartMcpServer(server.id)">
@@ -1638,8 +1643,10 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 <div v-else class="tool-list">
                   <article v-for="tool in tools" :key="tool.name" class="tool-row" :class="{ 'is-disabled': !tool.active }">
                     <div><strong>{{ tool.name }}</strong>
-                      <small class="description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(tool.name) }" :data-key="tool.name">{{ tool.description || '无描述' }}</small>
-                      <button v-if="descriptionOverflow.has(tool.name)" type="button" class="description-toggle" @click="toggleDescription(tool.name)">{{ expandedDescriptions.has(tool.name) ? '收起' : '展开' }}</button>
+                      <span class="description-line">
+                        <small class="description-clamp" :class="{ 'is-expanded': expandedDescriptions.has(tool.name) }" :data-key="tool.name">{{ tool.description || '无描述' }}</small>
+                        <button v-if="descriptionOverflow.has(tool.name)" type="button" class="description-toggle" @click="toggleDescription(tool.name)">{{ expandedDescriptions.has(tool.name) ? '收起' : '展开' }}</button>
+                      </span>
                     </div>
                     <div class="capability-tags"><span>{{ tool.source }}</span><span v-if="tool.mcpServerId">{{ tool.mcpServerId }}</span><span>{{ tool.active ? '可用' : '已禁用' }}</span></div>
                   </article>

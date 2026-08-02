@@ -3334,9 +3334,22 @@ select:focus-visible {
   -webkit-line-clamp: unset;
 }
 
+.description-line {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.description-line .description-clamp {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .description-toggle {
+  flex: none;
+  padding: 0 0 2px;
   border: 0;
-  padding: 0;
   color: var(--accent);
   background: transparent;
   cursor: pointer;
