@@ -4,6 +4,15 @@ Moon Code 是 **Kimi Code CLI 的桌面 GUI 版本**——以 Kimi Code CLI 为�
 
 “Codex 风格”只描述 UI、任务工作台和桌宠交互；项目不使用 Codex 协议。Moon Code 启动用户已安装的 `kimi` CLI，通过官方 `kimi web` REST/WebSocket 使用 Agent 能力；在需要时也可以启动经过兼容验证的托管 Kimi Code 运行时。Kimi Workspace、Session 和 Transcript 始终是唯一事实源。
 
+## 核心卖点
+
+- **项目文件树可视。** 目录浏览、文本预览、Git 状态和单文件按需 Diff 都内嵌在同一窗口，Agent 改了哪些文件、改成什么样一眼可查，不用在终端、编辑器和文件管理器之间来回切换。
+- **内置开发浏览器，批注即改。** 隔离浏览器支持 localhost 预览、Console/Network、多视口和整页截图；可以直接框选页面元素或区域写批注，作为 Prompt 附件发回 Agent，形成"看页面 → 批注 → 改代码"的闭环。
+- **子 Agent 跑第三方便宜模型。** 主会话保持 Kimi 官方模型的质量，高 token 消耗的子 Agent 任务可绑定内置供应商目录中的任意 OpenAI 兼容模型（如 DeepSeek V4 Flash），极大降低整体 token 成本。
+- **套餐用量可视化。** 套餐窗口、Extra Usage、Session token 和 Context 使用率准实时展示，支持 50%/80%/95% 阈值与系统通知，额度消耗不再靠猜。
+- **桌面宠物盯梢多 Session。** 桌宠置顶聚合运行中、待处理、完成、失败状态并提示未读，点击直接跳回对应会话，多任务并行不再靠记忆。
+- **多 Session 编码工作台。** 左侧按 Workspace 组织真实 Session，Prompt Queue、Steer/Abort 实时干预与内嵌 xterm 多标签 Terminal 同屏完成，长任务不阻塞。
+
 ## 为什么选择 Kimi Code CLI 内核
 
 Moon Code 不重新实现一个 Agent，也不把对话复制进另一套本地数据库，而是把 Kimi Code CLI 的官方运行时能力带到更适合桌面开发的工作台中：
