@@ -1,6 +1,6 @@
 # Moon Code
 
-Moon Code 是一个以 **Kimi Code CLI 为唯一 Agent 内核**的本地桌面客户端。
+Moon Code 是 **Kimi Code CLI 的桌面 GUI 版本**——以 Kimi Code CLI 为唯一 Agent 内核的本地桌面客户端。
 
 “Codex 风格”只描述 UI、任务工作台和桌宠交互；项目不使用 Codex 协议。Moon Code 启动用户已安装的 `kimi` CLI，通过官方 `kimi web` REST/WebSocket 使用 Agent 能力；在需要时也可以启动经过兼容验证的托管 Kimi Code 运行时。Kimi Workspace、Session 和 Transcript 始终是唯一事实源。
 
@@ -22,6 +22,7 @@ Kimi Web 的 Agent 能力很强，但长时间开发、多 Session 并行和本�
 - **把网页调试反馈接回 Agent。** 内置隔离开发浏览器，支持 localhost 预览、Console/Network、视口和截图；可以直接对页面元素或区域批注，并作为普通 Prompt 附件发送给 Kimi。
 - **长连接更可靠。** 通过 snapshot seed、cursor gap/epoch、增量 offset 和自动 resync 处理断线与乱序，流式文本、Thinking、Tool call 和 Tool result 会保持同一 Turn 的顺序。
 - **把高级能力显式化。** Skills、MCP、Tools、Subagent roster、用量窗口、Context 使用率和阈值通知都成为可见的产品界面，而不是隐藏在日志或网页状态里。
+- **子 Agent 可以跑在更便宜的第三方模型上。** 主会话保持 Kimi 官方模型的质量，把探索、整理这类高 token 消耗的子 Agent 任务绑定到内置供应商目录中的任意 OpenAI 兼容模型（例如 DeepSeek V4 Flash），能极大降低整体 token 成本；在设置页从模型目录直接选择即可，无需手写配置。
 
 这些改造的核心取舍是：让 Moon Code 负责桌面交互、状态投影和安全边界，让 Kimi Code CLI 继续负责 Agent 推理、工具执行和会话事实。这样既能获得原生桌面体验，也能最大限度跟随 Kimi 官方能力演进。
 
