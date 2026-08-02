@@ -214,9 +214,11 @@ describe('SettingsPanel', () => {
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeDefined()
 
     const openaiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
-    await openaiCard.get('.provider-card-model-toggle').trigger('click')
+    await openaiCard.get('.provider-model-select').trigger('click')
     await openaiCard.get('.provider-model-item').trigger('click')
-    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('gpt-5-mini')
+    expect(wrapper.find('.provider-model-item').exists()).toBe(false)
+    expect(openaiCard.get('.provider-model-select').classes()).toContain('has-selection')
+    expect(openaiCard.get('.provider-model-select').text()).toContain('GPT-5 mini')
     expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeUndefined()
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
     await flushPromises()
@@ -246,8 +248,8 @@ describe('SettingsPanel', () => {
     expect(wrapper.text()).toContain('Kimi Fast')
     expect(wrapper.text()).toContain('独立模型已启用')
     expect(wrapper.text()).toContain('Config API does not accept secondary_model yet')
-    expect(wrapper.findAll('.provider-card-model-toggle')).toHaveLength(2)
-    expect((wrapper.get('.provider-card-model-toggle').element as HTMLButtonElement).disabled).toBe(true)
+    expect(wrapper.findAll('.provider-model-select')).toHaveLength(2)
+    expect((wrapper.get('.provider-model-select').element as HTMLButtonElement).disabled).toBe(true)
     expect(wrapper.findAll('.provider-model-item')).toHaveLength(0)
     wrapper.unmount()
   })
@@ -482,7 +484,7 @@ describe('SettingsPanel', () => {
 
     /* 已配置独立模型时，“跟随主模型”按钮未选中，当前模型行选中；点击跟随按钮后直接切回 */
     const kimiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('Kimi'))!
-    await kimiCard.get('.provider-card-model-toggle').trigger('click')
+    await kimiCard.get('.provider-model-select').trigger('click')
     expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('Kimi Fast')
     await wrapper.get('.secondary-settings-selection .secondary-button').trigger('click')
     await flushPromises()
@@ -636,9 +638,10 @@ describe('SettingsPanel', () => {
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
     const anthropicCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('anthropic-main'))!
-    await anthropicCard.get('.provider-card-model-toggle').trigger('click')
+    await anthropicCard.get('.provider-model-select').trigger('click')
     await anthropicCard.get('.provider-model-item').trigger('click')
-    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('claude-sonnet-4-5')
+    expect(anthropicCard.get('.provider-model-select').text()).toContain('Claude Sonnet 4.5')
+    expect(anthropicCard.get('.provider-model-select').classes()).toContain('has-selection')
     expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
     wrapper.unmount()
   })
@@ -989,7 +992,7 @@ describe('SettingsPanel', () => {
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
     const openaiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
-    await openaiCard.get('.provider-card-model-toggle').trigger('click')
+    await openaiCard.get('.provider-model-select').trigger('click')
     await openaiCard.get('.provider-model-item').trigger('click')
     await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
     await flushPromises()

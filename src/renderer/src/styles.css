@@ -6547,7 +6547,7 @@ body.is-panel-resizing {
 .provider-card {
   min-width: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto auto;
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--border);
@@ -6599,11 +6599,8 @@ body.is-panel-resizing {
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  padding: 9px 11px;
-  border-radius: 8px;
+  gap: 2px 12px;
   color: var(--muted);
-  background: #dedcd9;
   font-size: var(--type-caption-size);
 }
 
@@ -6613,16 +6610,21 @@ body.is-panel-resizing {
   white-space: nowrap;
 }
 
-.provider-card-model-toggle {
+.provider-card-model-select {
+  position: relative;
+  min-width: 0;
+}
+
+.provider-model-select {
   width: 100%;
-  min-height: 40px;
+  min-height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 12px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 10px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px dashed var(--border);
   color: var(--muted);
   background: transparent;
   cursor: pointer;
@@ -6630,40 +6632,60 @@ body.is-panel-resizing {
   font-size: var(--type-ui-small-size);
 }
 
-.provider-card-model-toggle:hover {
-  border-color: rgba(0, 0, 0, 0.32);
+.provider-model-select:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.8);
+  border-bottom-color: var(--border-strong);
 }
 
-.provider-card-model-toggle.is-expanded {
-  color: var(--accent);
-  border-color: rgba(0, 0, 0, 0.32);
-  background: var(--accent-soft);
-}
-
-.provider-card-model-toggle span {
+.provider-model-select .provider-model-select-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.provider-card-model-toggle svg {
+.provider-model-select.has-selection {
+  color: var(--text);
+}
+
+.provider-model-select.has-selection .provider-model-select-label {
+  font-weight: 620;
+}
+
+.provider-model-select svg {
   flex: none;
   transition: transform 150ms ease;
 }
 
-.provider-card-model-toggle.is-expanded svg {
-  transform: rotate(180deg);
+.provider-model-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  animation: provider-dialog-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.provider-card-models {
-  max-height: 252px;
+.provider-model-popover-heading {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  font-weight: 560;
+}
+
+.provider-model-popover-list {
+  max-height: 240px;
   display: grid;
-  gap: 6px;
+  gap: 5px;
   overflow: auto;
-  padding-right: 3px;
 }
 
 .provider-card-actions {

@@ -223,6 +223,9 @@ function providerCardInUse(providerId: string): boolean {
 function toggleProviderModels(providerId: string): void {
   expandedProviderId.value = expandedProviderId.value === providerId ? null : providerId
 }
+function providerCardHasSelection(providerId: string): boolean {
+  return providerModelsOf(providerId).some((model) => model.id === secondaryModelDraft.value.model)
+}
 function providerCardModelLabel(providerId: string): string {
   const models = providerModelsOf(providerId)
   const selected = models.find((model) => model.id === secondaryModelDraft.value.model)
@@ -1079,6 +1082,9 @@ function onWindowKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Escape' || !props.open) return
   event.preventDefault()
   if (showSecondaryProviderForm.value) {
+    // Capture-phase: swallow Escape here so the App-level handler does not
+    // close the whole settings panel while the provider dialog is open.
+    event.stopImmediatePropagation()
     cancelProviderEditor()
     return
   }
@@ -1087,17 +1093,18 @@ function onWindowKeydown(event: KeyboardEvent): void {
 
 function onWindowMousedown(): void {
   if (providerPickerOpen.value) providerPickerOpen.value = false
+  if (expandedProviderId.value !== null) expandedProviderId.value = null
 }
 
 onMounted(() => {
-  window.addEventListener('keydown', onWindowKeydown)
+  window.addEventListener('keydown', onWindowKeydown, true)
   window.addEventListener('mousedown', onWindowMousedown)
 })
 onBeforeUnmount(() => {
   clearOAuthPoll()
   clearNoticeTimer()
   resetSecondaryProviderDraft()
-  window.removeEventListener('keydown', onWindowKeydown)
+  window.removeEventListener('keydown', onWindowKeydown, true)
   window.removeEventListener('mousedown', onWindowMousedown)
 })
 
@@ -1356,33 +1363,38 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                         <span>{{ provider.baseUrl ?? 'Kimi 默认地址' }}</span>
                         <span>{{ provider.models.length }} 个模型</span>
                       </div>
-                      <button
-                        type="button"
-                        class="provider-card-model-toggle"
-                        :class="{ 'is-expanded': expandedProviderId === provider.id }"
-                        :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
-                        :title="providerModelsOf(provider.id).length < 1 ? '这个服务暂时没有可用模型' : undefined"
-                        @click="toggleProviderModels(provider.id)"
-                      >
-                        <span>{{ providerCardModelLabel(provider.id) }}</span>
-                        <PhCaretDown :size="14" />
-                      </button>
-                      <div v-if="expandedProviderId === provider.id" class="provider-card-models">
+                      <div class="provider-card-model-select">
                         <button
-                          v-for="model in providerModelsOf(provider.id)"
-                          :key="model.id"
-                          class="provider-model-item"
-                          :class="{ 'is-selected': secondaryModelDraft.model === model.id }"
                           type="button"
+                          class="provider-model-select"
+                          :class="{ 'has-selection': providerCardHasSelection(provider.id) }"
                           :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
-                          @click="secondaryModelDraft.model = model.id; onSecondaryModelDraftChange()"
+                          @mousedown.stop
+                          @click="toggleProviderModels(provider.id)"
                         >
-                          <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model === model.id" :size="12" /></span>
-                          <span><strong>{{ model.displayName }}</strong><small>{{ model.id }}</small></span>
-                          <span v-if="currentSecondaryProviderId === provider.id && secondaryModelDescriptor?.id === model.id" class="model-current-badge">当前选用</span>
-                          <small v-else>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                          <span class="provider-model-select-label">{{ providerCardModelLabel(provider.id) }}</span>
+                          <PhCaretDown :size="13" />
                         </button>
-                        <p v-if="providerModelsOf(provider.id).length < 1" class="provider-model-empty">这个服务暂时没有可用模型。</p>
+                        <div v-if="expandedProviderId === provider.id" class="provider-model-popover" @mousedown.stop>
+                          <p class="provider-model-popover-heading">{{ providerTitle(provider.id) }} · 选择子 Agent 模型</p>
+                          <div class="provider-model-popover-list">
+                            <button
+                              v-for="model in providerModelsOf(provider.id)"
+                              :key="model.id"
+                              class="provider-model-item"
+                              :class="{ 'is-selected': secondaryModelDraft.model === model.id }"
+                              type="button"
+                              :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
+                              @click="secondaryModelDraft.model = model.id; onSecondaryModelDraftChange(); expandedProviderId = null"
+                            >
+                              <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model === model.id" :size="12" /></span>
+                              <span><strong>{{ model.displayName }}</strong><small>{{ model.id }}</small></span>
+                              <span v-if="currentSecondaryProviderId === provider.id && secondaryModelDescriptor?.id === model.id" class="model-current-badge">当前选用</span>
+                              <small v-else>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                            </button>
+                            <p v-if="providerModelsOf(provider.id).length < 1" class="provider-model-empty">这个服务暂时没有可用模型。</p>
+                          </div>
+                        </div>
                       </div>
                       <footer class="provider-card-actions">
                         <button class="provider-refresh-link" type="button" :disabled="actionPending !== null" @click="refreshProviderModels(provider.id)">
