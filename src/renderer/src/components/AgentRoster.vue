@@ -52,29 +52,27 @@ function usageLabel(agent: SessionAgentView): string | null {
         :key="agent.id"
         class="agent-row"
       >
-        <span class="agent-state" :class="`is-${agent.status}`" />
-        <div>
-          <header>
-            <strong>{{ agent.name }}</strong>
-            <span>{{ statusLabel(agent.status) }}</span>
-            <button
-              type="button"
-              class="agent-track-button"
-              :aria-label="`追踪 ${agent.name}`"
-              @click.stop="emit('open', agent)"
-            >
-              <PhListMagnifyingGlass :size="12" />
-              追踪
-            </button>
-          </header>
-          <p>{{ agent.description }}</p>
-          <footer>
-            <span v-if="agent.subagentType">{{ agent.subagentType }}</span>
-            <span v-if="agent.swarmIndex !== null">#{{ agent.swarmIndex + 1 }}</span>
-            <span v-if="usageLabel(agent)">{{ usageLabel(agent) }}</span>
-            <span v-if="agent.suspendedReason">{{ agent.suspendedReason }}</span>
-          </footer>
-        </div>
+        <header>
+          <span class="agent-state" :class="`is-${agent.status}`" />
+          <strong>{{ agent.name }}</strong>
+          <span class="agent-status-label">{{ statusLabel(agent.status) }}</span>
+        </header>
+        <p>{{ agent.description }}</p>
+        <footer>
+          <span v-if="agent.subagentType">{{ agent.subagentType }}</span>
+          <span v-if="agent.swarmIndex !== null">#{{ agent.swarmIndex + 1 }}</span>
+          <span v-if="usageLabel(agent)">{{ usageLabel(agent) }}</span>
+          <span v-if="agent.suspendedReason">{{ agent.suspendedReason }}</span>
+          <button
+            type="button"
+            class="agent-track-button"
+            :aria-label="`追踪 ${agent.name}`"
+            @click.stop="emit('open', agent)"
+          >
+            <PhListMagnifyingGlass :size="12" />
+            追踪
+          </button>
+        </footer>
       </article>
     </div>
   </section>
