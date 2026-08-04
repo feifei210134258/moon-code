@@ -29,6 +29,7 @@ export type TranscriptPart =
         after: string
         hunks: number | null
       }
+      writtenPath?: string
     }
   | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
   | {
@@ -307,7 +308,8 @@ export class TranscriptProjector {
             state: 'running',
             ...optionalString('description', description),
             ...optionalPreview('inputPreview', payload.args ?? payload.input),
-            ...optionalToolDiff(presentation)
+            ...optionalToolDiff(presentation),
+            ...optionalWrittenPath(presentation)
           })
         } else {
           existing.toolName = toolName
@@ -317,6 +319,8 @@ export class TranscriptProjector {
           if (input !== undefined) existing.inputPreview = input
           const diff = toolDiffPresentation(presentation)
           if (diff !== undefined) existing.toolDiff = diff
+          const writtenPath = presentation?.writtenPath
+          if (writtenPath !== undefined) existing.writtenPath = writtenPath
         }
         return changed()
       }
@@ -1484,6 +1488,7 @@ function clampPercent(value: number): number {
 type ToolPresentation = {
   summary?: string
   detail?: string
+  writtenPath?: string
   diff?: { path: string; before: string; after: string; hunks: number | null }
 }
 
@@ -1497,7 +1502,13 @@ function toolPresentation(value: unknown): ToolPresentation | null {
   if (kind === 'file_io') {
     const operation = previewLabel(display.operation, 80)
     const path = previewLabel(display.path)
-    return compactPresentation([operation, path].filter(Boolean).join(' · '), previewLabel(display.detail))
+    return {
+      ...compactPresentation([operation, path].filter(Boolean).join(' · '), previewLabel(display.detail)),
+      /* 只有真正写盘/改盘的 IO 才算“产物”，read/glob/grep 只是读取 */
+      ...(path === undefined || (operation !== 'write' && operation !== 'edit')
+        ? {}
+        : { writtenPath: path })
+    }
   }
   if (kind === 'diff') {
     const hunks = numberValue(display.hunks)
@@ -1507,6 +1518,7 @@ function toolPresentation(value: unknown): ToolPresentation | null {
     const after = previewValue(display.after)
     return {
       ...presentation,
+      ...(path === undefined ? {} : { writtenPath: path }),
       ...(path === undefined || before === undefined || after === undefined
         ? {}
         : { diff: { path, before, after, hunks } })
@@ -1577,6 +1589,13 @@ function optionalToolDiff(
 ): { toolDiff: NonNullable<ToolPart['toolDiff']> } | Record<string, never> {
   const diff = toolDiffPresentation(presentation)
   return diff === undefined ? {} : { toolDiff: diff }
+}
+
+function optionalWrittenPath(
+  presentation: ToolPresentation | null
+): { writtenPath: string } | Record<string, never> {
+  const path = presentation?.writtenPath
+  return path === undefined ? {} : { writtenPath: path }
 }
 
 function appendPreview(current: string | undefined, next: string): string {

@@ -147,6 +147,20 @@ const tocItems = computed(() => props.turns.flatMap((turn) => {
   }]
 }))
 
+/* 会话中工具真正写入/编辑过的文件路径：正文里命中这些路径保持亮蓝，
+   其余只是被文字提及的路径降为弱色（is-mention）。 */
+const artifactPaths = computed<ReadonlySet<string>>(() => {
+  const paths = new Set<string>()
+  for (const turn of props.turns) {
+    for (const block of turn.blocks) {
+      if (block.type !== 'activity' || block.activity.status !== 'done') continue
+      const path = block.activity.writtenPath?.trim().replace(/^\.\//, '')
+      if (path !== undefined && path.length > 0) paths.add(path)
+    }
+  }
+  return paths
+})
+
 /* Codex 式左侧刻度轨：每个 user 回合一枚紧凑刻度，
    横向长度反映回合高度，当前视口所在回合高亮。 */
 interface TocMeasurement {
@@ -440,6 +454,7 @@ watch(
                 v-if="block.type === 'text'"
                 :text="block.text"
                 :session-id="sessionId"
+                :artifact-paths="artifactPaths"
                 @open-file="emit('openFile', $event)"
                 @file-context="openOutputFileContextMenu"
               />

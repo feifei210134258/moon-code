@@ -19,7 +19,7 @@ import { workspaceFilePathFromHref } from '../utils/fileRouting'
 import 'katex/dist/katex.min.css'
 import 'highlight.js/styles/github.css'
 
-const props = defineProps<{ text: string; sessionId?: string }>()
+const props = defineProps<{ text: string; sessionId?: string; artifactPaths?: ReadonlySet<string> }>()
 const emit = defineEmits<{
   openFile: [path: string]
   fileContext: [path: string, event: MouseEvent]
@@ -62,7 +62,9 @@ renderer.renderer.rules.fence = (tokens, index, options, env, self) => {
   return `<div class="mermaid-placeholder" data-mermaid="${encodeURIComponent(token.content)}"><span>正在渲染 Mermaid…</span></div>`
 }
 
-const html = computed(() => DOMPurify.sanitize(renderer.render(props.text), {
+const html = computed(() => DOMPurify.sanitize(renderer.render(props.text, {
+  artifactPaths: props.artifactPaths
+}), {
   USE_PROFILES: { html: true },
   ALLOW_DATA_ATTR: true
 }))
@@ -213,6 +215,8 @@ function installFilePathLinks(markdownRenderer: MarkdownIt): void {
   const pattern = new RegExp(`((?:\\.{0,2}\\/)?(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?`, 'giu')
   const inlineFilePattern = new RegExp(`(?:^|\\s)((?:\\.{0,2}\\/)?(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?(?=$|\\s)`, 'iu')
   markdownRenderer.core.ruler.after('inline', 'kimi_file_paths', (state) => {
+    /* 每个 MarkdownBlock 实例渲染时经 env 传入自己的 artifactPaths，多实例互不干扰 */
+    const artifactPaths = state.env?.artifactPaths as ReadonlySet<string> | undefined
     for (const block of state.tokens) {
       if (block.type !== 'inline' || block.children === null) continue
       const next = []
@@ -226,6 +230,7 @@ function installFilePathLinks(markdownRenderer: MarkdownIt): void {
             /* 行内代码里的文件路径（Kimi 回复常见写法）也可点击打开 */
             token.attrSet('data-workspace-path', codeMatch[0].trim())
             token.attrSet('title', '点击打开文件')
+            if (isMentionedPath(codeMatch[0], artifactPaths)) token.attrJoin('class', 'is-mention')
           }
         }
         if (token.type !== 'text' || linkDepth > 0) {
@@ -243,7 +248,11 @@ function installFilePathLinks(markdownRenderer: MarkdownIt): void {
             next.push(text)
           }
           const open = new state.Token('link_open', 'a', 1)
-          open.attrs = [['href', '#'], ['class', 'markdown-file-link'], ['data-workspace-path', match[1]!]]
+          open.attrs = [
+            ['href', '#'],
+            ['class', isMentionedPath(match[1]!, artifactPaths) ? 'markdown-file-link is-mention' : 'markdown-file-link'],
+            ['data-workspace-path', match[1]!]
+          ]
           const label = new state.Token('text', '', 0)
           label.content = match[0]
           const close = new state.Token('link_close', 'a', -1)
@@ -259,6 +268,25 @@ function installFilePathLinks(markdownRenderer: MarkdownIt): void {
       block.children = next
     }
   })
+}
+
+/* 工具真正写入/编辑过的路径（产物）保持亮蓝；只被文字提及的路径降为弱色。
+   段级后缀匹配，允许正文写绝对路径或省略前缀；`:行:列` 定位后缀仅用于比较。 */
+function isArtifactPath(rawPath: string, artifactPaths: ReadonlySet<string> | undefined): boolean {
+  if (artifactPaths === undefined || artifactPaths.size === 0) return false
+  const mention = rawPath.trim().replace(/^\.\//, '').replace(/:\d+(?::\d+)?$/, '')
+  if (mention.length === 0) return false
+  for (const artifact of artifactPaths) {
+    if (artifact === mention) return true
+    if (artifact.endsWith(`/${mention}`)) return true
+    if (mention.endsWith(`/${artifact}`)) return true
+  }
+  return false
+}
+
+/* 未传 artifactPaths（或为空集）时保持旧行为：全部标蓝，不加 is-mention */
+function isMentionedPath(rawPath: string, artifactPaths: ReadonlySet<string> | undefined): boolean {
+  return artifactPaths !== undefined && artifactPaths.size > 0 && !isArtifactPath(rawPath, artifactPaths)
 }
 
 function escapeHtml(value: string): string {

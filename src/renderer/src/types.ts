@@ -34,6 +34,7 @@ export interface ChatActivity {
     after: string
     hunks: number | null
   }
+  writtenPath?: string
 }
 
 export type ChatBlock =

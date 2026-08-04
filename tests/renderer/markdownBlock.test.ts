@@ -121,4 +121,54 @@ describe('MarkdownBlock', () => {
     expect(wrapper.get('img').classes()).toContain('is-blocked')
     expect(wrapper.get('img').attributes('src')).toMatch(/^data:image\/gif/)
   })
+
+  it('keeps tool-written artifact paths bright blue but dims merely mentioned paths', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: {
+        text: '已写入 `src/app.ts:12`，样式参考 styles.css，工具函数见 `src/utils/format.ts`。',
+        artifactPaths: new Set(['src/app.ts'])
+      }
+    })
+    await flushPromises()
+
+    const mentioned = wrapper.get('a.markdown-file-link.is-mention')
+    expect(mentioned.attributes('data-workspace-path')).toBe('styles.css')
+
+    const inlineArtifact = wrapper.get('code.markdown-file-inline')
+    expect(inlineArtifact.classes()).not.toContain('is-mention')
+    expect(inlineArtifact.attributes('data-workspace-path')).toBe('src/app.ts:12')
+
+    const inlineMention = wrapper.get('code.markdown-file-inline.is-mention')
+    expect(inlineMention.text()).toBe('src/utils/format.ts')
+    await inlineMention.trigger('click')
+    expect(wrapper.emitted('openFile')).toEqual([['src/utils/format.ts']])
+  })
+
+  it('matches artifacts with ./ prefix or absolute mention paths', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: {
+        text: './src/app.ts 与 /repo/src/app.ts 都已写入。',
+        artifactPaths: new Set(['src/app.ts'])
+      }
+    })
+    await flushPromises()
+
+    const links = wrapper.findAll('a.markdown-file-link')
+    expect(links.map((link) => link.attributes('data-workspace-path'))).toEqual([
+      './src/app.ts',
+      '/repo/src/app.ts'
+    ])
+    for (const link of links) expect(link.classes()).not.toContain('is-mention')
+  })
+
+  it('keeps all file paths bright blue when artifactPaths is not provided', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: { text: '写入 src/app.ts 完成，样式参考 styles.css 与 `src/utils/format.ts`。' }
+    })
+
+    expect(wrapper.findAll('a.markdown-file-link.is-mention')).toHaveLength(0)
+    expect(wrapper.findAll('code.markdown-file-inline.is-mention')).toHaveLength(0)
+    expect(wrapper.findAll('a.markdown-file-link').length).toBeGreaterThanOrEqual(2)
+    expect(wrapper.findAll('code.markdown-file-inline')).toHaveLength(1)
+  })
 })

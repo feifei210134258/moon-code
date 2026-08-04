@@ -2356,6 +2356,18 @@ select:focus-visible {
   text-decoration: underline;
 }
 
+/* 只被文字提及、非工具产物的文件路径：弱色 + 虚线下划线，hover 仍可辨识可点击 */
+.markdown-block .markdown-file-link.is-mention,
+.markdown-block code.markdown-file-inline.is-mention {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.markdown-block .markdown-file-link.is-mention:hover,
+.markdown-block code.markdown-file-inline.is-mention:hover {
+  text-decoration: underline dotted;
+}
+
 .linked-file:hover {
   text-decoration: underline;
 }

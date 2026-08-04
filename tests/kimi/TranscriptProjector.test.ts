@@ -915,6 +915,48 @@ describe('TranscriptProjector', () => {
     expect(tool).toEqual(expect.objectContaining({ description: expectedDescription }))
   })
 
+  it.each([
+    ['file_io write', { kind: 'file_io', operation: 'write', path: 'src/app.ts' }],
+    ['file_io edit', { kind: 'file_io', operation: 'edit', path: 'src/app.ts' }],
+    ['diff', { kind: 'diff', path: 'src/app.ts', before: 'a', after: 'b', hunks: 1 }]
+  ])('exposes writtenPath for %s tool display', (_label, display) => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+    projector.project(frame('tool.call.started', {
+      turnId: 2,
+      toolCallId: 'tool-written',
+      name: 'Tool',
+      args: {},
+      display
+    }))
+
+    const tool = projector.getProjection('session-1').messages
+      .flatMap((message) => message.content)
+      .find((part) => part.type === 'tool' && part.toolCallId === 'tool-written')
+    expect(tool).toEqual(expect.objectContaining({ writtenPath: 'src/app.ts' }))
+  })
+
+  it.each([
+    ['read', { kind: 'file_io', operation: 'read', path: 'src/app.ts' }],
+    ['glob', { kind: 'file_io', operation: 'glob', path: 'src/*.ts' }],
+    ['grep', { kind: 'file_io', operation: 'grep', path: 'src' }]
+  ])('does not expose writtenPath for file_io %s', (_label, display) => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+    projector.project(frame('tool.call.started', {
+      turnId: 2,
+      toolCallId: 'tool-read-only',
+      name: 'Tool',
+      args: {},
+      display
+    }))
+
+    const tool = projector.getProjection('session-1').messages
+      .flatMap((message) => message.content)
+      .find((part) => part.type === 'tool' && part.toolCallId === 'tool-read-only')
+    expect(tool).not.toHaveProperty('writtenPath')
+  })
+
   it('preserves a bounded diff display for the dedicated Tool Diff view', () => {
     const projector = new TranscriptProjector()
     projector.seedSnapshot('session-1', snapshot())

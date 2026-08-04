@@ -477,7 +477,8 @@ function projectPart(
         ...(part.outputPreview === undefined ? {} : { outputPreview: part.outputPreview }),
         ...(part.outputStream === undefined ? {} : { outputStream: part.outputStream }),
         ...(part.progress === undefined ? {} : { progress: part.progress }),
-        ...(part.toolDiff === undefined ? {} : { toolDiff: part.toolDiff })
+        ...(part.toolDiff === undefined ? {} : { toolDiff: part.toolDiff }),
+        ...(part.writtenPath === undefined ? {} : { writtenPath: part.writtenPath })
       }
     })
     return

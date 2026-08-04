@@ -247,6 +247,7 @@ export type SessionTranscriptPart =
         after: string
         hunks: number | null
       }
+      writtenPath?: string
     }
   | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
   | {
