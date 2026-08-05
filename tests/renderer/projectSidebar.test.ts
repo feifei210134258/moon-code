@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 
 import { mount } from '@vue/test-utils'
+import { PhFolderSimple } from '@phosphor-icons/vue'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import FolderSimpleOpenIcon from '../../src/renderer/src/components/icons/FolderSimpleOpenIcon.vue'
 import ProjectSidebar from '../../src/renderer/src/components/ProjectSidebar.vue'
 
 const projects = [
@@ -115,6 +117,28 @@ describe('ProjectSidebar', () => {
     ;(btw as HTMLButtonElement).click()
     await nextTick()
     expect(wrapper.emitted('startSideChat')).toEqual([[]])
+    wrapper.unmount()
+  })
+
+  it('shows an open-folder icon for expanded projects and a closed one for collapsed projects', () => {
+    const wrapper = mount(ProjectSidebar, {
+      props: {
+        projects: [
+          projects[0]!,
+          { ...projects[1]!, expanded: false }
+        ],
+        activeWorkspaceId: 'workspace-a',
+        activeSessionId: 'session-a',
+        lifecyclePending: null,
+        lifecycleError: null
+      }
+    })
+    const rows = wrapper.findAll('.project-row')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.findComponent(FolderSimpleOpenIcon).exists()).toBe(true)
+    expect(rows[0]?.findComponent(PhFolderSimple).exists()).toBe(false)
+    expect(rows[1]?.findComponent(FolderSimpleOpenIcon).exists()).toBe(false)
+    expect(rows[1]?.findComponent(PhFolderSimple).exists()).toBe(true)
     wrapper.unmount()
   })
 

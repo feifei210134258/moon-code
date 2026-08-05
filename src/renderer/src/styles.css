@@ -1842,10 +1842,23 @@ select:focus-visible {
   font-size: var(--type-title-size);
 }
 
+/* 品牌空状态的主标题：比常规标题大两档，强化产品认知。 */
+.transcript-empty .transcript-brand-title {
+  font-size: 2.5rem;
+  letter-spacing: 0.01em;
+}
+
 .transcript-empty span {
   max-width: 440px;
   font-size: var(--type-ui-small-size);
   line-height: 1.55;
+}
+
+.dot-matrix-brand {
+  display: block;
+  width: min(100%, 490px);
+  aspect-ratio: 490 / 224;
+  margin-bottom: 14px;
 }
 
 .turn {
@@ -2819,7 +2832,24 @@ select:focus-visible {
 }
 
 .question-card {
+  /* 卡片自身限高并与 dock 上限对齐：header/footer 固定，body 内部滚动，
+   * 非全屏窗口下底部操作按钮始终可见，不用再下滑寻找。 */
+  max-height: min(430px, 46vh);
+  display: flex;
+  flex-direction: column;
   border-color: var(--card-border);
+}
+
+.question-card .interaction-card-header,
+.question-card .interaction-actions {
+  flex: none;
+}
+
+.question-card .interaction-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
 }
 
 .interaction-card-header {

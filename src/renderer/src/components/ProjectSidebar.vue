@@ -18,6 +18,7 @@ import {
 } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ProjectItem, SessionItem } from '../types'
+import FolderSimpleOpenIcon from './icons/FolderSimpleOpenIcon.vue'
 
 const props = defineProps<{
   projects: ProjectItem[]
@@ -199,7 +200,8 @@ onBeforeUnmount(() => {
             type="button"
             @click="$emit('toggleProject', project.id)"
           >
-            <PhFolderSimple :size="17" />
+            <FolderSimpleOpenIcon v-if="project.expanded" :size="17" />
+            <PhFolderSimple v-else :size="17" />
             <span>{{ project.name }}</span>
           </button>
           <div class="tree-action-area project-action-area">

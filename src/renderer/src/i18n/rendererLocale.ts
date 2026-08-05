@@ -68,7 +68,7 @@ const enUS: Record<string, string> = {
   '正在恢复实时会话…': 'Restoring live session…',
   '会话读取失败': 'Could not load session',
   '这个会话还没有消息': 'This session has no messages yet',
-  '从下方输入框开始一个新任务。': 'Start a new task from the composer below.',
+  '这个会话还没有消息，从下方输入框开始一个新任务。': 'This session has no messages yet. Start a new task from the composer below.',
   '已排队': 'Queued',
   'Kimi 已接收任务，正在生成回复…': 'Kimi received the task and is preparing a response…',
   'Kimi 等待你的操作': 'Kimi is waiting for your action',

@@ -4,6 +4,7 @@ import { shallowMount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import ConversationPane from '../../src/renderer/src/components/ConversationPane.vue'
+import DotMatrixBrand from '../../src/renderer/src/components/DotMatrixBrand.vue'
 
 const turns = [
   {
@@ -84,6 +85,31 @@ function stubRailLayout(wrapper: ReturnType<typeof mountConversation>): void {
 }
 
 describe('Conversation controls', () => {
+  it('shows the brand dot matrix and guidance for a fresh ready session', async () => {
+    const wrapper = mountConversation()
+    await wrapper.setProps({ turns: [], markers: [], phase: 'ready', error: null })
+
+    expect(wrapper.findComponent(DotMatrixBrand).exists()).toBe(true)
+    const empty = wrapper.get('.transcript-empty')
+    expect(empty.text()).toContain('Moon Code')
+    expect(empty.text()).toContain('这个会话还没有消息，从下方输入框开始一个新任务。')
+    wrapper.unmount()
+  })
+
+  it('keeps loading/error copy and hides the brand visual outside the ready empty state', async () => {
+    const wrapper = mountConversation()
+    await wrapper.setProps({ turns: [], markers: [], phase: 'loading', error: null })
+    expect(wrapper.findComponent(DotMatrixBrand).exists()).toBe(false)
+    expect(wrapper.get('.transcript-empty').text()).toContain('正在读取 Kimi 会话…')
+
+    await wrapper.setProps({ phase: 'error', error: 'boom' })
+    expect(wrapper.findComponent(DotMatrixBrand).exists()).toBe(false)
+    const empty = wrapper.get('.transcript-empty')
+    expect(empty.text()).toContain('会话读取失败')
+    expect(empty.text()).toContain('boom')
+    wrapper.unmount()
+  })
+
   it('keeps user identity and time above the right-aligned message bubble', () => {
     const wrapper = mountConversation()
     expect(wrapper.get('.turn').classes()).toContain('is-user')

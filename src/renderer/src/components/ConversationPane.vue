@@ -34,6 +34,7 @@ import MarkdownBlock from './MarkdownBlock.vue'
 import SessionWarnings from './SessionWarnings.vue'
 import SideChatPanel from './SideChatPanel.vue'
 import AgentDetailPanel from './AgentDetailPanel.vue'
+import DotMatrixBrand from './DotMatrixBrand.vue'
 import type { LocalPromptDraft } from '../utils/localPromptQueue'
 
 const props = withDefaults(defineProps<{
@@ -424,12 +425,18 @@ watch(
         </div>
       </div>
       <div v-if="turns.length === 0" class="transcript-empty">
-        <strong v-if="phase === 'loading'">正在读取 Kimi 会话…</strong>
-        <strong v-else-if="phase === 'resyncing' || phase === 'reconnecting'">正在恢复实时会话…</strong>
-        <strong v-else-if="phase === 'error'">会话读取失败</strong>
-        <strong v-else>这个会话还没有消息</strong>
-        <span v-if="error">{{ error }}</span>
-        <span v-else-if="phase === 'ready'">从下方输入框开始一个新任务。</span>
+        <template v-if="phase === 'ready' && !error">
+          <DotMatrixBrand />
+          <strong class="transcript-brand-title">Moon Code</strong>
+          <span>这个会话还没有消息，从下方输入框开始一个新任务。</span>
+        </template>
+        <template v-else>
+          <strong v-if="phase === 'loading'">正在读取 Kimi 会话…</strong>
+          <strong v-else-if="phase === 'resyncing' || phase === 'reconnecting'">正在恢复实时会话…</strong>
+          <strong v-else-if="phase === 'error'">会话读取失败</strong>
+          <strong v-else>这个会话还没有消息</strong>
+          <span v-if="error">{{ error }}</span>
+        </template>
       </div>
       <article :id="turnDomId(turn.id)" v-for="turn in turns" :key="turn.id" class="turn" :class="`is-${turn.role}`">
         <div class="turn-avatar" :class="`is-${turn.role}`">{{ turn.role === 'assistant' ? 'K' : 'U' }}</div>

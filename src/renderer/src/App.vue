@@ -264,7 +264,10 @@ function toggleRuntime(): void {
 
 async function addWorkspace(): Promise<void> {
   const workspaceId = await runtimeBridge.addWorkspace()
-  if (workspaceId !== null) store.selectWorkspace(workspaceId)
+  if (workspaceId === null) return
+  store.selectWorkspace(workspaceId)
+  /* 打开项目文件夹后自动新建会话并选中，省去手动点『新建任务』。 */
+  await createSession(workspaceId)
 }
 
 async function createSession(workspaceId: string): Promise<void> {
