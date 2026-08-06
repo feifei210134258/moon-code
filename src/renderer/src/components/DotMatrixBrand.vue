@@ -2,62 +2,69 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
- * 点阵品牌视觉：规则网格的浅色小圆点中，高亮圆点以 5×7 点阵字体
- * 拼出 “moon” 四个字母（呼应 Moon Code 品牌），高亮沿对角线缓慢
- * 流动并叠加全局呼吸，风格参考 Kimi 官网的点阵 logo。尊重
- * prefers-reduced-motion：开启减少动态时只渲染一帧静态画面。
- * 颜色取自 styles.css 的 --faint / --text 设计 token，跟随主题。
+ * 点阵品牌视觉：浅色小圆点组成的四块独立点阵 tile，每块内以 7×9
+ * 粗体点阵字形拼出 “moon” 的一个字母（呼应 Moon Code 品牌），块与块之间
+ * 留完全无点的空档——对齐 Kimi 官网点阵 logo 的分块样式。高亮沿对角线
+ * 缓慢流动并叠加全局呼吸。尊重 prefers-reduced-motion：开启减少动态时
+ * 只渲染一帧静态画面。颜色取自 styles.css 的 --faint / --text 设计
+ * token，跟随主题。
  */
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 
-const COLUMNS = 34
+const COLUMNS = 45 // 4 块 tile（各 9 列）+ 3 条块间空档（各 3 列）
 const ROWS = 11
 const PITCH = 14
 const MARGIN = 14
 const WIDTH = MARGIN * 2 + (COLUMNS - 1) * PITCH
 const HEIGHT = MARGIN * 2 + (ROWS - 1) * PITCH
-const DOT_RADIUS = 2.8
+const DOT_RADIUS = 3.5
 const WAVE_SPEED = (Math.PI * 2) / 9 // 一个完整波周期约 9 秒
 
-// 5×7 点阵字形，'#' 表示该格属于字母高亮；m / o / n 三个字形必须清晰可辨。
-const GLYPH_WIDTH = 5
-const GLYPH_HEIGHT = 7
-const GLYPH_GAP = 2 // 字母之间留出的空列数
+// 7×9 粗体点阵字形，'#' 表示该格属于字母高亮；笔画取 2 点粗，贴近 Kimi 点阵的厚实观感。
+const GLYPH_WIDTH = 7
+const GLYPH_HEIGHT = 9
 const WORD = 'moon'
 const GLYPHS: Record<string, string[]> = {
   m: [
-    '.###.',
-    '#...#',
-    '#.#.#',
-    '#.#.#',
-    '#.#.#',
-    '#.#.#',
-    '#.#.#',
+    '.##.##.',
+    '#######',
+    '##.#.##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
   ],
   o: [
-    '.###.',
-    '#...#',
-    '#...#',
-    '#...#',
-    '#...#',
-    '#...#',
-    '.###.',
+    '.#####.',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '.#####.',
   ],
   n: [
-    '#..##',
-    '#...#',
-    '#...#',
-    '#...#',
-    '#...#',
-    '#...#',
-    '#...#',
+    '##.###.',
+    '###.###',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
+    '##...##',
   ],
 }
 
-// 整行文字在网格中的位置：4 个字母（5 列）× 3 个 2 列间距 = 26 列，居中。
-const TEXT_WIDTH = WORD.length * GLYPH_WIDTH + (WORD.length - 1) * GLYPH_GAP
-const TEXT_OFFSET_X = Math.floor((COLUMNS - TEXT_WIDTH) / 2)
-const TEXT_OFFSET_Y = Math.floor((ROWS - GLYPH_HEIGHT) / 2)
+// 每个字母独占一块 9×11 点阵 tile（7×9 字形四周各留 1 格 padding），
+// 块间留 3 列空档。
+const TILE_COLS = GLYPH_WIDTH + 2
+const TILE_GAP = 3
+const TILE_STRIDE = TILE_COLS + TILE_GAP
 
 interface Dot {
   x: number
@@ -68,20 +75,17 @@ interface Dot {
 const dots: Dot[] = []
 for (let row = 0; row < ROWS; row += 1) {
   for (let col = 0; col < COLUMNS; col += 1) {
-    // 当前格是否落在某个字母的字形内。
-    let inLetter = false
-    const glyphRow = row - TEXT_OFFSET_Y
-    if (glyphRow >= 0 && glyphRow < GLYPH_HEIGHT) {
-      for (let i = 0; i < WORD.length; i += 1) {
-        const glyph = GLYPHS[WORD.charAt(i)]
-        if (glyph === undefined) continue
-        const glyphCol = col - (TEXT_OFFSET_X + i * (GLYPH_WIDTH + GLYPH_GAP))
-        if (glyphCol >= 0 && glyphCol < GLYPH_WIDTH && glyph[glyphRow]?.[glyphCol] === '#') {
-          inLetter = true
-          break
-        }
-      }
-    }
+    // 块间空档完全不画点。
+    const tileCol = col % TILE_STRIDE
+    if (tileCol >= TILE_COLS) continue
+    // 当前格是否落在本 tile 字母的字形内。
+    const glyph = GLYPHS[WORD.charAt(Math.floor(col / TILE_STRIDE))]
+    const glyphRow = row - 1
+    const glyphCol = tileCol - 1
+    const inLetter = glyph !== undefined
+      && glyphRow >= 0 && glyphRow < GLYPH_HEIGHT
+      && glyphCol >= 0 && glyphCol < GLYPH_WIDTH
+      && glyph[glyphRow]?.[glyphCol] === '#'
     dots.push({ x: MARGIN + col * PITCH, y: MARGIN + row * PITCH, inLetter })
   }
 }

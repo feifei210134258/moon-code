@@ -1857,7 +1857,7 @@ select:focus-visible {
 .dot-matrix-brand {
   display: block;
   width: min(100%, 490px);
-  aspect-ratio: 490 / 168;
+  aspect-ratio: 644 / 168;
   margin-bottom: 14px;
 }
 
@@ -2806,6 +2806,12 @@ select:focus-visible {
   color: var(--ink);
   font: inherit;
   font-size: var(--type-caption-size);
+}
+
+/* 搜索行本身就是无边框设计，聚焦时不再叠加全局 focus 外框。 */
+.draft-project-search input:focus-visible {
+  outline: 0;
+  box-shadow: none;
 }
 
 .draft-project-list {
