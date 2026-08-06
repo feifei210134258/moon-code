@@ -284,8 +284,8 @@ export class SessionSyncController extends EventEmitter {
         phase: 'ready',
         cursor,
         messages: projection.messages,
-        markers: transcript.markers,
-        todos: transcript.todos,
+        markers: transcript?.markers ?? [],
+        todos: transcript?.todos ?? [],
         sideChat: cloneSideChat(loading.sideChat),
         pendingApprovals: snapshot.pending_approvals.map(mapApproval),
         pendingQuestions: snapshot.pending_questions.map(mapQuestion),
@@ -667,8 +667,8 @@ export class SessionSyncController extends EventEmitter {
       state.activePromptStatus = snapshot.in_flight_turn === null ? null : 'running'
       state.cursor = cursor
       state.messages = projection.messages
-      state.markers = transcript.markers
-      state.todos = transcript.todos
+      state.markers = transcript?.markers ?? state.markers
+      state.todos = transcript?.todos ?? state.todos
       state.pendingApprovals = snapshot.pending_approvals.map(mapApproval)
       state.pendingQuestions = snapshot.pending_questions.map(mapQuestion)
       state.agents = agents
@@ -717,8 +717,10 @@ export class SessionSyncController extends EventEmitter {
     this.#resubscribeAttempts.clear()
   }
 
-  async #loadTranscriptSupplement(sessionId: string): Promise<TranscriptSupplement> {
-    if (this.#rest.getSessionTranscript === undefined) return { markers: [], todos: [] }
+  // 返回 null 表示 transcript 不可用/解析失败，调用方保留既有 todos/markers，
+  // 避免一次失败的 hydrate 覆盖掉 live 帧已填充的计划
+  async #loadTranscriptSupplement(sessionId: string): Promise<TranscriptSupplement | null> {
+    if (this.#rest.getSessionTranscript === undefined) return null
     try {
       const transcript: SessionTranscript = await this.#rest.getSessionTranscript(sessionId, { pageSize: 50 })
       return {
@@ -732,9 +734,13 @@ export class SessionSyncController extends EventEmitter {
           : []),
         todos: transcript.todos.map(mapTodo)
       }
-    } catch {
+    } catch (error) {
       // Snapshot loading remains usable if an older compatible server omits transcript extras.
-      return { markers: [], todos: [] }
+      console.warn(
+        `[SessionSyncController] transcript supplement for session ${sessionId} failed:`,
+        error
+      )
+      return null
     }
   }
 
@@ -1019,18 +1025,50 @@ function liveTodo(frame: SessionEventFrame): SessionTodoView | null {
     ?? recordString(frame.payload, 'todo_id')
     ?? 'todo'
   const updatedAt = typeof frame.timestamp === 'string' ? frame.timestamp : null
+  // 子代理自己的 todo 不覆盖主计划（display 路径与 args 路径同样过滤）
+  const agentId = frameAgentId(frame)
+  if (agentId !== null && agentId !== 'main') return null
   const display = recordValue(frame.payload.display)
-  if (display?.kind === 'todo_list') {
+  if (display?.kind === 'todo_list' || display?.kind === 'todo') {
     const items = parseTodoItems(display.items)
     return items === null ? null : { todoId, items, updatedAt }
   }
-  // agent-core-v2 的 TodoList 帧不带 display，全量清单在 args.todos
-  if (frame.type === 'tool.call.started' && (frame.payload.name === 'TodoList' || frame.payload.name === 'TodoWrite')) {
-    const agentId = recordString(frame.payload, 'agentId') ?? recordString(frame.payload, 'agent_id')
-    // 子代理自己的 todo 不覆盖主计划
-    if (agentId !== null && agentId !== 'main') return null
-    const items = parseTodoItems(recordValue(frame.payload.args)?.todos)
+  // agent-core-v2 的 TodoList 帧不带 display，全量清单在 args.todos；
+  // 工具名忽略大小写与下划线/连字符（TodoList / todo_list / todolist …）
+  if (
+    (frame.type === 'tool.call.started' || frame.type === 'tool.use') &&
+    (normalizeToolName(frame.payload.name) === 'todolist' ||
+      normalizeToolName(frame.payload.name) === 'todowrite')
+  ) {
+    const args = parseArgs(frame.payload.args)
+    const items = parseTodoItems(args?.todos)
     return items === null ? null : { todoId, items, updatedAt }
+  }
+  return null
+}
+
+function normalizeToolName(value: unknown): string {
+  return typeof value === 'string' ? value.toLowerCase().replace(/[_-]/g, '') : ''
+}
+
+function parseArgs(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'string') {
+    try {
+      return recordValue(JSON.parse(value))
+    } catch {
+      return null
+    }
+  }
+  return recordValue(value)
+}
+
+function normalizeTodoStatus(value: unknown): 'pending' | 'in_progress' | 'done' | null {
+  if (typeof value !== 'string') return null
+  const status = value.toLowerCase()
+  if (status === 'pending') return 'pending'
+  if (status === 'in_progress') return 'in_progress'
+  if (status === 'done' || status === 'completed' || status === 'complete' || status === 'finished') {
+    return 'done'
   }
   return null
 }
@@ -1040,12 +1078,16 @@ function parseTodoItems(value: unknown): SessionTodoItemView[] | null {
   const items: SessionTodoItemView[] = []
   for (const item of value) {
     const record = recordValue(item)
-    const title = typeof record?.title === 'string' ? record.title : null
-    const status = record?.status
-    if (title === null || (status !== 'pending' && status !== 'in_progress' && status !== 'done')) return null
+    // 与 schema 同语义：title 缺失回退 content，'completed' 等归一为 'done'
+    const title = typeof record?.title === 'string'
+      ? record.title
+      : (typeof record?.content === 'string' ? record.content : null)
+    const status = normalizeTodoStatus(record?.status)
+    // 单条不合法只跳过该条；全部不合法才整份返回 null
+    if (title === null || status === null) continue
     items.push({ title, status })
   }
-  return items
+  return items.length === 0 && value.length > 0 ? null : items
 }
 
 function sameTodo(left: SessionTodoView, right: SessionTodoView): boolean {

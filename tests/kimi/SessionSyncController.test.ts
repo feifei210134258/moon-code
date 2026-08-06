@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { SessionSyncController } from '../../packages/kimi-adapter/src/sync/SessionSyncController.js'
 import type { SessionSnapshot } from '../../packages/kimi-adapter/src/wire/schemas.js'
+import { sessionTranscriptSchema } from '../../packages/kimi-adapter/src/wire/schemas.js'
 import type { ConnectOptions } from '../../packages/kimi-adapter/src/transport/KimiWsClient.js'
 import type { KimiCursor, SessionEventFrame } from '../../packages/kimi-adapter/src/wire/ws.js'
 
@@ -220,6 +221,202 @@ describe('SessionSyncController', () => {
       items: [{ title: 'Collect Kimi state', status: 'done' }, { title: 'Render it in Plan', status: 'in_progress' }],
       updatedAt: '2026-07-23T00:03:00.000Z'
     }])
+    controller.close()
+  })
+
+  it('hydrates todo items via the lenient transcript schema (missing fields, content fallback, completed status)', async () => {
+    const controller = new SessionSyncController({
+      rest: {
+        getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)),
+        getSessionTranscript: vi.fn().mockResolvedValue(
+          // 真实 KimiRestClient 会在 schema 层做宽容解析；mock 边界同样过一遍 schema
+          sessionTranscriptSchema.parse({
+            agent_id: 'main',
+            todos: [{
+              todoId: 'todo-hydrate',
+              items: [
+                { content: 'No title here', status: 'completed' },
+                { title: 'Plain', status: 'pending' }
+              ]
+            }]
+          })
+        )
+      },
+      socket: new FakeSocket()
+    })
+
+    const state = await controller.openSession('session-1')
+
+    expect(state.todos).toEqual([{
+      todoId: 'todo-hydrate',
+      items: [
+        { title: 'No title here', status: 'done' },
+        { title: 'Plain', status: 'pending' }
+      ],
+      updatedAt: null
+    }])
+    controller.close()
+  })
+
+  it('warns and falls back to empty todos when the transcript request fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const controller = new SessionSyncController({
+      rest: {
+        getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)),
+        getSessionTranscript: vi.fn().mockRejectedValue(new Error('transcript boom'))
+      },
+      socket: new FakeSocket()
+    })
+
+    const state = await controller.openSession('session-1')
+
+    expect(state.todos).toEqual([])
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0]?.[0])).toContain('session-1')
+    warn.mockRestore()
+    controller.close()
+  })
+
+  it('keeps live-filled todos when a resync transcript request fails', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const socket = new FakeSocket()
+    const rest = {
+      getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)),
+      getSessionTranscript: vi.fn().mockRejectedValue(new Error('transcript boom'))
+    }
+    const controller = new SessionSyncController({ rest, socket })
+    try {
+      await controller.openSession('session-1')
+
+      // live 帧填充计划
+      socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+      socket.emit('session-event', {
+        type: 'tool.call.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+        timestamp: '2026-07-23T00:03:00.000Z',
+        payload: {
+          toolCallId: 'tool-todo-1', name: 'TodoList', agentId: 'main',
+          args: { todos: [{ title: 'Keep me', status: 'in_progress' }] }
+        }
+      } satisfies SessionEventFrame)
+      expect(controller.getState('session-1')?.todos).toHaveLength(1)
+
+      // resync 时 transcript 失败：保留 live 帧已填充的 todos，而不是清空
+      socket.emit('resync-required', { sessionId: 'session-1', reason: 'buffer_overflow' })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(rest.getSessionSnapshot).toHaveBeenCalledTimes(2)
+      expect(controller.getState('session-1')?.todos).toEqual([{
+        todoId: 'todo',
+        items: [{ title: 'Keep me', status: 'in_progress' }],
+        updatedAt: '2026-07-23T00:03:00.000Z'
+      }])
+    } finally {
+      warn.mockRestore()
+      controller.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('accepts the short display kind "todo" and filters subagent display frames', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+
+    // 主代理 display.kind = 'todo' 变体
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.use', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:03:00.000Z',
+      payload: {
+        toolCallId: 'tool-todo-a', name: 'TodoList', agentId: 'main',
+        display: { kind: 'todo', items: [{ title: 'Plan A', status: 'pending' }] }
+      }
+    } satisfies SessionEventFrame)
+    expect(controller.getState('session-1')?.todos).toEqual([{
+      todoId: 'todo',
+      items: [{ title: 'Plan A', status: 'pending' }],
+      updatedAt: '2026-07-23T00:03:00.000Z'
+    }])
+
+    // 子代理的 display 帧不覆盖主计划
+    socket.cursors['session-1'] = { seq: 12, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.use', seq: 12, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:03:30.000Z',
+      payload: {
+        toolCallId: 'tool-todo-b', name: 'TodoList', agentId: 'subagent-2',
+        display: { kind: 'todo_list', items: [{ title: 'Sub-agent plan', status: 'in_progress' }] }
+      }
+    } satisfies SessionEventFrame)
+    expect(controller.getState('session-1')?.todos).toEqual([{
+      todoId: 'todo',
+      items: [{ title: 'Plan A', status: 'pending' }],
+      updatedAt: '2026-07-23T00:03:00.000Z'
+    }])
+    controller.close()
+  })
+
+  it('recognizes tool name variants, tool.use frames, JSON-string args, and skips invalid items', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+
+    // tool.use + 小写下划线工具名（todo_list）+ JSON 字符串 args
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.use', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:03:00.000Z',
+      payload: {
+        toolCallId: 'tool-todo-1', name: 'todo_list', agentId: 'main',
+        args: JSON.stringify({
+          todos: [
+            { title: 'Valid', status: 'pending' },
+            { content: 'Completed via content', status: 'completed' },
+            { garbage: true },
+            { title: 'Bad status', status: 'weird' }
+          ]
+        })
+      }
+    } satisfies SessionEventFrame)
+
+    // 单条不合法只跳过该条；content/completed 归一
+    expect(controller.getState('session-1')?.todos).toEqual([{
+      todoId: 'todo',
+      items: [
+        { title: 'Valid', status: 'pending' },
+        { title: 'Completed via content', status: 'done' }
+      ],
+      updatedAt: '2026-07-23T00:03:00.000Z'
+    }])
+    controller.close()
+  })
+
+  it('drops live todo frames whose items are all invalid', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+    expect(controller.getState('session-1')?.todos).toEqual([])
+
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.call.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:03:00.000Z',
+      payload: {
+        toolCallId: 'tool-todo-1', name: 'TodoList', agentId: 'main',
+        args: { todos: [{ garbage: true }, { title: 'No status' }] }
+      }
+    } satisfies SessionEventFrame)
+
+    expect(controller.getState('session-1')?.todos).toEqual([])
     controller.close()
   })
 

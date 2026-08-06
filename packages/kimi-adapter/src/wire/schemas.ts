@@ -205,10 +205,30 @@ export const transcriptItemSchema = z.discriminatedUnion('kind', [
   })
 ])
 
-export const sessionTodoItemSchema = z.object({
-  title: z.string(),
-  status: z.enum(['pending', 'in_progress', 'done'])
-})
+/**
+ * 官方 web 端容错语义：`title` 缺失时回退 `content` 字段，
+ * `completed`/`complete`/`finished` 等完成态写法归一为 `done`。
+ */
+export const sessionTodoItemSchema = z.preprocess(
+  (value) => {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+    const record: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+    if (typeof record.title !== 'string' && typeof record.content === 'string') {
+      record.title = record.content
+    }
+    if (typeof record.status === 'string') {
+      const status = record.status.toLowerCase()
+      if (status === 'completed' || status === 'complete' || status === 'finished') {
+        record.status = 'done'
+      }
+    }
+    return record
+  },
+  z.object({
+    title: z.string(),
+    status: z.enum(['pending', 'in_progress', 'done'])
+  })
+)
 
 export const sessionTodoSchema = z.object({
   todoId: z.string(),
@@ -222,15 +242,22 @@ export const sideChatStartResultSchema = z.object({
 
 export const sessionTranscriptSchema = z.object({
   agent_id: z.string().min(1),
-  items: z.array(transcriptItemSchema),
-  has_more: z.boolean(),
-  tasks: z.array(z.record(z.string(), z.unknown())),
-  interactions: z.array(z.record(z.string(), z.unknown())),
-  attachments: z.array(z.record(z.string(), z.unknown())),
-  todos: z.array(sessionTodoSchema),
-  meta: z.record(z.string(), z.unknown()),
-  agents: z.array(z.record(z.string(), z.unknown())),
-  pending_interactions: z.array(z.record(z.string(), z.unknown()))
+  // 逐条 safeParse：未知 kind / 字段漂移的条目被丢弃，不再拖垮整个数组
+  items: z.array(z.unknown()).default([]).transform((items) =>
+    items.flatMap((item) => {
+      const parsed = transcriptItemSchema.safeParse(item)
+      return parsed.success ? [parsed.data] : []
+    })
+  ),
+  has_more: z.boolean().default(false),
+  tasks: z.array(z.record(z.string(), z.unknown())).default([]),
+  interactions: z.array(z.record(z.string(), z.unknown())).default([]),
+  attachments: z.array(z.record(z.string(), z.unknown())).default([]),
+  todos: z.array(sessionTodoSchema).default([]),
+  meta: z.record(z.string(), z.unknown()).default({}),
+  agents: z.array(z.record(z.string(), z.unknown())).default([]),
+  // 服务端实际发送的是 interactionId 字符串数组；兼容对象形态以防旧版本漂移
+  pending_interactions: z.array(z.union([z.string(), z.record(z.string(), z.unknown())])).default([])
 })
 
 export const promptSubmitResultSchema = z.object({
