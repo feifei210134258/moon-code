@@ -6,7 +6,6 @@ import { promisify } from 'node:util'
 import { createRequire } from 'node:module'
 import type { RuntimeCandidate, RuntimeDiscovery } from '../../shared/contracts.js'
 import {
-  MANAGED_KIMI_VERSION,
   SUPPORTED_KIMI_RANGE,
   isSupportedKimiVersion,
   parseKimiVersion
@@ -92,6 +91,11 @@ export function resolveManagedKimiEntry(): string {
   return require.resolve('@moonshot-ai/kimi-code/dist/main.mjs')
 }
 
+export function resolveManagedKimiVersion(): string {
+  const pkg = require('@moonshot-ai/kimi-code/package.json') as { version?: string }
+  return pkg.version ?? 'unknown'
+}
+
 export async function discoverRuntimes(): Promise<RuntimeDiscovery> {
   const managedEntry = resolveManagedKimiEntry()
   const systemExecutable = await locateSystemKimi()
@@ -101,7 +105,7 @@ export async function discoverRuntimes(): Promise<RuntimeDiscovery> {
     supportedRange: SUPPORTED_KIMI_RANGE,
     managed: {
       kind: 'managed',
-      version: MANAGED_KIMI_VERSION,
+      version: resolveManagedKimiVersion(),
       executable: managedEntry,
       compatible: true,
       reason: null

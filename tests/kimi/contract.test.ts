@@ -17,6 +17,15 @@ const asyncapiPath = fileURLToPath(
 const openapi = JSON.parse(readFileSync(openapiPath, 'utf8')) as OpenApiDocumentLike
 const asyncapi = JSON.parse(readFileSync(asyncapiPath, 'utf8')) as AsyncApiDocumentLike
 
+const openapi033Path = fileURLToPath(
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.33.0-openapi.json', import.meta.url)
+)
+const asyncapi033Path = fileURLToPath(
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.33.0-asyncapi.json', import.meta.url)
+)
+const openapi033 = JSON.parse(readFileSync(openapi033Path, 'utf8')) as OpenApiDocumentLike
+const asyncapi033 = JSON.parse(readFileSync(asyncapi033Path, 'utf8')) as AsyncApiDocumentLike
+
 describe('pinned Kimi 0.29.2 contract', () => {
   it('contains every route and WebSocket message required by the desktop foundation', () => {
     expect(() => assertKimiContract(openapi, asyncapi)).not.toThrow()
@@ -68,5 +77,11 @@ describe('pinned Kimi 0.29.2 contract', () => {
       location: 'components.messages.session_event.event.session.work_changed',
       message: 'Required session event variant is missing'
     })
+  })
+})
+
+describe('pinned Kimi 0.33.0 contract', () => {
+  it('contains every route and WebSocket message required by the desktop foundation', () => {
+    expect(() => assertKimiContract(openapi033, asyncapi033)).not.toThrow()
   })
 })

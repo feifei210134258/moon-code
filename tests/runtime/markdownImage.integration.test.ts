@@ -42,8 +42,9 @@ describe.skipIf(!runIntegration)('managed Kimi Markdown image integration', () =
       })
       await waitForTurnToFinish(rest, session.id)
       await bridge.compactSession(session.id, 'Keep the file-context boundary.')
-      const draft = await bridge.undoSession(session.id)
-      expect(draft?.text).toContain('P0 smoke')
+      await waitForTurnToFinish(rest, session.id)
+      // 0.33 起 undo 不允许跨越 compaction 边界，应被 SESSION_UNDO_UNAVAILABLE (40911) 拒绝。
+      await expect(bridge.undoSession(session.id)).rejects.toMatchObject({ code: 40911 })
     } finally {
       await bridge.close()
       await rest.archiveSession(session.id).catch(() => undefined)
