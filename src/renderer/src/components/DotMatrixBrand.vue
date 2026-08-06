@@ -2,56 +2,92 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 /**
- * 点阵品牌视觉：规则网格的浅色小圆点中，高亮圆点组成一轮月牙
- * （呼应 Moon Code 品牌），高亮沿对角线缓慢流动并叠加全局呼吸，
- * 风格参考 Kimi 官网的点阵动画。尊重 prefers-reduced-motion：
- * 开启减少动态时只渲染一帧静态画面。
+ * 点阵品牌视觉：规则网格的浅色小圆点中，高亮圆点以 5×7 点阵字体
+ * 拼出 “moon” 四个字母（呼应 Moon Code 品牌），高亮沿对角线缓慢
+ * 流动并叠加全局呼吸，风格参考 Kimi 官网的点阵 logo。尊重
+ * prefers-reduced-motion：开启减少动态时只渲染一帧静态画面。
  * 颜色取自 styles.css 的 --faint / --text 设计 token，跟随主题。
  */
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 
 const COLUMNS = 34
-const ROWS = 15
+const ROWS = 11
 const PITCH = 14
 const MARGIN = 14
 const WIDTH = MARGIN * 2 + (COLUMNS - 1) * PITCH
 const HEIGHT = MARGIN * 2 + (ROWS - 1) * PITCH
 const DOT_RADIUS = 2.8
-const MOON_RADIUS = Math.min(WIDTH, HEIGHT) * 0.48
-const MOON_INNER_RADIUS = MOON_RADIUS * 0.78
-const MOON_OFFSET_X = MOON_RADIUS * 0.45
-const MOON_TILT = -0.28
-const MOON_CENTER_X = WIDTH / 2
-const MOON_CENTER_Y = HEIGHT / 2
 const WAVE_SPEED = (Math.PI * 2) / 9 // 一个完整波周期约 9 秒
+
+// 5×7 点阵字形，'#' 表示该格属于字母高亮；m / o / n 三个字形必须清晰可辨。
+const GLYPH_WIDTH = 5
+const GLYPH_HEIGHT = 7
+const GLYPH_GAP = 2 // 字母之间留出的空列数
+const WORD = 'moon'
+const GLYPHS: Record<string, string[]> = {
+  m: [
+    '.###.',
+    '#...#',
+    '#.#.#',
+    '#.#.#',
+    '#.#.#',
+    '#.#.#',
+    '#.#.#',
+  ],
+  o: [
+    '.###.',
+    '#...#',
+    '#...#',
+    '#...#',
+    '#...#',
+    '#...#',
+    '.###.',
+  ],
+  n: [
+    '#..##',
+    '#...#',
+    '#...#',
+    '#...#',
+    '#...#',
+    '#...#',
+    '#...#',
+  ],
+}
+
+// 整行文字在网格中的位置：4 个字母（5 列）× 3 个 2 列间距 = 26 列，居中。
+const TEXT_WIDTH = WORD.length * GLYPH_WIDTH + (WORD.length - 1) * GLYPH_GAP
+const TEXT_OFFSET_X = Math.floor((COLUMNS - TEXT_WIDTH) / 2)
+const TEXT_OFFSET_Y = Math.floor((ROWS - GLYPH_HEIGHT) / 2)
 
 interface Dot {
   x: number
   y: number
-  inMoon: boolean
+  inLetter: boolean
 }
 
 const dots: Dot[] = []
-const cosTilt = Math.cos(MOON_TILT)
-const sinTilt = Math.sin(MOON_TILT)
 for (let row = 0; row < ROWS; row += 1) {
   for (let col = 0; col < COLUMNS; col += 1) {
-    const x = MARGIN + col * PITCH
-    const y = MARGIN + row * PITCH
-    const dx = x - MOON_CENTER_X
-    const dy = y - MOON_CENTER_Y
-    // 绕中心旋转后判断是否落在月牙带内（外圆之内、内圆之外）。
-    const rx = dx * cosTilt - dy * sinTilt
-    const ry = dx * sinTilt + dy * cosTilt
-    const inMoon =
-      rx * rx + ry * ry <= MOON_RADIUS * MOON_RADIUS &&
-      (rx - MOON_OFFSET_X) * (rx - MOON_OFFSET_X) + ry * ry > MOON_INNER_RADIUS * MOON_INNER_RADIUS
-    dots.push({ x, y, inMoon })
+    // 当前格是否落在某个字母的字形内。
+    let inLetter = false
+    const glyphRow = row - TEXT_OFFSET_Y
+    if (glyphRow >= 0 && glyphRow < GLYPH_HEIGHT) {
+      for (let i = 0; i < WORD.length; i += 1) {
+        const glyph = GLYPHS[WORD.charAt(i)]
+        if (glyph === undefined) continue
+        const glyphCol = col - (TEXT_OFFSET_X + i * (GLYPH_WIDTH + GLYPH_GAP))
+        if (glyphCol >= 0 && glyphCol < GLYPH_WIDTH && glyph[glyphRow]?.[glyphCol] === '#') {
+          inLetter = true
+          break
+        }
+      }
+    }
+    dots.push({ x: MARGIN + col * PITCH, y: MARGIN + row * PITCH, inLetter })
   }
 }
 
 let baseColor = '#8e8e93'
-let moonColor = '#1d1d1f'
+let letterColor = '#1d1d1f'
 let reducedMotion = false
 let rafId = 0
 let resizeObserver: ResizeObserver | null = null
@@ -62,7 +98,7 @@ function readThemeColors(): void {
   const faint = style.getPropertyValue('--faint').trim()
   const text = style.getPropertyValue('--text').trim()
   if (faint !== '') baseColor = faint
-  if (text !== '') moonColor = text
+  if (text !== '') letterColor = text
 }
 
 function draw(now: number): void {
@@ -90,19 +126,19 @@ function draw(now: number): void {
   ctx.fillStyle = baseColor
   ctx.globalAlpha = 0.32
   for (const dot of dots) {
-    if (dot.inMoon) continue
+    if (dot.inLetter) continue
     ctx.beginPath()
     ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, Math.PI * 2)
     ctx.fill()
   }
 
-  // 月牙上的高亮沿对角线缓慢流动，像水面波光一样循环。
-  ctx.fillStyle = moonColor
+  // 字母上的高亮沿对角线缓慢流动；alpha 恒在 0.78–1.0，任何相位下字母都接近实心，波光仅轻微起伏。
+  ctx.fillStyle = letterColor
   for (const dot of dots) {
-    if (!dot.inMoon) continue
+    if (!dot.inLetter) continue
     const wave = reducedMotion
-      ? 0.62
-      : 0.38 + 0.52 * (0.5 + 0.5 * Math.sin(dot.x * 0.045 + dot.y * 0.03 - t * WAVE_SPEED))
+      ? 0.88
+      : 0.78 + 0.22 * (0.5 + 0.5 * Math.sin(dot.x * 0.045 + dot.y * 0.03 - t * WAVE_SPEED))
     ctx.globalAlpha = wave * breathe
     ctx.beginPath()
     ctx.arc(dot.x, dot.y, DOT_RADIUS, 0, Math.PI * 2)

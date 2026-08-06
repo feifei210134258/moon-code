@@ -1214,6 +1214,39 @@ export function useRuntimeBridge() {
     }
   }
 
+  /* 草稿会话没有真实 Session，controls 直接来自 Kimi 设置里的新 Session 默认值，
+     与 loadSessionControls 的回退顺序保持一致。 */
+  const loadDraftControls = async (): Promise<void> => {
+    if (window.kimiAgent === undefined || runtime.value.status !== 'running') return
+    const generation = ++controlsGeneration
+    sessionControlsPending.value = true
+    sessionControlsError.value = null
+    try {
+      const settings = await window.kimiAgent.getKimiSettings()
+      if (generation !== controlsGeneration || requestedSessionId !== null) return
+      const model = settings.preferences.defaultModel ?? settings.models[0]?.id ?? null
+      if (model === null) throw new Error('Kimi 没有可用模型，请先在设置中配置 Provider 与默认模型')
+      const descriptor = settings.models.find((item) => item.id === model)
+      const thinking = resolveSessionThinkingEffort('', descriptor, settings.preferences.thinkingEffort)
+      sessionModels.value = settings.models
+      promptControls.value = {
+        model,
+        thinking,
+        permissionMode: settings.preferences.defaultPermissionMode ?? 'manual',
+        planMode: settings.preferences.defaultPlanMode ?? false,
+        swarmMode: false
+      }
+    } catch (error) {
+      if (generation === controlsGeneration && requestedSessionId === null) {
+        sessionModels.value = []
+        promptControls.value = null
+        sessionControlsError.value = errorMessage(error)
+      }
+    } finally {
+      if (generation === controlsGeneration) sessionControlsPending.value = false
+    }
+  }
+
   const setPromptControls = (controls: KimiPromptControls): void => {
     const previous = promptControls.value
     promptControls.value = { ...controls }
@@ -1501,6 +1534,7 @@ export function useRuntimeBridge() {
     moveLocalPrompt,
     setPromptControls,
     setGoalMode,
+    loadDraftControls,
     refreshSessionOperational,
     controlGoal,
     cancelTask,

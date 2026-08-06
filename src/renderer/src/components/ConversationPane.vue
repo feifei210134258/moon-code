@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PhArrowCounterClockwise, PhArrowSquareOut, PhSpinnerGap, PhTrash } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ChatTurn } from '../types'
+import type { ChatTurn, ProjectItem } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
 import type {
   ApprovalRequestView,
@@ -23,6 +23,7 @@ import type {
 import ApprovalCard from './ApprovalCard.vue'
 import ActivityBlock from './ActivityBlock.vue'
 import ComposerBar from './ComposerBar.vue'
+import DraftProjectPicker from './DraftProjectPicker.vue'
 import QuestionCard from './QuestionCard.vue'
 import TerminalDrawer from './TerminalDrawer.vue'
 import AgentRoster from './AgentRoster.vue'
@@ -42,6 +43,9 @@ const props = withDefaults(defineProps<{
   phase: 'idle' | 'loading' | 'ready' | 'resyncing' | 'reconnecting' | 'error'
   error: string | null
   composerEnabled: boolean
+  draftActive?: boolean
+  draftWorkspaceId?: string
+  projects?: ProjectItem[]
   promptPending: boolean
   promptError: string | null
   promptRunning: boolean
@@ -83,6 +87,9 @@ const props = withDefaults(defineProps<{
   agentTranscriptError?: string | null
   mentionSearch?: (query: string) => Promise<WorkspaceFileSearchItem[]>
 }>(), {
+  draftActive: false,
+  draftWorkspaceId: '',
+  projects: () => [],
   sideChat: null,
   sideChatPending: false,
   sideChatError: null,
@@ -102,6 +109,8 @@ const emit = defineEmits<{
     deliveryMode: 'queue' | 'steer'
   ]
   abort: []
+  selectDraftWorkspace: [workspaceId: string]
+  openDraftWorkspaceFolder: []
   respondApproval: [approvalId: string, response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }]
   respondQuestion: [questionId: string, answers: Record<string, QuestionAnswerInput>]
   dismissQuestion: [questionId: string]
@@ -612,6 +621,13 @@ watch(
       <div v-if="skillActivationError" class="composer-error">{{ skillActivationError }}</div>
       <div v-if="controlsError" class="composer-error">{{ controlsError }}</div>
       <div v-if="operationalError" class="composer-error">{{ operationalError }}</div>
+      <DraftProjectPicker
+        v-if="draftActive"
+        :projects="projects"
+        :workspace-id="draftWorkspaceId"
+        @select="emit('selectDraftWorkspace', $event)"
+        @open-folder="emit('openDraftWorkspaceFolder')"
+      />
       <ComposerBar
         ref="composer"
         :disabled="!composerEnabled || promptControls === null"

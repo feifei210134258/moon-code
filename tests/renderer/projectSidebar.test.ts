@@ -168,4 +168,63 @@ describe('ProjectSidebar', () => {
     expect(wrapper.emitted('loadSessionChildren')).toEqual([['session-a']])
     wrapper.unmount()
   })
+
+  it('opens the session menu on row right-click, positioned at the pointer, with the same items as the more button', async () => {
+    const wrapper = mountSidebar()
+    wrapper.findAll('.session-row')[0]!.element.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 })
+    )
+    await nextTick()
+    const contextMenu = [...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)!
+    expect(contextMenu).toBeDefined()
+    const expectedTop = Math.max(8, Math.min(200 + 6, window.innerHeight - 224))
+    const expectedLeft = Math.max(8, Math.min(300 - 146, window.innerWidth - 146 - 8))
+    expect((contextMenu as HTMLElement).style.top).toBe(`${Math.round(expectedTop)}px`)
+    expect((contextMenu as HTMLElement).style.left).toBe(`${Math.round(expectedLeft)}px`)
+    const contextItems = [...contextMenu.querySelectorAll('button')].map((item) => item.textContent)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    const dotsMenu = [...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)!
+    expect((dotsMenu as HTMLElement).style.top).toBe('8px')
+    const dotsItems = [...dotsMenu.querySelectorAll('button')].map((item) => item.textContent)
+    expect(contextItems).toEqual(dotsItems)
+    wrapper.unmount()
+  })
+
+  it('opens the project menu on row right-click', async () => {
+    const wrapper = mountSidebar()
+    wrapper.findAll('.project-row')[0]!.element.dispatchEvent(
+      new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 120, clientY: 80 })
+    )
+    await nextTick()
+    const projectMenu = [...document.querySelectorAll('.tree-menu-overlay')].find((menu) => menu.textContent?.includes('移除项目'))
+    expect(projectMenu).toBeDefined()
+    expect(projectMenu!.textContent).toContain('新建任务')
+    expect(projectMenu!.textContent).toContain('重命名')
+    const expectedTop = Math.max(8, Math.min(80 + 6, window.innerHeight - 224))
+    expect((projectMenu as HTMLElement).style.top).toBe(`${Math.round(expectedTop)}px`)
+    wrapper.unmount()
+  })
+
+  it('allows creating a task without projects, emitting an empty workspace id, and stays disabled while lifecycle is pending', async () => {
+    const wrapper = mount(ProjectSidebar, {
+      props: {
+        projects: [],
+        activeWorkspaceId: '',
+        activeSessionId: '',
+        lifecyclePending: null,
+        lifecycleError: null
+      }
+    })
+    const button = wrapper.get('.new-task-button')
+    expect(button.attributes('disabled')).toBeUndefined()
+    await button.trigger('click')
+    expect(wrapper.emitted('createSession')).toEqual([['']])
+
+    await wrapper.setProps({ lifecyclePending: 'creating' })
+    expect(wrapper.get('.new-task-button').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
 })

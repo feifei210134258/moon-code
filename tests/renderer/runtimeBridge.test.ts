@@ -1021,3 +1021,117 @@ describe('useRuntimeBridge session races', () => {
     wrapper.unmount()
   })
 })
+
+describe('useRuntimeBridge draft controls', () => {
+  it('loads draft prompt controls from the Kimi new-session defaults', async () => {
+    const getKimiSettings = vi.fn(async () => ({
+      preferences: {
+        defaultProvider: 'managed:kimi-code',
+        defaultModel: 'kimi-for-coding',
+        defaultPermissionMode: 'auto' as const,
+        defaultPlanMode: true,
+        mergeAllAvailableSkills: null,
+        telemetry: null,
+        thinkingEffort: 'low'
+      },
+      models: [{
+        id: 'kimi-for-coding',
+        providerId: 'managed:kimi-code',
+        displayName: 'Kimi for Coding',
+        maxContextSize: 262_144,
+        capabilities: ['thinking'],
+        supportEfforts: ['off', 'low', 'high', 'max'],
+        defaultEffort: 'high'
+      }]
+    }))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.30.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.30.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      getKimiSettings
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    expect(bridge.promptControls.value).toBeNull()
+
+    await bridge.loadDraftControls()
+
+    expect(getKimiSettings).toHaveBeenCalledTimes(1)
+    expect(bridge.promptControls.value).toEqual({
+      model: 'kimi-for-coding',
+      thinking: 'low',
+      permissionMode: 'auto',
+      planMode: true,
+      swarmMode: false
+    })
+    expect(bridge.sessionModels.value).toHaveLength(1)
+    expect(bridge.sessionControlsError.value).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('reports an error instead of enabling the composer when no model is available', async () => {
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.30.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.30.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      getKimiSettings: vi.fn(async () => ({
+        preferences: {
+          defaultProvider: null,
+          defaultModel: null,
+          defaultPermissionMode: null,
+          defaultPlanMode: null,
+          mergeAllAvailableSkills: null,
+          telemetry: null,
+          thinkingEffort: null
+        },
+        models: []
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+
+    await bridge.loadDraftControls()
+
+    expect(bridge.promptControls.value).toBeNull()
+    expect(bridge.sessionControlsError.value).toContain('没有可用模型')
+    wrapper.unmount()
+  })
+})

@@ -38,6 +38,8 @@ const {
   projects,
   activeWorkspaceId,
   activeSessionId,
+  draftActive,
+  draftWorkspaceId,
   activeExtension,
   rightPanelOpen,
   leftPanelWidth,
@@ -123,8 +125,7 @@ watch(
 )
 const composerEnabled = computed(() => showOperationalFixture || (
   runtimeBridge.runtime.value.status === 'running' &&
-  activeSessionId.value.length > 0 &&
-  transcriptPhase.value === 'ready'
+  (draftActive.value || (activeSessionId.value.length > 0 && transcriptPhase.value === 'ready'))
 ))
 const terminalEnabled = computed(() => (
   runtimeBridge.runtime.value.status === 'running' &&
@@ -203,8 +204,22 @@ async function submitPrompt(
   goalMode: boolean,
   deliveryMode: 'queue' | 'steer'
 ): Promise<void> {
-  const sessionId = activeSessionId.value
-  if (sessionId.length === 0) return
+  let sessionId = activeSessionId.value
+  if (sessionId.length === 0) {
+    /* 草稿态首条消息：先真正创建并打开会话，成功后才发送；失败则保持草稿态。 */
+    if (!draftActive.value) return
+    if (draftWorkspaceId.value.length === 0) {
+      runtimeBridge.lifecycleError.value = '请先选择项目'
+      return
+    }
+    const result = await runtimeBridge.createSession(draftWorkspaceId.value)
+    if (result === null) return
+    store.selectSession(result.sessionId)
+    /* main 侧要求会话已激活才能接收 Prompt；watcher 的 openSession 不等待，
+       这里显式等一次，避免首条消息撞上『Kimi session is not active』。 */
+    await runtimeBridge.openSession(result.sessionId)
+    sessionId = result.sessionId
+  }
   const accepted = await runtimeBridge.submitPrompt(sessionId, {
     text,
     ...(attachments.length === 0 ? {} : { attachments }),
@@ -262,17 +277,32 @@ function toggleRuntime(): void {
   void runtimeBridge.toggle()
 }
 
-async function addWorkspace(): Promise<void> {
+async function addWorkspace(options?: { forDraft?: boolean }): Promise<void> {
   const workspaceId = await runtimeBridge.addWorkspace()
   if (workspaceId === null) return
+  if (options?.forDraft === true && draftActive.value) {
+    /* 草稿下拉里的「打开文件夹」：保持草稿态，只把新项目设为草稿项目。 */
+    store.setDraftWorkspace(workspaceId)
+    return
+  }
+  store.exitDraft()
   store.selectWorkspace(workspaceId)
   /* 打开项目文件夹后自动新建会话并选中，省去手动点『新建任务』。 */
-  await createSession(workspaceId)
-}
-
-async function createSession(workspaceId: string): Promise<void> {
   const result = await runtimeBridge.createSession(workspaceId)
   if (result !== null) store.selectSession(result.sessionId)
+}
+
+function startDraftSession(workspaceId: string): void {
+  const hadSession = activeSessionId.value.length > 0
+  store.startDraft(workspaceId)
+  /* activeSessionId 变化时 watcher 会补载草稿 controls；本就为空时不会触发，这里直接补。 */
+  if (!hadSession && runtimeBridge.runtime.value.status === 'running') {
+    void runtimeBridge.loadDraftControls()
+  }
+}
+
+function openDraftWorkspaceFolder(): void {
+  void addWorkspace({ forDraft: true })
 }
 
 async function forkSession(sessionId: string): Promise<void> {
@@ -563,6 +593,9 @@ watch(
     branchesOpen.value = false
     if (sessionId.length === 0) {
       runtimeBridge.clearActiveSession()
+      /* 草稿态没有真实会话，controls 从 Kimi 设置的新 Session 默认值装载；
+         runtime 重启后回到 running 也会走这里补载。 */
+      if (draftActive.value && runtimeStatus === 'running') void runtimeBridge.loadDraftControls()
       return
     }
     if (runtimeStatus !== 'running') return
@@ -676,7 +709,7 @@ onBeforeUnmount(() => {
         :children-error="runtimeBridge.childrenError.value"
         @toggle-project="store.toggleProject"
         @select-session="store.selectSession"
-        @create-session="createSession"
+        @create-session="startDraftSession"
         @rename-workspace="runtimeBridge.renameWorkspace"
         @delete-workspace="runtimeBridge.deleteWorkspace"
         @rename-session="runtimeBridge.renameSession"
@@ -708,6 +741,9 @@ onBeforeUnmount(() => {
         :phase="transcriptPhase"
         :error="transcriptError"
         :composer-enabled="composerEnabled"
+        :draft-active="draftActive"
+        :draft-workspace-id="draftWorkspaceId"
+        :projects="projects"
         :prompt-pending="runtimeBridge.promptPending.value"
         :prompt-error="runtimeBridge.promptError.value"
         :prompt-running="activeSessionView?.mainTurnActive === true"
@@ -750,6 +786,8 @@ onBeforeUnmount(() => {
         :mention-search="searchMentionFiles"
         @submit="submitPrompt"
         @abort="runtimeBridge.abortActivePrompt"
+        @select-draft-workspace="store.setDraftWorkspace"
+        @open-draft-workspace-folder="openDraftWorkspaceFolder"
         @respond-approval="respondApproval"
         @respond-question="respondQuestion"
         @dismiss-question="dismissQuestion"

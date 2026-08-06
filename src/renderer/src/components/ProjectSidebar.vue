@@ -85,8 +85,8 @@ const menuSession = computed(() => {
 })
 
 function createSession(): void {
-  const workspaceId = props.activeWorkspaceId || props.projects[0]?.id
-  if (workspaceId !== undefined) emit('createSession', workspaceId)
+  const workspaceId = props.activeWorkspaceId || props.projects[0]?.id || ''
+  emit('createSession', workspaceId)
 }
 
 function closeMenu(): void {
@@ -103,7 +103,14 @@ function sessionStatusLabel(session: SessionItem): string {
   } as const)[session.tone ?? 'neutral']
 }
 
-function toggleMenu(key: string, event: MouseEvent): void {
+function clampMenuPosition(x: number, y: number): { top: string; left: string } {
+  const menuWidth = 146
+  const top = Math.max(8, Math.min(y + 6, window.innerHeight - 224))
+  const left = Math.max(8, Math.min(x - menuWidth, window.innerWidth - menuWidth - 8))
+  return { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
+}
+
+function toggleMenu(key: string, event: MouseEvent, fromPointer = false): void {
   if (menuKey.value === key) {
     closeMenu()
     return
@@ -111,10 +118,9 @@ function toggleMenu(key: string, event: MouseEvent): void {
   const trigger = event.currentTarget
   if (!(trigger instanceof HTMLElement)) return
   const rect = trigger.getBoundingClientRect()
-  const menuWidth = 146
-  const top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - 224))
-  const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))
-  menuPosition.value = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
+  const anchorX = fromPointer ? event.clientX : rect.right
+  const anchorY = fromPointer ? event.clientY : rect.bottom
+  menuPosition.value = clampMenuPosition(anchorX, anchorY)
   menuKey.value = key
 }
 
@@ -180,7 +186,7 @@ onBeforeUnmount(() => {
 <template>
   <aside class="project-sidebar">
     <div class="sidebar-actions">
-      <button class="new-task-button" type="button" :disabled="lifecyclePending !== null || projects.length === 0" @click="createSession">
+      <button class="new-task-button" type="button" :disabled="lifecyclePending !== null" @click="createSession">
         <PhNotePencil :size="17" />
         <span>新建任务</span>
       </button>
@@ -199,6 +205,7 @@ onBeforeUnmount(() => {
             class="project-row"
             type="button"
             @click="$emit('toggleProject', project.id)"
+            @contextmenu.prevent.stop="toggleMenu(`workspace:${project.id}`, $event, true)"
           >
             <FolderSimpleOpenIcon v-if="project.expanded" :size="17" />
             <PhFolderSimple v-else :size="17" />
@@ -227,6 +234,7 @@ onBeforeUnmount(() => {
                 :class="{ 'is-active': activeSessionId === session.id, 'is-child': session.parentSessionId !== undefined }"
                 type="button"
                 @click="$emit('selectSession', session.id)"
+                @contextmenu.prevent.stop="toggleMenu(`session:${session.id}`, $event, true)"
               >
                 <span class="session-title">
                   <span

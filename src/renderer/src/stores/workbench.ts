@@ -79,6 +79,9 @@ export const useWorkbenchStore = defineStore('workbench', {
     projects: structuredClone(initialProjects),
     activeWorkspaceId: 'kimi-agent',
     activeSessionId: 'explore-client',
+    /* 草稿会话：「新建任务」先进入草稿态，发出首条消息时才真正创建会话。 */
+    draftActive: false,
+    draftWorkspaceId: '',
     activeExtension: 'changes' as ExtensionTab,
     rightPanelOpen: true,
     leftPanelWidth: 260,
@@ -110,7 +113,42 @@ export const useWorkbenchStore = defineStore('workbench', {
         this.activeSessionId = workspace.sessions[0]?.id ?? ''
       }
     },
+    startDraft(workspaceId: string) {
+      this.draftActive = true
+      this.draftWorkspaceId = workspaceId
+      this.activeSessionId = ''
+      if (workspaceId.length > 0) {
+        this.activeWorkspaceId = workspaceId
+        const workspace = this.projects.find((project) => project.id === workspaceId)
+        if (workspace !== undefined) {
+          workspace.expanded = true
+          rememberProjectExpansion(this.projectExpansion, workspaceId, true)
+        }
+      }
+      /* 中间栏回到品牌空状态，输入框可用。 */
+      this.turns = []
+      this.transcriptPhase = 'ready'
+      this.transcriptError = null
+      this.transcriptHasMore = false
+    },
+    setDraftWorkspace(workspaceId: string) {
+      if (!this.draftActive) return
+      this.draftWorkspaceId = workspaceId
+      this.activeWorkspaceId = workspaceId
+      const workspace = this.projects.find((project) => project.id === workspaceId)
+      if (workspace !== undefined) {
+        workspace.expanded = true
+        rememberProjectExpansion(this.projectExpansion, workspaceId, true)
+      }
+    },
+    exitDraft() {
+      this.draftActive = false
+      this.draftWorkspaceId = ''
+    },
     selectSession(sessionId: string) {
+      /* 点选任意已有会话（或首条消息创建成功后）退出草稿态。 */
+      this.draftActive = false
+      this.draftWorkspaceId = ''
       this.activeSessionId = sessionId
       const workspace = this.projects.find((project) => project.sessions.some((session) => session.id === sessionId))
       if (workspace !== undefined) this.activeWorkspaceId = workspace.id
@@ -174,7 +212,7 @@ export const useWorkbenchStore = defineStore('workbench', {
       const activeStillExists = projects.some((project) =>
         project.sessions.some((session) => session.id === this.activeSessionId)
       )
-      if (!activeStillExists) {
+      if (!activeStillExists && !this.draftActive) {
         this.activeSessionId = selectedWorkspace?.sessions[0]?.id
           ?? projects.flatMap((project) => project.sessions)[0]?.id
           ?? ''

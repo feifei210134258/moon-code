@@ -465,3 +465,108 @@ describe('workbench transcript hydration', () => {
     }))
   })
 })
+
+describe('workbench draft session state', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    window.localStorage.removeItem('moon-code:navigation-activity:v2')
+    window.localStorage.removeItem('moon-code:project-expansion:v1')
+  })
+
+  afterEach(() => {
+    window.localStorage.removeItem('moon-code:navigation-activity:v2')
+    window.localStorage.removeItem('moon-code:project-expansion:v1')
+  })
+
+  function draftTree() {
+    return [
+      {
+        id: 'workspace-a', name: 'A', root: '/a', sessions: [{
+          id: 'session-a', title: 'A', updatedAt: null, busy: false,
+          pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      },
+      {
+        id: 'workspace-b', name: 'B', root: '/b', sessions: [{
+          id: 'session-b', title: 'B', updatedAt: null, busy: false,
+          pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+        }]
+      }
+    ]
+  }
+
+  it('enters the draft state without creating a session and resets the transcript to the brand empty state', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(draftTree())
+    store.activeSessionId = 'session-1'
+    store.hydrateTranscript(sessionState())
+    expect(store.turns.length).toBeGreaterThan(0)
+
+    store.startDraft('workspace-b')
+
+    expect(store.draftActive).toBe(true)
+    expect(store.draftWorkspaceId).toBe('workspace-b')
+    expect(store.activeSessionId).toBe('')
+    expect(store.activeWorkspaceId).toBe('workspace-b')
+    expect(store.projects.find((project) => project.id === 'workspace-b')?.expanded).toBe(true)
+    expect(store.turns).toEqual([])
+    expect(store.transcriptPhase).toBe('ready')
+    expect(store.transcriptError).toBeNull()
+  })
+
+  it('does not auto-select a session when the tree refreshes during a draft', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(draftTree())
+    store.startDraft('workspace-a')
+
+    store.hydrateProjects(draftTree())
+
+    expect(store.draftActive).toBe(true)
+    expect(store.activeSessionId).toBe('')
+    expect(store.activeWorkspaceId).toBe('workspace-a')
+  })
+
+  it('exits the draft state when an existing session is selected', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(draftTree())
+    store.startDraft('workspace-a')
+
+    store.selectSession('session-b')
+
+    expect(store.draftActive).toBe(false)
+    expect(store.draftWorkspaceId).toBe('')
+    expect(store.activeSessionId).toBe('session-b')
+  })
+
+  it('switches the draft workspace and ignores draft updates outside the draft state', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(draftTree())
+    store.startDraft('workspace-a')
+
+    store.setDraftWorkspace('workspace-b')
+
+    expect(store.draftWorkspaceId).toBe('workspace-b')
+    expect(store.activeWorkspaceId).toBe('workspace-b')
+    expect(store.activeSessionId).toBe('')
+
+    store.exitDraft()
+    expect(store.draftActive).toBe(false)
+
+    store.selectSession('session-a')
+    store.setDraftWorkspace('workspace-b')
+    expect(store.draftActive).toBe(false)
+    expect(store.draftWorkspaceId).toBe('')
+    expect(store.activeSessionId).toBe('session-a')
+  })
+
+  it('restores auto-selection after the draft ends', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(draftTree())
+    store.startDraft('workspace-a')
+    store.exitDraft()
+
+    store.hydrateProjects(draftTree())
+
+    expect(store.activeSessionId).not.toBe('')
+  })
+})
