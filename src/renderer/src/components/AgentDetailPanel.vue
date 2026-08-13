@@ -63,6 +63,7 @@ function statusLabel(status: SessionAgentView['status']): string {
     <div class="agent-detail-meta">
       <span v-if="agent.subagentType">{{ agent.subagentType }}</span>
       <span v-if="agent.swarmIndex !== null">Swarm #{{ agent.swarmIndex + 1 }}</span>
+      <span v-if="agent.model">{{ agent.model }}<template v-if="agent.thinkingEffort"> · {{ agent.thinkingEffort }}</template></span>
       <span v-if="usageLabel(agent, transcript)">{{ usageLabel(agent, transcript) }}</span>
       <span v-for="detail in usageDetails(agent, transcript)" :key="detail">{{ detail }}</span>
       <span v-if="agent.suspendedReason">{{ agent.suspendedReason }}</span>

@@ -23,6 +23,8 @@ export interface AgentRosterItem {
   parentToolCallId: string | null
   swarmIndex: number | null
   runInBackground: boolean
+  model: string | null
+  thinkingEffort: string | null
   createdAt: string | null
   startedAt: string | null
   completedAt: string | null
@@ -36,7 +38,9 @@ export class AgentProjector {
 
   seedSnapshot(sessionId: string, snapshot: SessionSnapshot): AgentRosterItem[] {
     const roster = new Map<string, AgentRosterItem>()
-    roster.set(MAIN_AGENT_ID, mainAgent(snapshot.session.main_turn_active === true ? 'working' : 'idle'))
+    const main = mainAgent(snapshot.session.main_turn_active === true ? 'working' : 'idle')
+    main.model = snapshot.session.agent_config.model
+    roster.set(MAIN_AGENT_ID, main)
     for (const task of snapshot.subagents ?? []) {
       if (task.kind !== 'subagent' || task.run_in_background === true) continue
       roster.set(task.id, mapSnapshotSubagent(task))
@@ -66,6 +70,8 @@ export class AgentProjector {
           parentToolCallId: stringValue(payload.parentToolCallId),
           swarmIndex: numberValue(payload.swarmIndex),
           runInBackground: false,
+          model: stringValue(payload.model),
+          thinkingEffort: stringValue(payload.thinkingEffort),
           createdAt: frame.timestamp,
           startedAt: null,
           completedAt: null,
@@ -144,14 +150,20 @@ export class AgentProjector {
         const agent = roster.get(id)
         if (agent === undefined) return false
         const contextTokens = numberValue(payload.contextTokens) ?? numberValue(payload.context_tokens)
-        if (contextTokens === null) return false
-        agent.usage = {
-          inputTokens: agent.usage?.inputTokens ?? 0,
-          outputTokens: agent.usage?.outputTokens ?? 0,
-          cacheReadTokens: agent.usage?.cacheReadTokens ?? 0,
-          cacheCreationTokens: agent.usage?.cacheCreationTokens ?? 0,
-          contextTokens
+        const model = stringValue(payload.model)
+        const thinkingEffort = stringValue(payload.thinkingEffort)
+        if (contextTokens === null && model === null && thinkingEffort === null) return false
+        if (contextTokens !== null) {
+          agent.usage = {
+            inputTokens: agent.usage?.inputTokens ?? 0,
+            outputTokens: agent.usage?.outputTokens ?? 0,
+            cacheReadTokens: agent.usage?.cacheReadTokens ?? 0,
+            cacheCreationTokens: agent.usage?.cacheCreationTokens ?? 0,
+            contextTokens
+          }
         }
+        if (model !== null) agent.model = model
+        if (thinkingEffort !== null) agent.thinkingEffort = thinkingEffort
         return true
       }
       case 'agent.created':
@@ -194,6 +206,8 @@ function mainAgent(status: AgentRosterItem['status']): AgentRosterItem {
     parentToolCallId: null,
     swarmIndex: null,
     runInBackground: false,
+    model: null,
+    thinkingEffort: null,
     createdAt: null,
     startedAt: null,
     completedAt: null,
@@ -215,6 +229,8 @@ function mapSnapshotSubagent(task: SnapshotSubagent): AgentRosterItem {
     parentToolCallId: task.parent_tool_call_id ?? null,
     swarmIndex: task.swarm_index ?? null,
     runInBackground: task.run_in_background === true,
+    model: task.model ?? null,
+    thinkingEffort: task.thinking_effort ?? null,
     createdAt: timestampValue(task.created_at),
     startedAt: timestampValue(task.started_at),
     completedAt: timestampValue(task.completed_at),

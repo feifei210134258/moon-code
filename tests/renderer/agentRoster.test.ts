@@ -12,20 +12,23 @@ describe('AgentRoster', () => {
           {
             id: 'main', role: 'main', name: 'Kimi', description: 'Main', status: 'working',
             subagentType: null, parentAgentId: null, parentToolCallId: null, swarmIndex: null,
-            runInBackground: false, createdAt: null, startedAt: null, completedAt: null,
+            runInBackground: false, model: null, thinkingEffort: null,
+            createdAt: null, startedAt: null, completedAt: null,
             suspendedReason: null, outputPreview: null, usage: null
           },
           {
             id: 'agent-1', role: 'subagent', name: 'explore', description: 'Inspect auth', status: 'completed',
             subagentType: 'explore', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0,
-            runInBackground: false, createdAt: null, startedAt: null, completedAt: null,
+            runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'high',
+            createdAt: null, startedAt: null, completedAt: null,
             suspendedReason: null, outputPreview: 'No credential leak found',
             usage: { inputTokens: 100, outputTokens: 25, cacheReadTokens: 20, cacheCreationTokens: 5, contextTokens: 256 }
           },
           {
             id: 'agent-2', role: 'subagent', name: 'coder', description: 'Fix the bug', status: 'working',
             subagentType: 'coder', parentAgentId: 'main', parentToolCallId: 'tool-2', swarmIndex: 1,
-            runInBackground: false, createdAt: null, startedAt: null, completedAt: null,
+            runInBackground: false, model: null, thinkingEffort: null,
+            createdAt: null, startedAt: null, completedAt: null,
             suspendedReason: null, outputPreview: 'Patching store.ts', usage: null
           }
         ]
@@ -45,6 +48,8 @@ describe('AgentRoster', () => {
     expect(list.text()).toContain('Fix the bug')
     expect(list.text()).toContain('工作中')
     expect(list.text()).toContain('150 tokens')
+    // 模型与思考档位在展开行内展示
+    expect(list.text()).toContain('kimi-for-coding · high')
     // 任务报告不再内联渲染
     expect(list.text()).not.toContain('No credential leak found')
     expect(list.text()).not.toContain('Patching store.ts')

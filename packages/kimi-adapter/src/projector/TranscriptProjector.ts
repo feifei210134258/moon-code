@@ -499,6 +499,7 @@ export class TranscriptProjector {
       case 'mcp.server.status':
       case 'skill.activated':
       case 'tool.list.updated':
+      case 'event.di.unit_changed':
       case 'subagent.spawned':
       case 'subagent.started':
       case 'subagent.suspended':

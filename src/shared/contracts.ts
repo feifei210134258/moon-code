@@ -193,6 +193,7 @@ export interface SessionNavigationItem {
   lastTurnReason: 'completed' | 'cancelled' | 'failed' | null
   lastPrompt: string | null
   parentSessionId?: string | null
+  archivedAt?: string | null
 }
 
 export interface WorkspaceNavigationItem {
@@ -401,6 +402,8 @@ export interface SessionAgentView {
   parentToolCallId: string | null
   swarmIndex: number | null
   runInBackground: boolean
+  model: string | null
+  thinkingEffort: string | null
   createdAt: string | null
   startedAt: string | null
   completedAt: string | null

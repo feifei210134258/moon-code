@@ -120,13 +120,15 @@ export function installSettingsApiFixture(): void {
         {
           id: 'main', role: 'main' as const, name: 'Kimi', description: '当前会话的主 Agent', status: 'working' as const,
           subagentType: null, parentAgentId: null, parentToolCallId: null, swarmIndex: null,
-          runInBackground: false, createdAt: null, startedAt: null, completedAt: null,
+          runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'high',
+          createdAt: null, startedAt: null, completedAt: null,
           suspendedReason: null, outputPreview: null, usage: null
         },
         {
           id: 'agent-1', role: 'subagent' as const, name: 'explore', description: '核对 MCP 运行时契约', status: 'completed' as const,
           subagentType: 'explore', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0,
-          runInBackground: false, createdAt: null, startedAt: null, completedAt: null,
+          runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'low',
+          createdAt: null, startedAt: null, completedAt: null,
           suspendedReason: null, outputPreview: '已确认 Kimi v2 REST route 与状态映射。',
           usage: { inputTokens: 1200, outputTokens: 230, cacheReadTokens: 480, cacheCreationTokens: 0, contextTokens: 4200 }
         }

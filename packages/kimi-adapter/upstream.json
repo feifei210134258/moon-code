@@ -2,7 +2,7 @@
   "source": {
     "repository": "https://github.com/MoonshotAI/kimi-code",
     "npmPackage": "@moonshot-ai/kimi-code",
-    "version": "0.33.0"
+    "version": "0.36.0"
   },
   "license": "MIT",
   "copiedFiles": [],
@@ -10,7 +10,9 @@
     "contracts/kimi-0.29.2-openapi.json",
     "contracts/kimi-0.29.2-asyncapi.json",
     "contracts/kimi-0.33.0-openapi.json",
-    "contracts/kimi-0.33.0-asyncapi.json"
+    "contracts/kimi-0.33.0-asyncapi.json",
+    "contracts/kimi-0.36.0-openapi.json",
+    "contracts/kimi-0.36.0-asyncapi.json"
   ],
   "notes": "Transport and schema code in this package is original integration code. No upstream source file has been copied yet."
 }

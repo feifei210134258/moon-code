@@ -44,6 +44,7 @@ import {
   sessionTranscriptSchema,
   sideChatStartResultSchema,
   sessionListSchema,
+  sessionListV2Schema,
   sessionSummarySchema,
   terminalCloseResultSchema,
   terminalListSchema,
@@ -96,6 +97,8 @@ import {
   type BackgroundTask,
   type BackgroundTaskCancelResult,
   type SessionSummary,
+  type SessionSummaryV2,
+  type SessionActivityStatus,
   type SessionTranscript,
   type SideChatStartResult,
   type Terminal,
@@ -537,6 +540,33 @@ export class KimiRestClient {
 
   async listSessions(options: { workspaceId?: string; includeArchive?: boolean } = {}): Promise<SessionSummary[]> {
     return (await this.listSessionPage(options)).items
+  }
+
+  async listSessionPageV2(options: {
+    workspaceId?: string | string[]
+    activityStatus?: SessionActivityStatus | SessionActivityStatus[]
+    updatedAfter?: number
+    archived?: 'true' | 'false' | 'all'
+    sort?: 'meta.updated_at_desc' | 'meta.updated_at_asc' | 'meta.created_at_desc'
+    includeGit?: boolean
+    pageSize?: number
+    pageToken?: string
+  } = {}): Promise<{ items: SessionSummaryV2[]; hasMore: boolean; nextPageToken: string | null }> {
+    const query = new URLSearchParams()
+    const setList = (key: string, value: string | string[] | undefined) => {
+      if (value === undefined) return
+      for (const item of Array.isArray(value) ? value : [value]) query.append(key, item)
+    }
+    setList('workspace.id', options.workspaceId)
+    setList('activity.status', options.activityStatus)
+    if (options.updatedAfter !== undefined) query.set('meta.updated_after', String(options.updatedAfter))
+    if (options.archived !== undefined) query.set('meta.archived', options.archived)
+    if (options.sort !== undefined) query.set('sort', options.sort)
+    if (options.includeGit === true) query.set('include', 'git')
+    query.set('page_size', String(options.pageSize ?? 100))
+    if (options.pageToken !== undefined) query.set('page_token', options.pageToken)
+    const data = await this.request(`/api/v2/sessions?${query}`, {}, sessionListV2Schema)
+    return { items: data.items, hasMore: data.has_more, nextPageToken: data.next_page_token }
   }
 
   createSession(input: {

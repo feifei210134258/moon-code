@@ -1,9 +1,9 @@
 {
-  "capturedAt": "2026-08-06T03:00:25.379Z",
-  "kimiVersion": "0.33.0",
-  "source": "@moonshot-ai/kimi-code@0.33.0",
+  "capturedAt": "2026-08-13T09:26:33.400Z",
+  "kimiVersion": "0.36.0",
+  "source": "@moonshot-ai/kimi-code@0.36.0",
   "files": {
-    "kimi-0.33.0-openapi.json": "fa70632ff89db06053bf2d0135f3a344b13a5ab13495a7f58a7e47c9f927051f",
-    "kimi-0.33.0-asyncapi.json": "946c8d31521c8537ed5cd870646b9faa1920deef0164da914055b3b8ec4749e4"
+    "kimi-0.36.0-openapi.json": "64dc81b30aeb622d0a40d27423c8749fb4b1ac086658529d35cfcafaeaa971a2",
+    "kimi-0.36.0-asyncapi.json": "4be7ad4d292e90a697c1a80a742e44f9954d01d18cbc5b3eb2cba6ffe16d8307"
   }
 }

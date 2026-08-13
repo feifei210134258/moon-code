@@ -19,7 +19,8 @@ function snapshot(): SessionSnapshot {
     subagents: [{
       id: 'agent-1', session_id: 'session-1', kind: 'subagent', description: 'Inspect auth',
       status: 'running', created_at: '2026-07-23T00:00:00.000Z', subagent_phase: 'working',
-      subagent_type: 'explore', parent_tool_call_id: 'tool-1', swarm_index: 0
+      subagent_type: 'explore', parent_tool_call_id: 'tool-1', swarm_index: 0,
+      model: 'kimi-for-coding', thinking_effort: 'high'
     }],
     pending_approvals: [],
     pending_questions: []
@@ -34,8 +35,11 @@ describe('AgentProjector', () => {
   it('seeds snapshot roster and applies authoritative subagent lifecycle usage', () => {
     const projector = new AgentProjector()
     expect(projector.seedSnapshot('session-1', snapshot())).toEqual([
-      expect.objectContaining({ id: 'main', role: 'main', status: 'working' }),
-      expect.objectContaining({ id: 'agent-1', status: 'working', parentToolCallId: 'tool-1' })
+      expect.objectContaining({ id: 'main', role: 'main', status: 'working', model: 'kimi' }),
+      expect.objectContaining({
+        id: 'agent-1', status: 'working', parentToolCallId: 'tool-1',
+        model: 'kimi-for-coding', thinkingEffort: 'high'
+      })
     ])
 
     projector.project(frame('subagent.completed', {
@@ -90,6 +94,27 @@ describe('AgentProjector', () => {
       agentId: 'background-live', delta: 'background output'
     }, 17))).toBe(false)
     expect(projector.getRoster('session-1').map((agent) => agent.id)).not.toContain('background-live')
+  })
+
+  it('tracks model and thinking effort from spawn and status frames', () => {
+    const projector = new AgentProjector()
+    projector.seedSnapshot('session-1', { ...snapshot(), subagents: [] })
+
+    projector.project(frame('subagent.spawned', {
+      subagentId: 'agent-3', subagentName: 'explore', description: 'Inspect config',
+      parentAgentId: 'main', runInBackground: false,
+      model: 'kimi-for-coding-highspeed', thinkingEffort: 'low'
+    }, 12))
+    expect(projector.getRoster('session-1')[1]).toEqual(expect.objectContaining({
+      id: 'agent-3', model: 'kimi-for-coding-highspeed', thinkingEffort: 'low'
+    }))
+
+    expect(projector.project(frame('agent.status.updated', {
+      agentId: 'main', model: 'kimi-k3', thinkingEffort: 'max'
+    }, 13))).toBe(true)
+    expect(projector.getRoster('session-1')[0]).toEqual(expect.objectContaining({
+      id: 'main', model: 'kimi-k3', thinkingEffort: 'max'
+    }))
   })
 
   it('drops a foreground subagent when it detaches into a background task', () => {

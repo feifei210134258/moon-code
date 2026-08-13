@@ -268,7 +268,7 @@ async function startIsolatedRuntime(
   const ready = await waitForRuntimeReady(child)
   const client = new KimiRestClient({ origin: ready.origin, token: ready.token })
   const meta = await client.getMeta()
-  expect(meta.server_version).toBe('0.33.0')
+  expect(meta.server_version).toBe('0.36.0')
   expect(meta.backend).toBe('v2')
   return { child, client, workspaceRoot }
 }

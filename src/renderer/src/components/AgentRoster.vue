@@ -61,6 +61,7 @@ function usageLabel(agent: SessionAgentView): string | null {
         <footer>
           <span v-if="agent.subagentType">{{ agent.subagentType }}</span>
           <span v-if="agent.swarmIndex !== null">#{{ agent.swarmIndex + 1 }}</span>
+          <span v-if="agent.model">{{ agent.model }}<template v-if="agent.thinkingEffort"> · {{ agent.thinkingEffort }}</template></span>
           <span v-if="usageLabel(agent)">{{ usageLabel(agent) }}</span>
           <span v-if="agent.suspendedReason">{{ agent.suspendedReason }}</span>
           <button

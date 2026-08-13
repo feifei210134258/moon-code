@@ -181,6 +181,50 @@ describe('KimiRestClient', () => {
     )
   })
 
+  it('queries the v2 session list with domain filters and opaque cursor', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: {
+          items: [{
+            id: 'session-1',
+            workspace: { id: 'workspace-1', cwd: '/tmp/project' },
+            meta: {
+              title: 'Task', last_prompt: '继续', created_at: 1_787_000_000_000,
+              updated_at: 1_787_000_100_000, archived: true, archived_at: 1_787_000_200_000
+            },
+            activity: { status: 'idle' }
+          }],
+          has_more: true,
+          next_page_token: 'cursor-1'
+        }
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.listSessionPageV2({
+      workspaceId: ['workspace-1', 'workspace-2'],
+      activityStatus: ['running', 'failed'],
+      archived: 'all',
+      sort: 'meta.updated_at_desc',
+      pageSize: 50,
+      pageToken: 'cursor-0'
+    })).resolves.toEqual({
+      items: [expect.objectContaining({ id: 'session-1', meta: expect.objectContaining({ archived: true }) })],
+      hasMore: true,
+      nextPageToken: 'cursor-1'
+    })
+    const url = new URL(fetchImpl.mock.calls[0]?.[0] as string)
+    expect(url.pathname).toBe('/api/v2/sessions')
+    expect(url.searchParams.getAll('workspace.id')).toEqual(['workspace-1', 'workspace-2'])
+    expect(url.searchParams.getAll('activity.status')).toEqual(['running', 'failed'])
+    expect(url.searchParams.get('meta.archived')).toBe('all')
+    expect(url.searchParams.get('sort')).toBe('meta.updated_at_desc')
+    expect(url.searchParams.get('page_size')).toBe('50')
+    expect(url.searchParams.get('page_token')).toBe('cursor-0')
+  })
+
   it('submits text prompts with bearer auth and validates the authoritative response', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({

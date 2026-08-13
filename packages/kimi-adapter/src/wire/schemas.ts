@@ -75,6 +75,39 @@ export const sessionListSchema = z.object({
   has_more: z.boolean()
 })
 
+export const sessionSummaryV2Schema = z.object({
+  id: z.string().min(1),
+  workspace: z.object({
+    id: z.string().min(1),
+    cwd: z.string().nullable()
+  }),
+  meta: z.object({
+    title: z.string().nullable(),
+    last_prompt: z.string().nullable(),
+    created_at: z.number().int(),
+    updated_at: z.number().int(),
+    archived: z.boolean(),
+    archived_at: z.number().int().nullable()
+  }),
+  activity: z.object({
+    status: z.enum(['running', 'approval', 'question', 'failed', 'idle'])
+  }),
+  git: z.object({
+    branch: z.string().nullable(),
+    pull_request: z.object({
+      number: z.number().int(),
+      state: z.enum(['open', 'closed', 'merged']),
+      url: z.string()
+    }).nullable()
+  }).optional()
+})
+
+export const sessionListV2Schema = z.object({
+  items: z.array(sessionSummaryV2Schema),
+  has_more: z.boolean(),
+  next_page_token: z.string().nullable()
+})
+
 export const messageContentPartSchema = z.object({
   type: z.string().min(1)
 }).passthrough()
@@ -183,7 +216,9 @@ export const snapshotSubagentSchema = z.object({
   parent_tool_call_id: z.string().optional(),
   suspended_reason: z.string().optional(),
   swarm_index: z.number().int().nonnegative().optional(),
-  run_in_background: z.boolean().optional()
+  run_in_background: z.boolean().optional(),
+  model: z.string().optional(),
+  thinking_effort: z.string().optional()
 })
 
 export const transcriptMarkerSchema = z.object({
@@ -734,6 +769,8 @@ export type WorkspaceDeleteResult = z.infer<typeof workspaceDeleteResultSchema>
 export type UploadedFile = z.infer<typeof uploadedFileSchema>
 export type UploadedFileDeleteResult = z.infer<typeof uploadedFileDeleteResultSchema>
 export type SessionSummary = z.infer<typeof sessionSummarySchema>
+export type SessionSummaryV2 = z.infer<typeof sessionSummaryV2Schema>
+export type SessionActivityStatus = SessionSummaryV2['activity']['status']
 export type MessageContentPart = z.infer<typeof messageContentPartSchema>
 export type SessionMessage = z.infer<typeof sessionMessageSchema>
 export type InFlightTool = z.infer<typeof inFlightToolSchema>

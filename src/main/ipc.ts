@@ -60,7 +60,8 @@ import {
   type SessionCreateResult,
   type SessionExportResult
 } from '../shared/contracts.js'
-import type { SessionSummary } from '../../packages/kimi-adapter/src/wire/schemas.js'
+import type { SessionSummary, SessionSummaryV2 } from '../../packages/kimi-adapter/src/wire/schemas.js'
+import { KimiApiError } from '../../packages/kimi-adapter/src/transport/KimiRestClient.js'
 import { discoverRuntimes } from './runtime/discovery.js'
 import type { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
 import type { KimiSessionBridge } from './kimi/KimiSessionBridge.js'
@@ -282,7 +283,18 @@ export function registerIpc(
   })
   ipcMain.handle(ipcChannels.sessionsArchivedList, async (event): Promise<WorkspaceNavigationItem['sessions']> => {
     assertTrustedSender(event)
-    const page = await runtime.createRestClient().listSessionPage({
+    const client = runtime.createRestClient()
+    try {
+      const page = await client.listSessionPageV2({
+        archived: 'true',
+        sort: 'meta.updated_at_desc',
+        pageSize: 100
+      })
+      return page.items.map(projectSessionNavigationV2)
+    } catch (error) {
+      if (!(error instanceof KimiApiError && error.status === 404)) throw error
+    }
+    const page = await client.listSessionPage({
       archivedOnly: true,
       pageSize: 100
     })
@@ -1181,6 +1193,23 @@ function projectSessionNavigation(session: SessionSummary): WorkspaceNavigationI
     parentSessionId: typeof session.metadata.parent_session_id === 'string'
       ? session.metadata.parent_session_id
       : null
+  }
+}
+
+function projectSessionNavigationV2(session: SessionSummaryV2): WorkspaceNavigationItem['sessions'][number] {
+  const status = session.activity.status
+  const isoTime = (value: number | null): string | null =>
+    value === null ? null : new Date(value).toISOString()
+  return {
+    id: session.id,
+    title: session.meta.title ?? '',
+    updatedAt: isoTime(session.meta.updated_at),
+    busy: status === 'running' || status === 'approval' || status === 'question',
+    pendingInteraction: status === 'approval' ? 'approval' : status === 'question' ? 'question' : 'none',
+    lastTurnReason: status === 'failed' ? 'failed' : null,
+    lastPrompt: session.meta.last_prompt,
+    parentSessionId: null,
+    archivedAt: isoTime(session.meta.archived_at)
   }
 }
 

@@ -11,7 +11,8 @@ describe('AgentDetailPanel', () => {
         agent: {
           id: 'agent-1', role: 'subagent', name: 'Reviewer', description: 'Review tests', status: 'completed',
           subagentType: 'review', parentAgentId: 'main', parentToolCallId: 'tool-parent', swarmIndex: 0,
-          runInBackground: false, createdAt: null, startedAt: null, completedAt: null, suspendedReason: null,
+          runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'high',
+          createdAt: null, startedAt: null, completedAt: null, suspendedReason: null,
           outputPreview: 'Covered', usage: null
         },
         transcript: {

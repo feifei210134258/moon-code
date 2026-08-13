@@ -159,7 +159,8 @@ const selectedAgent = computed(() => activeSessionView.value?.agents.find((agent
 const agentDetailFixture: SessionAgentView = {
   id: 'fixture-reviewer', role: 'subagent', name: 'Reviewer', description: '检查实现与测试覆盖',
   status: 'completed', subagentType: 'review', parentAgentId: 'main', parentToolCallId: 'fixture-tool',
-  swarmIndex: 0, runInBackground: false, createdAt: '2026-07-24T07:30:00.000Z',
+  swarmIndex: 0, runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'high',
+  createdAt: '2026-07-24T07:30:00.000Z',
   startedAt: '2026-07-24T07:30:01.000Z', completedAt: '2026-07-24T07:30:05.000Z',
   suspendedReason: null, outputPreview: '核心路径已有覆盖。',
   usage: { inputTokens: 1084, outputTokens: 216, cacheReadTokens: 640, cacheCreationTokens: 0, contextTokens: 1940 }

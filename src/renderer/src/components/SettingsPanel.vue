@@ -1697,7 +1697,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                   <article v-for="session in archivedSessions" :key="session.id" class="archive-session-row">
                     <div>
                       <strong>{{ session.title || session.lastPrompt || '未命名任务' }}</strong>
-                      <small>{{ archivedTime(session.updatedAt) }}</small>
+                      <small>{{ archivedTime(session.archivedAt ?? session.updatedAt) }}</small>
                     </div>
                     <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="restoreSession(session.id)">
                       <PhArrowCounterClockwise :class="{ spin: actionPending === `session:restore:${session.id}` }" :size="14" />恢复

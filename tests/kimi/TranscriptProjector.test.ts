@@ -999,6 +999,9 @@ describe('TranscriptProjector', () => {
       duration_ms: 4
     }))
     projector.project(frame('hook.result', { hookEvent: 'afterTool', content: 'ok' }))
+    projector.project(frame('event.di.unit_changed', {
+      scope: 'mcp', token: 'server-1', state: 'Active'
+    }))
 
     expect(projector.getProjection('session-1').unknownEventCount).toBe(0)
   })
