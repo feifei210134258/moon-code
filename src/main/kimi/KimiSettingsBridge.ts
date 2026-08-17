@@ -7,6 +7,7 @@ import type {
   KimiOAuthFlow,
   KimiPreferencesPatch,
   KimiProviderCatalogItem,
+  KimiProviderModelInput,
   KimiProviderRefreshResult,
   KimiSecondaryModelPreference,
   KimiSecondaryModelUpdateInput,
@@ -77,11 +78,6 @@ export class KimiSettingsBridge {
       this.#getProviderManagementCapability(client),
       this.#loadSecondaryModelPreference()
     ])
-    const kimiProviders = providers.filter((provider) => (
-      provider.type === 'kimi' || provider.id === auth.managed_provider?.name
-    ))
-    const kimiProviderIds = new Set(kimiProviders.map((provider) => provider.id))
-    if (auth.managed_provider !== null) kimiProviderIds.add(auth.managed_provider.name)
     return {
       auth: {
         ready: auth.ready,
@@ -92,10 +88,10 @@ export class KimiSettingsBridge {
           status: auth.managed_provider.status
         }
       },
-      models: models.filter((model) => kimiProviderIds.has(model.provider)).map(mapModel),
+      // 官方对主模型没有供应商限制：set_default 接受任何已配置的模型别名
+      // （kimi web 与 TUI 的模型选择器都按供应商分组展示全部模型）。
+      models: models.map(mapModel),
       secondaryModelOptions: models.map(mapModel),
-      // Default-model choices intentionally stay on Kimi providers, while the
-      // secondary model may target any provider supported by Kimi Code.
       providers: providers.map(mapProvider),
       preferences: mapPreferences(config),
       secondaryModel: mapSecondaryModel(config),
@@ -320,7 +316,7 @@ export class KimiSettingsBridge {
         baseUrl: input.baseUrl,
         defaultModel: input.defaultModel,
         defaultModelContextSize: input.defaultModelContextSize,
-        configuredModels: []
+        configuredModels: toWriteCatalogModels(input.id, input.models)
       })
       await client.createProvider({
         id: input.id,
@@ -359,14 +355,24 @@ export class KimiSettingsBridge {
     }
     const targetId = input.newId ?? input.id
     const targetBaseUrl = input.baseUrl ?? current.base_url
+    // 显式模型清单优先（编辑器的模型表格整体替换语义）；未提供时沿用当前已配置的模型。
+    const configuredModels = input.models !== undefined
+      ? toWriteCatalogModels(targetId, input.models)
+      : (await client.listModels()).filter((model) => model.provider === input.id)
+    // 整体替换语义下，当前默认模型可能已被移出清单；只有仍在新清单中时才沿用，
+    // 否则回退到清单首个模型（由 #resolveProviderWriteCatalog 处理）。
+    const currentDefault = current.default_model ?? undefined
+    const currentDefaultKept = input.models !== undefined &&
+      currentDefault !== undefined &&
+      input.models.some((entry) => entry.model === stripProviderPrefix(currentDefault, input.id))
     const resolved = await this.#resolveProviderWriteCatalog(client, {
       providerId: targetId,
       previousProviderId: input.id,
       type: input.type,
       baseUrl: targetBaseUrl,
-      defaultModel: input.defaultModel ?? current.default_model,
+      defaultModel: input.defaultModel ?? (input.models === undefined || currentDefaultKept ? currentDefault : undefined),
       defaultModelContextSize: input.defaultModelContextSize,
-      configuredModels: (await client.listModels()).filter((model) => model.provider === input.id)
+      configuredModels
     })
     await client.replaceProvider(input.id, {
       ...(input.newId === undefined || input.newId === input.id ? {} : { new_id: input.newId }),
@@ -695,6 +701,21 @@ function stripProviderPrefix(value: string, ...providerIds: string[]): string {
     if (value.startsWith(prefix)) return value.slice(prefix.length)
   }
   return value
+}
+
+/** 将编辑器提交的显式模型清单转成写入目录解析所用的目录项形状（别名为裸模型名）。 */
+function toWriteCatalogModels(
+  providerId: string,
+  models: KimiProviderModelInput[] | undefined
+): ModelCatalogItem[] {
+  return (models ?? []).map((entry) => ({
+    provider: providerId,
+    model: entry.model,
+    max_context_size: entry.maxContextSize,
+    ...(entry.displayName === undefined ? {} : { display_name: entry.displayName }),
+    ...(entry.capabilities === undefined ? {} : { capabilities: [...entry.capabilities] }),
+    ...(entry.supportEfforts === undefined ? {} : { support_efforts: [...entry.supportEfforts] })
+  }))
 }
 
 function providerDirectoryCandidates(providerId: string, baseUrl?: string): string[] {

@@ -1,6 +1,7 @@
 import type {
   AddKimiProviderInput,
   KimiPreferencesPatch,
+  KimiProviderModelInput,
   KimiProviderType,
   KimiSecondaryModelUpdateInput,
   UpdateKimiProviderInput
@@ -97,19 +98,21 @@ export function validateAddProviderInput(value: unknown): AddKimiProviderInput {
     ? undefined
     : validateModelId(value.defaultModel)
   const defaultModelContextSize = validateOptionalContextSize(value.defaultModelContextSize)
+  const models = validateProviderModelsInput(value.models)
   return {
     id,
     type: type as KimiProviderType,
     ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(apiKey === undefined ? {} : { apiKey }),
     ...(defaultModel === undefined ? {} : { defaultModel }),
-    ...(defaultModelContextSize === undefined ? {} : { defaultModelContextSize })
+    ...(defaultModelContextSize === undefined ? {} : { defaultModelContextSize }),
+    ...(models === undefined ? {} : { models })
   }
 }
 
 export function validateUpdateProviderInput(value: unknown): UpdateKimiProviderInput {
   if (!isRecord(value)) throw new TypeError('Invalid Kimi provider update input')
-  const allowed = new Set(['id', 'newId', 'type', 'baseUrl', 'apiKey', 'defaultModel', 'defaultModelContextSize'])
+  const allowed = new Set(['id', 'newId', 'type', 'baseUrl', 'apiKey', 'defaultModel', 'defaultModelContextSize', 'models'])
   if (Object.keys(value).some((key) => !allowed.has(key))) {
     throw new TypeError('Invalid Kimi provider update input')
   }
@@ -126,6 +129,7 @@ export function validateUpdateProviderInput(value: unknown): UpdateKimiProviderI
     ? undefined
     : validateModelId(value.defaultModel)
   const defaultModelContextSize = validateOptionalContextSize(value.defaultModelContextSize)
+  const models = validateProviderModelsInput(value.models)
   return {
     id: id!,
     ...(newId === undefined ? {} : { newId }),
@@ -133,7 +137,8 @@ export function validateUpdateProviderInput(value: unknown): UpdateKimiProviderI
     ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(apiKey === undefined ? {} : { apiKey }),
     ...(defaultModel === undefined ? {} : { defaultModel }),
-    ...(defaultModelContextSize === undefined ? {} : { defaultModelContextSize })
+    ...(defaultModelContextSize === undefined ? {} : { defaultModelContextSize }),
+    ...(models === undefined ? {} : { models })
   }
 }
 
@@ -211,6 +216,52 @@ function validateOptionalContextSize(value: unknown): number | undefined {
     throw new TypeError('Invalid Kimi provider model context size')
   }
   return value
+}
+
+const PROVIDER_MODELS_MAX = 64
+
+/**
+ * 显式模型清单校验。空数组等价于未提供（回退到目录补全/单模型路径）；
+ * 重复的模型别名会被服务端拒绝，这里提前拦截。
+ */
+function validateProviderModelsInput(value: unknown): KimiProviderModelInput[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > PROVIDER_MODELS_MAX) {
+    throw new TypeError('Invalid Kimi provider models')
+  }
+  if (value.length < 1) return undefined
+  const seen = new Set<string>()
+  return value.map((entry) => {
+    if (!isRecord(entry)) throw new TypeError('Invalid Kimi provider model entry')
+    const allowed = new Set(['model', 'maxContextSize', 'displayName', 'capabilities', 'supportEfforts'])
+    if (Object.keys(entry).some((key) => !allowed.has(key))) {
+      throw new TypeError('Invalid Kimi provider model entry')
+    }
+    const model = validateModelId(entry.model).trim()
+    if (model.length < 1) throw new TypeError('Invalid Kimi provider model id')
+    if (seen.has(model)) throw new TypeError(`模型 ${model} 在清单中重复`)
+    seen.add(model)
+    const maxContextSize = validateOptionalContextSize(entry.maxContextSize)
+    if (maxContextSize === undefined) throw new TypeError('Invalid Kimi provider model context size')
+    const displayName = optionalString(entry.displayName, 'model display name', 256)
+    return {
+      model,
+      maxContextSize,
+      ...(displayName === undefined ? {} : { displayName }),
+      ...(entry.capabilities === undefined ? {} : { capabilities: validateStringList(entry.capabilities, 'capabilities') }),
+      ...(entry.supportEfforts === undefined ? {} : { supportEfforts: validateStringList(entry.supportEfforts, 'supportEfforts') })
+    }
+  })
+}
+
+function validateStringList(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.length > 32) throw new TypeError(`Invalid Kimi provider model ${label}`)
+  return value.map((item) => {
+    if (typeof item !== 'string' || item.length < 1 || item.length > 128 || item.includes('\0')) {
+      throw new TypeError(`Invalid Kimi provider model ${label}`)
+    }
+    return item
+  })
 }
 
 function optionalString(value: unknown, label: string, maxLength: number): string | undefined {

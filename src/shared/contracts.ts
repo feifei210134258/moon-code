@@ -879,6 +879,19 @@ export interface KimiPreferencesPatch {
   thinkingEffort?: string | null
 }
 
+/**
+ * 一个待写入的 Provider 模型条目。模型别名不带 Provider 前缀
+ * （Bridge 写入前会按目标 Provider 规范化）。capabilities/supportEfforts
+ * 不可在编辑器中修改，仅用于整体替换时保留刷新或目录导入得到的元数据。
+ */
+export interface KimiProviderModelInput {
+  model: string
+  maxContextSize: number
+  displayName?: string
+  capabilities?: string[]
+  supportEfforts?: string[]
+}
+
 export interface AddKimiProviderInput {
   id: string
   type: KimiProviderType
@@ -886,6 +899,8 @@ export interface AddKimiProviderInput {
   apiKey?: string
   defaultModel?: string
   defaultModelContextSize?: number
+  /** 显式模型清单；提供时优先于目录自动补全与单模型回退。 */
+  models?: KimiProviderModelInput[]
 }
 
 export interface UpdateKimiProviderInput {
@@ -896,6 +911,8 @@ export interface UpdateKimiProviderInput {
   apiKey?: string
   defaultModel?: string
   defaultModelContextSize?: number
+  /** 显式模型清单；提供时整体替换该 Provider 的模型别名（未列出的别名会被移除）。 */
+  models?: KimiProviderModelInput[]
 }
 
 export interface KimiProviderRefreshResult {

@@ -551,7 +551,48 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
-  it('keeps default models focused on Kimi and hides write controls for a read-only Runtime', async () => {
+  it('offers every configured provider’s models as primary model choices', async () => {
+    const multiProviderSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      models: [
+        ...snapshot.models,
+        {
+          id: 'company/glm-5.3', providerId: 'company', displayName: 'GLM 5.3',
+          maxContextSize: 131_072, capabilities: [], supportEfforts: [], defaultEffort: null
+        }
+      ],
+      providers: [
+        ...snapshot.providers,
+        {
+          id: 'company', type: 'openai', baseUrl: 'https://llm.example.com/v1', defaultModel: 'company/glm-5.3',
+          hasCredential: true, status: 'connected', models: ['company/glm-5.3']
+        }
+      ]
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => multiProviderSnapshot),
+      setDefaultModel: vi.fn(async () => multiProviderSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await wrapper.get('.model-view-switch button:first-child').trigger('click')
+
+    // 官方 set_default 不接受供应商限制：自定义供应商的模型也列在主模型候选中。
+    const customRow = wrapper.findAll('.primary-model-grid .model-row')
+      .find((row) => row.text().includes('company/glm-5.3'))
+    expect(customRow).toBeDefined()
+    await customRow!.trigger('click')
+    await flushPromises()
+    expect(api.setDefaultModel).toHaveBeenCalledWith('company/glm-5.3')
+    wrapper.unmount()
+  })
+
+  it('hides write controls for a read-only Runtime', async () => {
     const api = {
       getKimiSettings: vi.fn(async () => snapshot)
     } as unknown as KimiAgentDesktopApi
@@ -622,19 +663,18 @@ describe('SettingsPanel', () => {
     // The catalog is not mocked, so the picker degrades to manual mode.
     expect(wrapper.get('.provider-picker-trigger').text()).toContain('手动配置')
     const form = wrapper.get('.secondary-provider-form')
-    const inputs = form.findAll('input')
-    await inputs[0]!.setValue('anthropic-main')
+    await form.get('input[placeholder="例如 openai-main"]').setValue('anthropic-main')
     await form.get('select').setValue('anthropic')
-    await inputs[1]!.setValue('https://api.anthropic.com')
-    await inputs[2]!.setValue('sk-ant-secret')
-    // 目录外的自定义服务必须提供首个模型别名与上下文 Token，提交按钮在此之前保持禁用。
+    await form.get('input[type="url"]').setValue('https://api.anthropic.com')
+    await form.get('input[type="password"]').setValue('sk-ant-secret')
+    // 目录外的自定义服务必须至少填写一个模型（别名与上下文 Token），提交按钮在此之前保持禁用。
     // 注意：重渲染可能替换表单元素，断言前重新查询。
     const submitDisabled = () =>
       (wrapper.get('.secondary-provider-form').get('.provider-form-actions .primary-button')
         .element as HTMLButtonElement).disabled
     expect(submitDisabled()).toBe(true)
-    await inputs[3]!.setValue('claude-sonnet-4-5')
-    await inputs[4]!.setValue('200000')
+    await form.get('input[placeholder="例如 glm-5.3"]').setValue('claude-sonnet-4-5')
+    await form.get('input[placeholder="例如 131072"]').setValue('200000')
     expect(submitDisabled()).toBe(false)
     await wrapper.get('.secondary-provider-form').trigger('submit')
     await flushPromises()
@@ -645,7 +685,7 @@ describe('SettingsPanel', () => {
       baseUrl: 'https://api.anthropic.com',
       apiKey: 'sk-ant-secret',
       defaultModel: 'claude-sonnet-4-5',
-      defaultModelContextSize: 200_000
+      models: [{ model: 'claude-sonnet-4-5', maxContextSize: 200_000 }]
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
     const anthropicCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('anthropic-main'))!
@@ -779,18 +819,17 @@ describe('SettingsPanel', () => {
     expect(wrapper.get('.provider-picker-trigger').text()).toContain('手动配置')
     const form = wrapper.get('.secondary-provider-form')
     expect(form.text()).toContain('API Base URL')
-    await form.find('input').setValue('private-manual')
+    await form.get('input[placeholder="例如 openai-main"]').setValue('private-manual')
     await form.get('input[type="url"]').setValue('https://private.example.com/v1')
-    // 目录不可用时无法自动补全模型元数据，首个模型别名与上下文 Token 变为必填。
+    // 目录不可用时无法自动补全模型元数据，至少一个完整模型行变为必填。
     // 注意：重渲染可能替换表单元素，断言前重新查询。
     const freshForm = () => wrapper.get('.secondary-provider-form')
     const submitDisabled = () =>
       (freshForm().get('.provider-form-actions .primary-button').element as HTMLButtonElement).disabled
-    expect(freshForm().text()).toContain('需填写模型别名与上下文 Token 才能创建')
+    expect(freshForm().text()).toContain('需至少填写一个模型')
     expect(submitDisabled()).toBe(true)
-    const inputs = form.findAll('input')
-    await inputs[3]!.setValue('private-coder')
-    await inputs[4]!.setValue('131072')
+    await form.get('input[placeholder="例如 glm-5.3"]').setValue('private-coder')
+    await form.get('input[placeholder="例如 131072"]').setValue('131072')
     expect(submitDisabled()).toBe(false)
     await freshForm().trigger('submit')
     await flushPromises()
@@ -798,7 +837,7 @@ describe('SettingsPanel', () => {
       id: 'private-manual', type: 'openai',
       baseUrl: 'https://private.example.com/v1',
       defaultModel: 'private-coder',
-      defaultModelContextSize: 131_072
+      models: [{ model: 'private-coder', maxContextSize: 131_072 }]
     }))
     wrapper.unmount()
   })
@@ -852,7 +891,7 @@ describe('SettingsPanel', () => {
     // api.deepseek.com 命中目录中的 deepseek，模型元数据由主进程自动补全，无需手填。
     // 注意：重渲染可能替换表单元素，断言前重新查询。
     const freshForm = () => wrapper.get('.secondary-provider-form')
-    expect(freshForm().text()).not.toContain('需填写模型别名与上下文 Token 才能创建')
+    expect(freshForm().text()).not.toContain('需至少填写一个模型')
     const submit = freshForm().get('.provider-form-actions .primary-button')
     expect((submit.element as HTMLButtonElement).disabled).toBe(false)
     await freshForm().trigger('submit')
@@ -908,13 +947,12 @@ describe('SettingsPanel', () => {
 
     // The catalog is not mocked, so the form degrades to manual mode.
     const form = wrapper.get('.secondary-provider-form')
-    const inputs = form.findAll('input')
-    await inputs[0]!.setValue('opencode-go')
+    await form.get('input[placeholder="例如 openai-main"]').setValue('opencode-go')
     await form.get('select').setValue('openai')
-    await inputs[1]!.setValue('https://opencode.example.com/v1')
-    await inputs[2]!.setValue('sk-opencode-secret')
-    await inputs[3]!.setValue('opencode-go/latest')
-    await inputs[4]!.setValue('200000')
+    await form.get('input[type="url"]').setValue('https://opencode.example.com/v1')
+    await form.get('input[type="password"]').setValue('sk-opencode-secret')
+    await form.get('input[placeholder="例如 glm-5.3"]').setValue('latest')
+    await form.get('input[placeholder="例如 131072"]').setValue('200000')
     await form.trigger('submit')
     await flushPromises()
 
@@ -923,8 +961,8 @@ describe('SettingsPanel', () => {
       type: 'openai',
       baseUrl: 'https://opencode.example.com/v1',
       apiKey: 'sk-opencode-secret',
-      defaultModel: 'opencode-go/latest',
-      defaultModelContextSize: 200_000
+      defaultModel: 'latest',
+      models: [{ model: 'latest', maxContextSize: 200_000 }]
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
     wrapper.unmount()
@@ -989,6 +1027,182 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
+  it('adds a custom Provider with multiple models in one save', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      addKimiProvider: vi.fn(async () => writableSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await wrapper.get('.provider-add-card').trigger('click')
+    await flushPromises()
+
+    const form = wrapper.get('.secondary-provider-form')
+    await form.get('input[placeholder="例如 openai-main"]').setValue('company-gateway')
+    await form.get('input[type="url"]').setValue('https://llm.example.com/v1')
+    await form.get('input[type="password"]').setValue('gw-key')
+
+    // 一次添加多个模型：再加一行，默认模型选择第二个。
+    // 注意：重渲染会替换表单元素，每次操作后重新查询。
+    await form.get('.provider-model-add').trigger('click')
+    await flushPromises()
+    const rows = wrapper.get('.secondary-provider-form').findAll('.provider-model-row')
+    expect(rows).toHaveLength(2)
+    await rows[0]!.get('input[placeholder="例如 glm-5.3"]').setValue('glm-5.3')
+    await rows[0]!.get('input[placeholder="例如 131072"]').setValue('131072')
+    await rows[1]!.get('input[placeholder="例如 glm-5.3"]').setValue('deepseek-v4-pro')
+    await rows[1]!.get('input[placeholder="例如 131072"]').setValue('202752')
+    await rows[1]!.get('input[placeholder="可选"]').setValue('DeepSeek V4 Pro')
+    await flushPromises()
+    await wrapper.get('.secondary-provider-form').get('label.provider-form-wide select').setValue('deepseek-v4-pro')
+    await wrapper.get('.secondary-provider-form').trigger('submit')
+    await flushPromises()
+
+    expect(api.addKimiProvider).toHaveBeenCalledWith({
+      id: 'company-gateway',
+      type: 'openai',
+      baseUrl: 'https://llm.example.com/v1',
+      apiKey: 'gw-key',
+      defaultModel: 'deepseek-v4-pro',
+      models: [
+        { model: 'glm-5.3', maxContextSize: 131_072 },
+        { model: 'deepseek-v4-pro', maxContextSize: 202_752, displayName: 'DeepSeek V4 Pro' }
+      ]
+    })
+    wrapper.unmount()
+  })
+
+  it('removes a single model from a Provider in the editor', async () => {
+    const twoModelSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      secondaryModelOptions: [
+        ...snapshot.secondaryModelOptions,
+        {
+          id: 'company/glm-5.3', providerId: 'company', displayName: 'GLM 5.3',
+          maxContextSize: 131_072, capabilities: ['thinking'], supportEfforts: [], defaultEffort: null
+        },
+        {
+          id: 'company/deepseek-v4-pro', providerId: 'company', displayName: 'DeepSeek V4 Pro',
+          maxContextSize: 202_752, capabilities: ['thinking', 'tool_use'], supportEfforts: ['low'], defaultEffort: null
+        }
+      ],
+      providers: [
+        ...snapshot.providers,
+        {
+          id: 'company', type: 'openai', baseUrl: 'https://llm.example.com/v1', defaultModel: 'company/glm-5.3',
+          hasCredential: true, status: 'connected', models: ['company/glm-5.3', 'company/deepseek-v4-pro']
+        }
+      ],
+      capabilities: {
+        ...snapshot.capabilities,
+        canEditProvider: true,
+        canDeleteProvider: true,
+        providerManagementUnavailableReason: null,
+        providerDeleteUnavailableReason: null
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => twoModelSnapshot),
+      updateKimiProvider: vi.fn(async () => twoModelSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await wrapper.get('.provider-icon-button[aria-label="编辑 company"]').trigger('click')
+
+    // 编辑时用当前模型初始化表格；删除 deepseek-v4-pro 行后保存。
+    const form = wrapper.get('.secondary-provider-form')
+    const rows = form.findAll('.provider-model-row')
+    expect(rows).toHaveLength(2)
+    expect((rows[0]!.get('input[placeholder="例如 glm-5.3"]').element as HTMLInputElement).value).toBe('glm-5.3')
+    await rows[1]!.get('button[title="移除该模型"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('.secondary-provider-form').trigger('submit')
+    await flushPromises()
+
+    expect(api.updateKimiProvider).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'company',
+      defaultModel: 'glm-5.3',
+      models: [
+        { model: 'glm-5.3', maxContextSize: 131_072, displayName: 'GLM 5.3', capabilities: ['thinking'] }
+      ]
+    }))
+    const payload = (api.updateKimiProvider as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      models: Array<{ model: string }>
+    }
+    expect(payload.models).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('blocks submit when duplicate model aliases are entered', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      addKimiProvider: vi.fn(async () => writableSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await wrapper.get('.provider-add-card').trigger('click')
+    await flushPromises()
+
+    const form = wrapper.get('.secondary-provider-form')
+    await form.get('input[placeholder="例如 openai-main"]').setValue('company-gateway')
+    await form.get('input[type="url"]').setValue('https://llm.example.com/v1')
+    await form.get('.provider-model-add').trigger('click')
+    await flushPromises()
+    const rows = wrapper.get('.secondary-provider-form').findAll('.provider-model-row')
+    expect(rows).toHaveLength(2)
+    await rows[0]!.get('input[placeholder="例如 glm-5.3"]').setValue('glm-5.3')
+    await rows[0]!.get('input[placeholder="例如 131072"]').setValue('131072')
+    await rows[1]!.get('input[placeholder="例如 glm-5.3"]').setValue('glm-5.3')
+    await rows[1]!.get('input[placeholder="例如 131072"]').setValue('65536')
+    await flushPromises()
+
+    const freshForm = () => wrapper.get('.secondary-provider-form')
+    expect(freshForm().text()).toContain('模型别名重复')
+    const submit = freshForm().get('.provider-form-actions .primary-button')
+    expect((submit.element as HTMLButtonElement).disabled).toBe(true)
+    expect(api.addKimiProvider).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
   it('submits a zero-model Provider edit using catalog-resolvable DeepSeek metadata', async () => {
     const zeroModelSnapshot: KimiSettingsSnapshot = {
       ...snapshot,
@@ -1031,10 +1245,10 @@ describe('SettingsPanel', () => {
     await wrapper.get('.provider-icon-button[aria-label="编辑 pixel"]').trigger('click')
 
     const form = wrapper.get('.secondary-provider-form')
-    const inputs = form.findAll('input')
-    await inputs[0]!.setValue('deepseek')
-    await inputs[1]!.setValue('https://api.deepseek.com')
-    await inputs[3]!.setValue('deepseek-v4-flash')
+    await form.get('input[placeholder="例如 openai-main"]').setValue('deepseek')
+    await form.get('input[type="url"]').setValue('https://api.deepseek.com')
+    // 零模型供应商的修复路径：模型表格整表留空（目录自动补全），默认模型走自由文本。
+    await form.get('input[placeholder="留空则自动选择首个模型"]').setValue('deepseek-v4-flash')
     await form.trigger('submit')
     await flushPromises()
 

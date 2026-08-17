@@ -127,7 +127,10 @@ describe('KimiSettingsBridge', () => {
     const snapshot = await bridge.getSnapshot()
     expect(snapshot).toEqual(expect.objectContaining({
       auth: expect.objectContaining({ ready: true, providersCount: 1 }),
-      models: [expect.objectContaining({ id: 'kimi-for-coding', maxContextSize: 262_144 })],
+      models: [
+        expect.objectContaining({ id: 'kimi-for-coding', maxContextSize: 262_144 }),
+        expect.objectContaining({ id: 'local-coder', providerId: 'local:openai' })
+      ],
       providers: [
         expect.objectContaining({ id: 'managed:kimi-code', hasCredential: true }),
         expect.objectContaining({ id: 'local:openai', hasCredential: true })
@@ -141,7 +144,8 @@ describe('KimiSettingsBridge', () => {
       })
     }))
     expect(JSON.stringify(snapshot)).not.toContain('api_key')
-    expect(snapshot.models.map((model) => model.id)).toEqual(['kimi-for-coding'])
+    // 主模型可选范围覆盖所有已配置供应商（官方 set_default 不接受供应商限制）。
+    expect(snapshot.models.map((model) => model.id)).toEqual(['kimi-for-coding', 'local-coder'])
     expect(snapshot.secondaryModelOptions.map((model) => model.id)).toEqual([
       'kimi-for-coding',
       'local-coder'
@@ -325,6 +329,97 @@ describe('KimiSettingsBridge', () => {
       new_id: 'private-gateway',
       default_model: 'private-coder',
       models: [{ model: 'private-coder', max_context_size: 65_536 }]
+    }))
+  })
+
+  it('creates a custom provider with multiple explicit models in one save', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+
+    await new KimiSettingsBridge(runtime).addProvider({
+      id: 'company-gateway', type: 'openai', baseUrl: 'https://llm.example.com/v1',
+      apiKey: 'gw-key',
+      models: [
+        { model: 'glm-5.3', maxContextSize: 131_072, displayName: 'GLM 5.3', capabilities: ['thinking', 'tool_use'] },
+        { model: 'deepseek-v4-pro', maxContextSize: 202_752 }
+      ]
+    })
+
+    // 未显式选择默认模型时回退到清单首个模型。
+    expect(client.createProvider).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'company-gateway',
+      default_model: 'glm-5.3',
+      models: [
+        expect.objectContaining({ model: 'glm-5.3', max_context_size: 131_072, display_name: 'GLM 5.3', capabilities: ['thinking', 'tool_use'] }),
+        expect.objectContaining({ model: 'deepseek-v4-pro', max_context_size: 202_752 })
+      ]
+    }))
+  })
+
+  it('replaces the provider model list on edit, dropping omitted aliases', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+
+    // local:openai 当前配置了 local-coder；编辑后只保留 new-coder 并带上新模型。
+    await new KimiSettingsBridge(runtime).updateProvider({
+      id: 'local:openai', type: 'openai', baseUrl: 'http://127.0.0.1:11434/v1',
+      defaultModel: 'new-coder',
+      models: [
+        { model: 'new-coder', maxContextSize: 65_536, supportEfforts: ['low', 'high'] },
+        { model: 'second-coder', maxContextSize: 32_768 }
+      ]
+    })
+
+    // 显式清单直接成为 PUT 的模型列表（未列出的别名由服务端移除）。
+    expect(client.replaceProvider).toHaveBeenCalledWith('local:openai', expect.objectContaining({
+      default_model: 'new-coder',
+      models: [
+        expect.objectContaining({ model: 'new-coder', max_context_size: 65_536, support_efforts: ['low', 'high'] }),
+        expect.objectContaining({ model: 'second-coder', max_context_size: 32_768 })
+      ]
+    }))
+  })
+
+  it('falls back to the first remaining model when the current default is removed from the list', async () => {
+    const client = createClient()
+    client.supportsProviderManagement.mockResolvedValue(true)
+    // local:openai 的当前默认模型是 local-coder（见 createClient 的 providers fixture）。
+    const providers = [{
+      id: 'local:openai', type: 'openai', has_api_key: true, status: 'connected' as const,
+      default_model: 'local:openai/local-coder', models: ['local:openai/local-coder']
+    }]
+    client.listProviders.mockResolvedValue(providers)
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.29.2', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+
+    await new KimiSettingsBridge(runtime).updateProvider({
+      id: 'local:openai', type: 'openai',
+      models: [{ model: 'new-coder', maxContextSize: 65_536 }]
+    })
+
+    // local-coder 已被移出清单，默认模型不能继续指向它。
+    expect(client.replaceProvider).toHaveBeenCalledWith('local:openai', expect.objectContaining({
+      default_model: 'new-coder',
+      models: [expect.objectContaining({ model: 'new-coder', max_context_size: 65_536 })]
     }))
   })
 

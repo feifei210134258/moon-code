@@ -74,8 +74,18 @@ const secondaryProviderDraft = ref<{
   baseUrl: string
   apiKey: string
   defaultModel: string
-  defaultModelContextSize: string | number
-}>({ id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '', defaultModelContextSize: '' })
+}>({ id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '' })
+/* 供应商编辑器里的模型行。capabilities/supportEfforts 不可编辑，
+   仅用于在整体替换时保留刷新/目录导入带来的模型元数据。
+   maxContextSize 在 number 输入框下会被 v-model 自动转成 number。 */
+interface ProviderModelRow {
+  model: string
+  maxContextSize: string | number
+  displayName: string
+  capabilities?: string[]
+  supportEfforts?: string[]
+}
+const providerModelRows = ref<ProviderModelRow[]>([])
 const editingProviderId = ref<string | null>(null)
 const providerEditorMode = ref<'catalog' | 'manual'>('catalog')
 const catalogSummaries = ref<KimiCatalogProviderSummary[]>([])
@@ -236,15 +246,58 @@ const manualProviderDirectoryHit = computed(() => {
 const providerEditorModelFieldsRequired = computed(() =>
   !providerEditorIsEditing.value && !providerEditorIsCatalogMode.value && !manualProviderDirectoryHit.value
 )
-const manualDefaultModelMissing = computed(() =>
-  providerEditorModelFieldsRequired.value && secondaryProviderDraft.value.defaultModel.trim().length < 1
-)
-const manualContextSizeMissing = computed(() => {
-  if (!providerEditorModelFieldsRequired.value) return false
-  const text = String(secondaryProviderDraft.value.defaultModelContextSize ?? '').trim()
-  if (text.length < 1) return true
+function providerModelRowIsBlank(row: ProviderModelRow): boolean {
+  return row.model.trim().length < 1 &&
+    String(row.maxContextSize).trim().length < 1 &&
+    row.displayName.trim().length < 1
+}
+function providerModelRowContextSize(row: ProviderModelRow): number | null {
+  const text = String(row.maxContextSize).trim()
+  if (text.length < 1) return null
   const size = Number(text)
-  return !Number.isInteger(size) || size < 1 || size > 16_777_216
+  return Number.isInteger(size) && size >= 1 && size <= 16_777_216 ? size : null
+}
+/** 全部字段为空的行会被忽略（目录命中时留给自动补全）；部分填写的行必须补全。 */
+const completeProviderModelRows = computed(() => providerModelRows.value.filter((row) =>
+  !providerModelRowIsBlank(row) && row.model.trim().length > 0 && providerModelRowContextSize(row) !== null
+))
+const partialProviderModelRowCount = computed(() => providerModelRows.value.filter((row) =>
+  !providerModelRowIsBlank(row) && (row.model.trim().length < 1 || providerModelRowContextSize(row) === null)
+).length)
+const duplicateProviderModelIds = computed(() => {
+  const seen = new Set<string>()
+  const duplicates = new Set<string>()
+  for (const row of completeProviderModelRows.value) {
+    const alias = row.model.trim()
+    if (seen.has(alias)) duplicates.add(alias)
+    seen.add(alias)
+  }
+  return [...duplicates]
+})
+/** 目录命中的手动新增允许整表留空（自动补全）；编辑模式整表留空表示保留当前清单。 */
+const providerModelsBlockSubmit = computed(() => {
+  if (providerEditorIsCatalogMode.value) return false
+  if (partialProviderModelRowCount.value > 0 || duplicateProviderModelIds.value.length > 0) return true
+  return providerEditorModelFieldsRequired.value && completeProviderModelRows.value.length < 1
+})
+const providerModelRowsHint = computed(() => {
+  if (providerEditorIsCatalogMode.value) return null
+  if (duplicateProviderModelIds.value.length > 0) {
+    return `模型别名重复：${duplicateProviderModelIds.value.join('、')}`
+  }
+  if (partialProviderModelRowCount.value > 0) return '有模型行缺少别名或有效的上下文 Token，请补全或清空该行。'
+  if (providerEditorModelFieldsRequired.value && completeProviderModelRows.value.length < 1) {
+    return '该服务不在 Kimi 供应商目录中，需至少填写一个模型（别名与上下文 Token）才能创建。'
+  }
+  if (providerEditorIsEditing.value && completeProviderModelRows.value.length < 1) {
+    return '整表留空将保留当前模型清单；目录可识别的服务会自动补全。'
+  }
+  return null
+})
+const providerModelsEditorTitleSuffix = computed(() => {
+  if (providerEditorIsEditing.value) return '（保存时整体替换）'
+  if (providerEditorModelFieldsRequired.value) return '（至少一个）'
+  return '（留空则从 Kimi 目录自动补全）'
 })
 const secondarySettingsModelLabel = computed(() => {
   if (secondaryModelDraft.value.model.length < 1) return '跟随主模型'
@@ -410,10 +463,25 @@ function selectSecondaryProvider(providerId: string): void {
   onSecondaryModelDraftChange()
 }
 
+function emptyProviderModelRow(): ProviderModelRow {
+  return { model: '', maxContextSize: '', displayName: '' }
+}
+
+function addProviderModelRow(): void {
+  if (providerModelRows.value.length >= 64) return
+  providerModelRows.value.push(emptyProviderModelRow())
+}
+
+function removeProviderModelRow(index: number): void {
+  if (providerModelRows.value.length <= 1) return
+  providerModelRows.value.splice(index, 1)
+}
+
 function resetSecondaryProviderDraft(): void {
   secondaryProviderDraft.value = {
-    id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '', defaultModelContextSize: ''
+    id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: ''
   }
+  providerModelRows.value = [emptyProviderModelRow()]
   editingProviderId.value = null
 }
 
@@ -474,8 +542,9 @@ function chooseManualProvider(): void {
   catalogSearch.value = ''
   if (editingProviderId.value === null) {
     secondaryProviderDraft.value = {
-      id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: '', defaultModelContextSize: ''
+      id: '', type: 'openai', baseUrl: '', apiKey: '', defaultModel: ''
     }
+    providerModelRows.value = [emptyProviderModelRow()]
   }
   providerPickerOpen.value = false
 }
@@ -501,9 +570,9 @@ async function selectCatalogProvider(item: KimiCatalogProviderSummary): Promise<
       type: detail.wireType ?? 'openai',
       baseUrl: '',
       apiKey: '',
-      defaultModel: '',
-      defaultModelContextSize: ''
+      defaultModel: ''
     }
+    providerModelRows.value = [emptyProviderModelRow()]
   } catch (reason) {
     catalogError.value = errorMessage(reason)
     selectedCatalogId.value = null
@@ -534,9 +603,19 @@ function beginEditProvider(providerId: string): void {
     type: provider.type as KimiProviderType,
     baseUrl: provider.baseUrl ?? '',
     apiKey: '',
-    defaultModel: stripProviderPrefix(provider.defaultModel, provider.id),
-    defaultModelContextSize: ''
+    defaultModel: stripProviderPrefix(provider.defaultModel, provider.id)
   }
+  // 用当前已配置的模型初始化模型表格；保存时整体替换该供应商的模型清单。
+  const currentModels = providerModelsOf(providerId)
+  providerModelRows.value = currentModels.length > 0
+    ? currentModels.map((model) => ({
+      model: stripProviderPrefix(model.id, providerId),
+      maxContextSize: String(model.maxContextSize),
+      displayName: model.displayName === model.id ? '' : model.displayName,
+      capabilities: [...model.capabilities],
+      supportEfforts: [...model.supportEfforts]
+    }))
+    : [emptyProviderModelRow()]
   showSecondaryProviderForm.value = true
 }
 
@@ -859,10 +938,38 @@ async function saveSecondaryProvider(): Promise<void> {
   try {
     const baseUrl = secondaryProviderDraft.value.baseUrl.trim()
     const apiKey = secondaryProviderDraft.value.apiKey.trim()
-    const defaultModel = secondaryProviderDraft.value.defaultModel.trim()
-    const defaultModelContextSizeText = String(secondaryProviderDraft.value.defaultModelContextSize ?? '')
-    const defaultModelContextSize = Number(defaultModelContextSizeText)
-    const hasDefaultModelContextSize = defaultModelContextSizeText.trim().length > 0
+    const modelRows = completeProviderModelRows.value
+    const defaultModel = (() => {
+      const selected = secondaryProviderDraft.value.defaultModel.trim()
+      if (selected.length > 0) return selected
+      return modelRows[0]?.model.trim() ?? ''
+    })()
+    // 目录命中的手动新增允许整表留空：不发送 models，由主进程从 Kimi 目录补全。
+    const modelsPayload = modelRows.length < 1 ? undefined : modelRows.map((row) => ({
+      model: row.model.trim(),
+      maxContextSize: providerModelRowContextSize(row)!,
+      ...(row.displayName.trim().length < 1 ? {} : { displayName: row.displayName.trim() }),
+      ...(row.capabilities === undefined || row.capabilities.length < 1
+        ? {}
+        : { capabilities: [...row.capabilities] }),
+      ...(row.supportEfforts === undefined || row.supportEfforts.length < 1
+        ? {}
+        : { supportEfforts: [...row.supportEfforts] })
+    }))
+    if (oldId !== null && modelsPayload !== undefined) {
+      // 编辑保存是整体替换语义：正在被子 Agent 使用的模型被移除时先确认。
+      const inUse = secondaryModelDescriptor.value
+      const removedInUse = inUse !== null &&
+        providerModelsOf(oldId).some((model) => model.id === inUse.id) &&
+        !modelRows.some((row) => `${oldId}/${row.model.trim()}` === inUse.id)
+      if (
+        removedInUse &&
+        !window.confirm(`保存后 ${inUse!.id} 将从该服务中移除，当前子 Agent 模型选择将失效。确定继续吗？`)
+      ) {
+        actionPending.value = null
+        return
+      }
+    }
     const next = oldId === null
       ? await api.addKimiProvider({
         id,
@@ -870,7 +977,7 @@ async function saveSecondaryProvider(): Promise<void> {
         ...(baseUrl.length < 1 ? {} : { baseUrl }),
         ...(apiKey.length < 1 ? {} : { apiKey }),
         ...(defaultModel.length < 1 ? {} : { defaultModel }),
-        ...(hasDefaultModelContextSize ? { defaultModelContextSize } : {})
+        ...(modelsPayload === undefined ? {} : { models: modelsPayload })
       })
       : await api.updateKimiProvider({
         id: oldId,
@@ -879,7 +986,7 @@ async function saveSecondaryProvider(): Promise<void> {
         ...(baseUrl.length < 1 ? {} : { baseUrl }),
         ...(apiKey.length < 1 ? {} : { apiKey }),
         ...(defaultModel.length < 1 ? {} : { defaultModel }),
-        ...(hasDefaultModelContextSize ? { defaultModelContextSize } : {})
+        ...(modelsPayload === undefined ? {} : { models: modelsPayload })
       })
     snapshot.value = next
     showSecondaryProviderForm.value = false
@@ -1579,21 +1686,43 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                               </option>
                             </select>
                           </label>
-                          <label v-else class="provider-form-wide">
-                            <span>首个 / 默认模型别名{{ providerEditorModelFieldsRequired ? '（必填）' : '' }}</span>
-                            <input v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="例如 gpt-5-mini" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
-                          </label>
-                          <label v-if="!providerEditorIsCatalogMode" class="provider-form-wide">
-                            <span>模型上下文 Token{{ providerEditorModelFieldsRequired ? '（必填）' : '（私有或未知服务时填写）' }}</span>
-                            <input v-model="secondaryProviderDraft.defaultModelContextSize" type="number" min="1" max="16777216" placeholder="已知服务会从 Kimi 模型目录自动识别" autocomplete="off" :disabled="actionPending !== null" />
-                          </label>
+                          <template v-else>
+                            <div class="provider-form-wide provider-models-editor">
+                              <span class="provider-models-editor-title">模型清单{{ providerModelsEditorTitleSuffix }}</span>
+                              <div class="provider-models-head" aria-hidden="true"><span>模型别名</span><span>上下文 Token</span><span>显示名（可选）</span><span /></div>
+                              <div v-for="(row, index) in providerModelRows" :key="index" class="provider-model-row">
+                                <input v-model="row.model" type="text" maxlength="256" placeholder="例如 glm-5.3" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
+                                <input v-model="row.maxContextSize" type="number" min="1" max="16777216" placeholder="例如 131072" autocomplete="off" :disabled="actionPending !== null" />
+                                <input v-model="row.displayName" type="text" maxlength="256" placeholder="可选" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
+                                <button
+                                  type="button"
+                                  class="provider-icon-button is-danger"
+                                  :aria-label="`移除模型 ${row.model || index + 1}`"
+                                  title="移除该模型"
+                                  :disabled="actionPending !== null || providerModelRows.length <= 1"
+                                  @click="removeProviderModelRow(index)"
+                                ><PhTrash :size="14" /></button>
+                              </div>
+                              <button type="button" class="provider-disclosure-button provider-model-add" :disabled="actionPending !== null || providerModelRows.length >= 64" @click="addProviderModelRow"><PhPlus :size="14" />添加模型</button>
+                            </div>
+                            <label class="provider-form-wide">
+                              <span>默认模型</span>
+                              <select v-if="completeProviderModelRows.length > 0" v-model="secondaryProviderDraft.defaultModel" :disabled="actionPending !== null">
+                                <option value="">使用首个模型</option>
+                                <option v-for="row in completeProviderModelRows" :key="row.model.trim()" :value="row.model.trim()">
+                                  {{ row.displayName.trim() || row.model.trim() }}
+                                </option>
+                              </select>
+                              <input v-else v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="留空则自动选择首个模型" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
+                            </label>
+                          </template>
                         </div>
-                        <p v-if="providerEditorModelFieldsRequired" class="provider-catalog-hint">该服务不在 Kimi 供应商目录中，需填写模型别名与上下文 Token 才能创建。</p>
+                        <p v-if="providerModelRowsHint !== null" class="provider-catalog-hint">{{ providerModelRowsHint }}</p>
                         <p v-if="secondaryProviderIdExists" class="field-error">这个连接名称已存在。</p>
                         <p class="credential-note">API Key 交给 Kimi 官方配置保存，Moon Code 不会回读或另存。</p>
                         <div class="provider-form-actions">
                           <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="cancelProviderEditor">取消</button>
-                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists || (providerEditorIsCatalogMode && secondaryProviderDraft.defaultModel.trim().length < 1) || (catalogRequiresBaseUrl && secondaryProviderDraft.baseUrl.trim().length < 1) || manualDefaultModelMissing || manualContextSizeMissing">{{ providerEditorSubmitLabel }}</button>
+                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists || (providerEditorIsCatalogMode && secondaryProviderDraft.defaultModel.trim().length < 1) || (catalogRequiresBaseUrl && secondaryProviderDraft.baseUrl.trim().length < 1) || providerModelsBlockSubmit">{{ providerEditorSubmitLabel }}</button>
                         </div>
                       </form>
                     </div>

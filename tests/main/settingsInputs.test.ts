@@ -121,8 +121,46 @@ describe('settings IPC input validation', () => {
     )
   })
 
-  it('accepts provider edits while keeping credentials optional', () => {
-    expect(validateUpdateProviderInput({
+  it('validates explicit provider model lists', () => {
+    expect(validateAddProviderInput({
+      id: 'company-gateway',
+      type: 'openai',
+      models: [
+        { model: 'glm-5.3', maxContextSize: 131_072, displayName: 'GLM 5.3', capabilities: ['thinking'] },
+        { model: 'zai-org/GLM-4.6', maxContextSize: 202_752, supportEfforts: ['low', 'high'] }
+      ]
+    })).toEqual({
+      id: 'company-gateway',
+      type: 'openai',
+      models: [
+        { model: 'glm-5.3', maxContextSize: 131_072, displayName: 'GLM 5.3', capabilities: ['thinking'] },
+        { model: 'zai-org/GLM-4.6', maxContextSize: 202_752, supportEfforts: ['low', 'high'] }
+      ]
+    })
+    // 空数组等价于未提供（回退到目录补全/单模型路径）。
+    expect(validateAddProviderInput({ id: 'company-gateway', type: 'openai', models: [] })).toEqual({
+      id: 'company-gateway',
+      type: 'openai'
+    })
+    expect(() => validateAddProviderInput({
+      id: 'company-gateway', type: 'openai',
+      models: [{ model: 'glm-5.3', maxContextSize: 131_072 }, { model: 'glm-5.3', maxContextSize: 65_536 }]
+    })).toThrow('模型 glm-5.3 在清单中重复')
+    expect(() => validateAddProviderInput({
+      id: 'company-gateway', type: 'openai',
+      models: [{ model: 'glm-5.3' }]
+    })).toThrow('Invalid Kimi provider model context size')
+    expect(() => validateAddProviderInput({
+      id: 'company-gateway', type: 'openai',
+      models: [{ model: 'glm-5.3', maxContextSize: 131_072, raw: {} }]
+    })).toThrow('Invalid Kimi provider model entry')
+    expect(() => validateUpdateProviderInput({
+      id: 'company-gateway', type: 'openai',
+      models: [{ model: 'glm-5.3', maxContextSize: 131_072, capabilities: 'thinking' }]
+    })).toThrow('Invalid Kimi provider model capabilities')
+  })
+
+  it('accepts provider edits while keeping credentials optional', () => {    expect(validateUpdateProviderInput({
       id: 'local:openai', newId: 'local-openai-work', type: 'openai',
       baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder',
       defaultModelContextSize: 131_072

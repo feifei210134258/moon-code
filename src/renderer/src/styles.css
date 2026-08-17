@@ -7399,6 +7399,48 @@ body.is-panel-resizing {
   grid-column: 1 / -1;
 }
 
+/* ---------- 供应商编辑器：模型清单表格 ---------- */
+
+.provider-models-editor {
+  display: grid;
+  gap: 6px;
+}
+
+.provider-models-editor-title {
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  font-weight: 560;
+}
+
+.provider-models-head,
+.provider-model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 26px;
+  gap: 6px;
+  align-items: center;
+}
+
+.provider-models-head span {
+  color: var(--faint);
+  font-size: var(--type-caption-size);
+}
+
+.provider-model-row input {
+  height: 32px;
+}
+
+.provider-model-row .provider-icon-button {
+  width: 26px;
+  height: 26px;
+}
+
+.provider-model-add {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .secondary-provider-form .credential-note,
 .secondary-provider-form .field-error {
   margin: 10px 0 0;
