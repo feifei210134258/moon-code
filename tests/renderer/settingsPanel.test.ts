@@ -627,14 +627,25 @@ describe('SettingsPanel', () => {
     await form.get('select').setValue('anthropic')
     await inputs[1]!.setValue('https://api.anthropic.com')
     await inputs[2]!.setValue('sk-ant-secret')
-    await form.trigger('submit')
+    // 目录外的自定义服务必须提供首个模型别名与上下文 Token，提交按钮在此之前保持禁用。
+    // 注意：重渲染可能替换表单元素，断言前重新查询。
+    const submitDisabled = () =>
+      (wrapper.get('.secondary-provider-form').get('.provider-form-actions .primary-button')
+        .element as HTMLButtonElement).disabled
+    expect(submitDisabled()).toBe(true)
+    await inputs[3]!.setValue('claude-sonnet-4-5')
+    await inputs[4]!.setValue('200000')
+    expect(submitDisabled()).toBe(false)
+    await wrapper.get('.secondary-provider-form').trigger('submit')
     await flushPromises()
 
     expect(api.addKimiProvider).toHaveBeenCalledWith({
       id: 'anthropic-main',
       type: 'anthropic',
       baseUrl: 'https://api.anthropic.com',
-      apiKey: 'sk-ant-secret'
+      apiKey: 'sk-ant-secret',
+      defaultModel: 'claude-sonnet-4-5',
+      defaultModelContextSize: 200_000
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
     const anthropicCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('anthropic-main'))!
@@ -770,12 +781,88 @@ describe('SettingsPanel', () => {
     expect(form.text()).toContain('API Base URL')
     await form.find('input').setValue('private-manual')
     await form.get('input[type="url"]').setValue('https://private.example.com/v1')
-    await form.trigger('submit')
+    // 目录不可用时无法自动补全模型元数据，首个模型别名与上下文 Token 变为必填。
+    // 注意：重渲染可能替换表单元素，断言前重新查询。
+    const freshForm = () => wrapper.get('.secondary-provider-form')
+    const submitDisabled = () =>
+      (freshForm().get('.provider-form-actions .primary-button').element as HTMLButtonElement).disabled
+    expect(freshForm().text()).toContain('需填写模型别名与上下文 Token 才能创建')
+    expect(submitDisabled()).toBe(true)
+    const inputs = form.findAll('input')
+    await inputs[3]!.setValue('private-coder')
+    await inputs[4]!.setValue('131072')
+    expect(submitDisabled()).toBe(false)
+    await freshForm().trigger('submit')
     await flushPromises()
     expect(api.addKimiProvider).toHaveBeenCalledWith(expect.objectContaining({
       id: 'private-manual', type: 'openai',
-      baseUrl: 'https://private.example.com/v1'
+      baseUrl: 'https://private.example.com/v1',
+      defaultModel: 'private-coder',
+      defaultModelContextSize: 131_072
     }))
+    wrapper.unmount()
+  })
+
+  it('keeps manual model fields optional when the Base URL domain hits the Kimi catalog', async () => {
+    const writableSnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      capabilities: {
+        ...snapshot.capabilities,
+        secondaryModel: {
+          ...snapshot.capabilities.secondaryModel,
+          writable: true,
+          canDisable: true,
+          unavailableReason: null
+        }
+      }
+    }
+    const catalogSummary = {
+      id: 'deepseek', name: 'DeepSeek', wireType: 'openai', needsBaseUrl: false,
+      envKey: 'DEEPSEEK_API_KEY', modelCount: 2, rejected: false, rejectReason: null
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => writableSnapshot),
+      listKimiCatalogProviders: vi.fn(async () => [catalogSummary]),
+      addKimiProvider: vi.fn(async () => writableSnapshot)
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    const addButton = wrapper.findAll('.provider-add-card')
+      .find((button) => button.text().includes('添加模型服务'))
+    await addButton!.trigger('click')
+    await flushPromises()
+
+    await wrapper.get('.provider-picker-trigger').trigger('click')
+    await flushPromises()
+    await wrapper.get('.provider-picker-manual').trigger('click')
+    await flushPromises()
+    // 用语义选择器填表：picker 打开时搜索框会占据 inputs[0]，下标不可靠。
+    const form = wrapper.get('.secondary-provider-form')
+    await form.get('input[placeholder="例如 openai-main"]').setValue('my-deepseek')
+    await form.get('select').setValue('openai')
+    await form.get('input[type="url"]').setValue('https://api.deepseek.com/v1')
+    await form.get('input[type="password"]').setValue('sk-deepseek-secret')
+    await flushPromises()
+
+    // api.deepseek.com 命中目录中的 deepseek，模型元数据由主进程自动补全，无需手填。
+    // 注意：重渲染可能替换表单元素，断言前重新查询。
+    const freshForm = () => wrapper.get('.secondary-provider-form')
+    expect(freshForm().text()).not.toContain('需填写模型别名与上下文 Token 才能创建')
+    const submit = freshForm().get('.provider-form-actions .primary-button')
+    expect((submit.element as HTMLButtonElement).disabled).toBe(false)
+    await freshForm().trigger('submit')
+    await flushPromises()
+    expect(api.addKimiProvider).toHaveBeenCalledWith({
+      id: 'my-deepseek',
+      type: 'openai',
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: 'sk-deepseek-secret'
+    })
     wrapper.unmount()
   })
 

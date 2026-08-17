@@ -6,6 +6,7 @@ import type { ConnectOptions, KimiWsClient } from '../../packages/kimi-adapter/s
 import type { KimiCursor } from '../../packages/kimi-adapter/src/wire/ws.js'
 import type { PromptSubmitResult } from '../../packages/kimi-adapter/src/wire/schemas.js'
 import { KimiSessionBridge } from '../../src/main/kimi/KimiSessionBridge.js'
+import type { KimiConfigFileWatcher } from '../../src/main/kimi/KimiConfigFileWatcher.js'
 import { KimiTerminalCompatibility } from '../../src/main/kimi/KimiTerminalCompatibility.js'
 import type { KimiRuntimeManager } from '../../src/main/runtime/KimiRuntimeManager.js'
 
@@ -200,6 +201,30 @@ describe('KimiSessionBridge terminals', () => {
       { scope: 'navigation', eventType: 'event.workspace.created' },
       { scope: 'config', eventType: 'event.config.changed' }
     ])
+    await bridge.close()
+  })
+
+  it('turns Kimi config file changes into config invalidations without forwarding file contents', async () => {
+    const socket = new FakeSocket()
+    const runtime = new FakeRuntime(socket)
+    const watcher = new class extends EventEmitter {
+      readonly start = vi.fn()
+      readonly close = vi.fn()
+    }()
+    const bridge = new KimiSessionBridge(
+      runtime as unknown as KimiRuntimeManager,
+      watcher as unknown as KimiConfigFileWatcher
+    )
+    // FakeRuntime 构造时已是 running，监听器应立即启动。
+    expect(watcher.start).toHaveBeenCalledTimes(1)
+    const events: unknown[] = []
+    bridge.on('global-state-changed', (event) => events.push(event))
+
+    watcher.emit('change')
+    expect(events).toEqual([{ scope: 'config', eventType: 'kimi.config.file_changed' }])
+
+    runtime.emit('state-changed', { ...runtime.state, status: 'stopped' })
+    expect(watcher.close).toHaveBeenCalled()
     await bridge.close()
   })
 

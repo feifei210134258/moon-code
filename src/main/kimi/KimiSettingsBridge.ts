@@ -335,7 +335,11 @@ export class KimiSettingsBridge {
     const provider: Record<string, unknown> = { type: input.type }
     if (input.baseUrl !== undefined) provider.base_url = input.baseUrl
     if (input.apiKey !== undefined) provider.api_key = input.apiKey
-    if (input.defaultModel !== undefined) provider.default_model = input.defaultModel
+    // config.toml 中 provider 的 default_model 存储的是带 Provider 前缀的模型别名，
+    // 与服务端 createProvider 的写入语义保持一致。
+    if (input.defaultModel !== undefined) {
+      provider.default_model = `${input.id}/${stripProviderPrefix(input.defaultModel, input.id)}`
+    }
     await client.setConfig({ providers: { [input.id]: provider } })
     await client.refreshProvider(input.id)
     return await this.getSnapshot()

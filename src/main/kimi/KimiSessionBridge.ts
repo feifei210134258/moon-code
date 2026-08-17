@@ -11,6 +11,7 @@ import type { KimiWsClient } from '../../../packages/kimi-adapter/src/transport/
 import { KimiApiError } from '../../../packages/kimi-adapter/src/transport/KimiRestClient.js'
 import type { MessageContentPart, PromptSubmitResult } from '../../../packages/kimi-adapter/src/wire/schemas.js'
 import type { KimiRuntimeManager } from '../runtime/KimiRuntimeManager.js'
+import type { KimiConfigFileWatcher } from './KimiConfigFileWatcher.js'
 import { KimiTerminalCompatibility } from './KimiTerminalCompatibility.js'
 import { projectAgentTranscript } from './KimiAgentTranscriptProjector.js'
 import type {
@@ -52,19 +53,30 @@ const execFileAsync = promisify(execFile)
 
 export class KimiSessionBridge extends EventEmitter {
   readonly #runtime: KimiRuntimeManager
+  readonly #configWatcher: KimiConfigFileWatcher | null
   #controller: SessionSyncController | null = null
   #socket: KimiWsClient | null = null
   readonly #terminalAttachments = new Set<string>()
   readonly #terminalCompatibility = new KimiTerminalCompatibility()
 
-  constructor(runtime: KimiRuntimeManager) {
+  constructor(runtime: KimiRuntimeManager, configWatcher: KimiConfigFileWatcher | null = null) {
     super()
     this.#runtime = runtime
+    this.#configWatcher = configWatcher
+    // 外部写入方（kimi code web、CLI、手工编辑 config.toml）不会让 Runtime 的
+    // WS 发出任何通知（0.36 起服务端不再转发 config/model_catalog 事件，跨进程
+    // 写入本来也没有事件）；config 文件变更因此在这里折算成既有的 config 失效
+    // 信号，Renderer 仍通过官方 REST 重新读取权威快照。
+    this.#configWatcher?.on('change', () => {
+      this.emit('global-state-changed', { scope: 'config', eventType: 'kimi.config.file_changed' } satisfies KimiGlobalStateEvent)
+    })
     runtime.on('state-changed', (state) => {
+      if (state.status === 'running') this.#configWatcher?.start()
       if (state.status === 'stopping' || state.status === 'stopped' || state.status === 'error') {
         void this.close().catch((error: unknown) => this.emit('terminal-cleanup-error', error))
       }
     })
+    if (this.#runtime.state.status === 'running') this.#configWatcher?.start()
     this.#terminalCompatibility.on('terminal-output', (output: TerminalOutputEvent) => {
       this.emit('terminal-output', output)
     })
@@ -668,6 +680,7 @@ export class KimiSessionBridge extends EventEmitter {
   }
 
   async close(): Promise<void> {
+    this.#configWatcher?.close()
     this.#controller?.close()
     this.#controller = null
     this.#socket = null

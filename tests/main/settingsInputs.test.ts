@@ -12,14 +12,14 @@ import {
 describe('settings IPC input validation', () => {
   it('accepts bounded provider configuration and loopback development endpoints', () => {
     expect(validateAddProviderInput({
-      id: 'local:openai',
+      id: 'local-openai',
       type: 'openai',
       baseUrl: 'http://127.0.0.1:11434/v1',
       apiKey: 'local-key',
       defaultModel: 'local-coder',
       defaultModelContextSize: 131_072
     })).toEqual({
-      id: 'local:openai',
+      id: 'local-openai',
       type: 'openai',
       baseUrl: 'http://127.0.0.1:11434/v1',
       apiKey: 'local-key',
@@ -28,6 +28,44 @@ describe('settings IPC input validation', () => {
     })
     expect(validateProviderId('managed:kimi-code')).toBe('managed:kimi-code')
     expect(validateModelId('kimi-for-coding')).toBe('kimi-for-coding')
+  })
+
+  it('accepts server-legal provider ids (unicode names and spaces) for new providers', () => {
+    expect(validateAddProviderInput({ id: '公司', type: 'openai' })).toEqual({ id: '公司', type: 'openai' })
+    expect(validateAddProviderInput({ id: 'My OpenAI 主备', type: 'openai' })).toEqual({
+      id: 'My OpenAI 主备',
+      type: 'openai'
+    })
+    expect(validateUpdateProviderInput({ id: '公司', newId: '公司 灾备', type: 'openai' })).toEqual({
+      id: '公司',
+      newId: '公司 灾备',
+      type: 'openai'
+    })
+  })
+
+  it('rejects new provider ids the Kimi Runtime would reject, and keeps existing ids permissive', () => {
+    // 服务端 createProvider/replaceProvider 的 pattern 不允许 "." 或 ":"；
+    // 本地提前拒绝，避免提交后才发现创建不成功。
+    expect(() => validateAddProviderInput({ id: 'local:openai', type: 'openai' })).toThrow(
+      '连接名称只能包含文字、数字、空格以及 - 和 _，且必须以文字或数字开头'
+    )
+    expect(() => validateAddProviderInput({ id: 'openai.main', type: 'openai' })).toThrow(
+      '连接名称只能包含文字、数字、空格以及 - 和 _，且必须以文字或数字开头'
+    )
+    expect(() => validateAddProviderInput({ id: '-leading-dash', type: 'openai' })).toThrow(
+      '连接名称只能包含文字、数字、空格以及 - 和 _，且必须以文字或数字开头'
+    )
+    expect(() => validateUpdateProviderInput({ id: '公司', newId: 'bad:id', type: 'openai' })).toThrow(
+      '连接名称只能包含文字、数字、空格以及 - 和 _，且必须以文字或数字开头'
+    )
+    // 既有 Provider 的 id 以服务端返回为准（config.toml 可手工写入任意键名）。
+    expect(validateProviderId('公司')).toBe('公司')
+    expect(validateProviderId('managed:kimi-code')).toBe('managed:kimi-code')
+    expect(validateProviderRefreshInput({ scope: 'provider', providerId: '公司' })).toEqual({
+      scope: 'provider',
+      providerId: '公司'
+    })
+    expect(() => validateProviderId('')).toThrow('Invalid Kimi provider id')
   })
 
   it('rejects credential URLs, insecure remote HTTP and unbounded secrets', () => {
@@ -85,11 +123,11 @@ describe('settings IPC input validation', () => {
 
   it('accepts provider edits while keeping credentials optional', () => {
     expect(validateUpdateProviderInput({
-      id: 'local:openai', newId: 'local:openai-work', type: 'openai',
+      id: 'local:openai', newId: 'local-openai-work', type: 'openai',
       baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder',
       defaultModelContextSize: 131_072
     })).toEqual({
-      id: 'local:openai', newId: 'local:openai-work', type: 'openai',
+      id: 'local:openai', newId: 'local-openai-work', type: 'openai',
       baseUrl: 'http://127.0.0.1:11434/v1', defaultModel: 'local-coder',
       defaultModelContextSize: 131_072
     })

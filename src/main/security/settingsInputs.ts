@@ -14,7 +14,16 @@ const PROVIDER_TYPES = new Set<KimiProviderType>([
   'openai_responses',
   'vertexai'
 ])
-const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+// 新建/重命名 Provider 的 id 规则与 Kimi Runtime 服务端契约保持一致
+//（packages/kimi-adapter/contracts/*-openapi.json 中 createProvider 的 pattern：
+// ^[\p{L}\p{N}][\p{L}\p{N}\-_ ]*$）。本地只放行服务端能接受的值，避免
+// 本地校验通过、服务端再拒绝（例如带 "." 或 ":" 的 id），也放行服务端允许、
+// 旧版客户端却拒绝的合法 id（例如中文名或带空格的名称）。
+const NEW_PROVIDER_ID_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N}\-_ ]*$/u
+const NEW_PROVIDER_ID_MAX_LENGTH = 128
+// 既有 Provider（可能来自手工编辑的 config.toml，如 "managed:kimi-code"）只要求
+// 非空、可安全进入 URL 路径；删除/刷新/编辑等操作以服务端返回的 id 为准。
+const PROVIDER_ID_MAX_LENGTH = 256
 
 export function validateModelId(value: unknown): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > 256 || value.includes('\0')) {
@@ -50,14 +59,25 @@ export function validateSecondaryModelInput(value: unknown): KimiSecondaryModelU
 
 export function validateProviderId(value: unknown, optional = false): string | undefined {
   if (value === undefined && optional) return undefined
-  if (typeof value !== 'string' || !PROVIDER_ID_PATTERN.test(value)) {
+  if (typeof value !== 'string' || value.length < 1 || value.length > PROVIDER_ID_MAX_LENGTH || value.includes('\0')) {
     throw new TypeError('Invalid Kimi provider id')
   }
   return value
 }
 
+export function validateNewProviderId(value: unknown): string {
+  if (
+    typeof value !== 'string' ||
+    value.length > NEW_PROVIDER_ID_MAX_LENGTH ||
+    !NEW_PROVIDER_ID_PATTERN.test(value)
+  ) {
+    throw new TypeError('连接名称只能包含文字、数字、空格以及 - 和 _，且必须以文字或数字开头')
+  }
+  return value
+}
+
 export function validateCatalogId(value: unknown): string {
-  if (typeof value !== 'string' || !PROVIDER_ID_PATTERN.test(value)) {
+  if (typeof value !== 'string' || value.length < 1 || value.length > PROVIDER_ID_MAX_LENGTH || value.includes('\0')) {
     throw new TypeError('Invalid Kimi catalog id')
   }
   return value
@@ -65,7 +85,7 @@ export function validateCatalogId(value: unknown): string {
 
 export function validateAddProviderInput(value: unknown): AddKimiProviderInput {
   if (!isRecord(value)) throw new TypeError('Invalid Kimi provider input')
-  const id = validateProviderId(value.id)
+  const id = validateNewProviderId(value.id)
   const type = value.type
   if (typeof type !== 'string' || !PROVIDER_TYPES.has(type as KimiProviderType)) {
     throw new TypeError('Invalid Kimi provider type')
@@ -78,7 +98,7 @@ export function validateAddProviderInput(value: unknown): AddKimiProviderInput {
     : validateModelId(value.defaultModel)
   const defaultModelContextSize = validateOptionalContextSize(value.defaultModelContextSize)
   return {
-    id: id!,
+    id,
     type: type as KimiProviderType,
     ...(baseUrl === undefined ? {} : { baseUrl }),
     ...(apiKey === undefined ? {} : { apiKey }),
@@ -94,7 +114,7 @@ export function validateUpdateProviderInput(value: unknown): UpdateKimiProviderI
     throw new TypeError('Invalid Kimi provider update input')
   }
   const id = validateProviderId(value.id)
-  const newId = value.newId === undefined ? undefined : validateProviderId(value.newId)
+  const newId = value.newId === undefined ? undefined : validateNewProviderId(value.newId)
   const type = value.type
   if (typeof type !== 'string' || !PROVIDER_TYPES.has(type as KimiProviderType)) {
     throw new TypeError('Invalid Kimi provider type')

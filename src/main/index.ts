@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, Notification, screen, shell } from 'electron'
 import { registerIpc } from './ipc.js'
 import { KimiSessionBridge } from './kimi/KimiSessionBridge.js'
+import { KimiConfigFileWatcher } from './kimi/KimiConfigFileWatcher.js'
 import { KimiSettingsBridge } from './kimi/KimiSettingsBridge.js'
 import { KimiCapabilitiesBridge } from './kimi/KimiCapabilitiesBridge.js'
 import { KimiBrowserManager } from './browser/KimiBrowserManager.js'
@@ -30,7 +31,7 @@ const runtime = new KimiRuntimeManager({
   secondaryModelPreferencesStore: secondaryModelPreferences
 })
 const cliUpdates = new KimiCliUpdateService()
-const sessions = new KimiSessionBridge(runtime)
+const sessions = new KimiSessionBridge(runtime, new KimiConfigFileWatcher())
 const settings = new KimiSettingsBridge(runtime, secondaryModelPreferences)
 const capabilities = new KimiCapabilitiesBridge(runtime)
 const browser = new KimiBrowserManager(runtime, () => mainWindow)

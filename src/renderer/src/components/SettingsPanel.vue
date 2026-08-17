@@ -208,6 +208,44 @@ const catalogApiKeyPlaceholder = computed(() => {
   }
   return providerEditorIsEditing.value ? '留空以保留当前 API Key' : 'sk-…'
 })
+/* 与 KimiSettingsBridge.#findProviderDirectory 的候选逻辑保持一致：
+   连接名称或 Base URL 的注册域名能命中 Kimi 供应商目录时，模型元数据会自动补全；
+   目录外的自定义服务没有任何模型来源，必须手动填写首个模型别名和上下文 Token，
+   否则服务端无法创建（POST /providers 要求至少一个模型）。 */
+const manualProviderDirectoryHit = computed(() => {
+  const candidates = new Set<string>()
+  const normalizedId = secondaryProviderDraft.value.id.trim().toLowerCase()
+  if (normalizedId.length > 0) candidates.add(normalizedId)
+  const baseUrl = secondaryProviderDraft.value.baseUrl.trim()
+  if (baseUrl.length > 0) {
+    try {
+      const labels = new URL(baseUrl).hostname.toLowerCase().split('.').filter(Boolean)
+      const registrableLabel = labels.at(-2)
+      if (registrableLabel !== undefined) candidates.add(registrableLabel)
+    } catch {
+      // URL 合法性由主进程校验；这里只做目录命中的尽力判断。
+    }
+  }
+  if (candidates.size < 1) return false
+  return [...candidates].some((candidate) =>
+    catalogSummaries.value.some((item) =>
+      item.id.toLowerCase() === candidate && !item.rejected && item.modelCount > 0
+    )
+  )
+})
+const providerEditorModelFieldsRequired = computed(() =>
+  !providerEditorIsEditing.value && !providerEditorIsCatalogMode.value && !manualProviderDirectoryHit.value
+)
+const manualDefaultModelMissing = computed(() =>
+  providerEditorModelFieldsRequired.value && secondaryProviderDraft.value.defaultModel.trim().length < 1
+)
+const manualContextSizeMissing = computed(() => {
+  if (!providerEditorModelFieldsRequired.value) return false
+  const text = String(secondaryProviderDraft.value.defaultModelContextSize ?? '').trim()
+  if (text.length < 1) return true
+  const size = Number(text)
+  return !Number.isInteger(size) || size < 1 || size > 16_777_216
+})
 const secondarySettingsModelLabel = computed(() => {
   if (secondaryModelDraft.value.model.length < 1) return '跟随主模型'
   return secondaryModelDraftDescriptor.value?.displayName ?? secondaryModelDraft.value.model
@@ -1542,19 +1580,20 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                             </select>
                           </label>
                           <label v-else class="provider-form-wide">
-                            <span>首个 / 默认模型别名</span>
+                            <span>首个 / 默认模型别名{{ providerEditorModelFieldsRequired ? '（必填）' : '' }}</span>
                             <input v-model="secondaryProviderDraft.defaultModel" type="text" maxlength="256" placeholder="例如 gpt-5-mini" autocomplete="off" spellcheck="false" :disabled="actionPending !== null" />
                           </label>
                           <label v-if="!providerEditorIsCatalogMode" class="provider-form-wide">
-                            <span>模型上下文 Token（私有或未知服务时填写）</span>
+                            <span>模型上下文 Token{{ providerEditorModelFieldsRequired ? '（必填）' : '（私有或未知服务时填写）' }}</span>
                             <input v-model="secondaryProviderDraft.defaultModelContextSize" type="number" min="1" max="16777216" placeholder="已知服务会从 Kimi 模型目录自动识别" autocomplete="off" :disabled="actionPending !== null" />
                           </label>
                         </div>
+                        <p v-if="providerEditorModelFieldsRequired" class="provider-catalog-hint">该服务不在 Kimi 供应商目录中，需填写模型别名与上下文 Token 才能创建。</p>
                         <p v-if="secondaryProviderIdExists" class="field-error">这个连接名称已存在。</p>
                         <p class="credential-note">API Key 交给 Kimi 官方配置保存，Moon Code 不会回读或另存。</p>
                         <div class="provider-form-actions">
                           <button class="secondary-button" type="button" :disabled="actionPending !== null" @click="cancelProviderEditor">取消</button>
-                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists || (providerEditorIsCatalogMode && secondaryProviderDraft.defaultModel.trim().length < 1) || (catalogRequiresBaseUrl && secondaryProviderDraft.baseUrl.trim().length < 1)">{{ providerEditorSubmitLabel }}</button>
+                          <button class="primary-button" type="submit" :disabled="actionPending !== null || secondaryProviderDraft.id.trim().length < 1 || secondaryProviderIdExists || (providerEditorIsCatalogMode && secondaryProviderDraft.defaultModel.trim().length < 1) || (catalogRequiresBaseUrl && secondaryProviderDraft.baseUrl.trim().length < 1) || manualDefaultModelMissing || manualContextSizeMissing">{{ providerEditorSubmitLabel }}</button>
                         </div>
                       </form>
                     </div>

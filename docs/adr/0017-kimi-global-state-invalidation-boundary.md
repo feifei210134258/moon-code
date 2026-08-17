@@ -45,3 +45,9 @@ Kimi Code `0.29.0` 的 WebSocket 不只发送当前会话的 Turn。服务端会
 - `kimiSessionBridge.test.ts` 覆盖 Main 的 payload 隔离。
 - `runtimeBridge.test.ts` 覆盖 Renderer 的导航合并与 Config revision。
 - `settingsPanel.test.ts` 覆盖 SettingsPanel 的权威重读。
+
+## 补充（2026-08-17，Kimi 0.36）
+
+实测 Kimi 0.36 的 WS 广播器只转发 `event.session.*`、`session.meta.updated`、`event.plugin/capability/config.warning/di.*`，**不再向连接转发 `event.config.changed` 与 `event.model_catalog.changed`**（Provider 的增删改、POST /config 均无任何 WS 帧）；跨进程写入（另一个 `kimi web` 实例、CLI）本来也不会在本进程产生事件。上述 WS 失效通道因此对 Config/Provider 变更完全静默。
+
+为此新增 `KimiConfigFileWatcher`：Main 进程只读监听 `~/.kimi-code/config.toml`（监听目录以兼容原子替换，去抖 300 ms），任何写入方落盘后折算为既有的 `scope: 'config'` 失效通知，Renderer 仍经官方 REST 重读权威快照。它不解析、不修改配置，也不引入轮询；Moon Code 自身经 REST 的写入会触发一次冗余重读，代价可忽略。`kimiConfigFileWatcher.test.ts` 与 `kimiSessionBridge.test.ts` 覆盖去抖、目录缺失、生命周期与 payload 隔离。
