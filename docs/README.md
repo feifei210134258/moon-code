@@ -1,14 +1,14 @@
 # Moon Code 调研与设计索引
 
 > 工作名称：Moon Code；历史调研基线：2026-07-22，Kimi Code `0.29.0`；本机系统 CLI 当前为 `0.29.2`
-> 当前阶段：P0 功能实现与未签名 macOS 内测交付；0.2.0 次主力模型正在补充 Provider 配置体验
+> 当前阶段：P0 功能实现与未签名 macOS / Windows 内测交付；0.2.0 次主力模型正在补充 Provider 配置体验
 
-这个项目不是通用 Agent 聚合器，也不是 Codex 协议客户端。它是一个以 Kimi Code 为唯一 Agent 内核的 macOS 桌面客户端；“Codex 风格”只描述 UI、任务工作台和桌宠交互。
+这个项目不是通用 Agent 聚合器，也不是 Codex 协议客户端。它是一个以 Kimi Code 为唯一 Agent 内核的桌面客户端（支持 macOS 与 Windows）；“Codex 风格”只描述 UI、任务工作台和桌宠交互。
 
 ## 已确认的产品决策
 
 - Kimi Code Web 当前可见功能必须完整覆盖。
-- macOS 首发，架构为后续 Windows/Linux 留出空间。
+- macOS 与 Windows 均已交付，架构为后续 Linux 留出空间。
 - 客户端管理一套经过兼容验证的 Kimi Code 运行时，同时允许高级用户选择系统已安装版本。
 - 内置开发浏览器包含地址栏、项目预览、Console、Network、设备尺寸和截图。
 - HTML 画面批注是可行的增强目标：用户在网页元素或区域上写反馈，客户端把截图、元素定位和文字反馈作为普通 Kimi Prompt 附件发送。
