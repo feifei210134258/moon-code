@@ -76,7 +76,7 @@ function createClient() {
     supportsSecondaryModelConfigWrite: vi.fn(async () => false),
     supportsProviderManagement: vi.fn(async () => false),
     setDefaultModel: vi.fn(async () => ({})),
-    setConfig: vi.fn(async () => config),
+    setConfig: vi.fn(async (_patch?: Record<string, unknown>) => config),
     createProvider: vi.fn(async () => ({
       id: 'third-party:openai', type: 'openai', has_api_key: true, status: 'connected' as const,
       models: ['third-party:openai/local-coder']
@@ -528,6 +528,114 @@ describe('KimiSettingsBridge', () => {
     expect(store.save).toHaveBeenLastCalledWith({ mode: 'inherit', model: null, defaultEffort: null })
     expect(inherited.secondaryModelControl.preference.mode).toBe('inherit')
     expect(inherited.secondaryModelControl.requiresRestart).toBe(false)
+  })
+
+  it('writes the secondary model through REST on capable owned Runtimes so it applies without a restart', async () => {
+    const client = createClient()
+    client.supportsSecondaryModelConfigWrite.mockResolvedValue(true)
+    // v2 语义：REST 写入立即反映到有效配置。
+    client.setConfig.mockImplementation(async (patch: Record<string, unknown> = {}) => ({
+      ...await client.getConfig(),
+      ...patch
+    }))
+    let preference = { mode: 'inherit' as const, model: null, defaultEffort: null }
+    const store = {
+      load: vi.fn(async () => preference),
+      save: vi.fn(async (next) => { preference = next })
+    }
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.36.0', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      appliedSecondaryModelPreference: { mode: 'configured', model: 'old-model', defaultEffort: null },
+      appliedSecondaryModelSource: 'moon-code-environment',
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+    const bridge = new KimiSettingsBridge(runtime, store)
+
+    const snapshot = await bridge.setSecondaryModel({ model: 'local-coder', defaultEffort: 'low' })
+
+    expect(client.setConfig).toHaveBeenCalledWith({
+      secondary_model: { model: 'local-coder', default_effort: 'low' }
+    })
+    expect(store.save).toHaveBeenCalledWith({
+      mode: 'configured', model: 'local-coder', defaultEffort: 'low'
+    })
+    expect(snapshot.secondaryModelControl).toEqual(expect.objectContaining({
+      configurationMode: 'runtime-rest',
+      requiresRestart: false,
+      appliedPreference: { mode: 'configured', model: 'local-coder', defaultEffort: 'low' },
+      appliedSource: 'kimi-config'
+    }))
+  })
+
+  it('keeps a spawn-disabled secondary off until restart even when REST writes land', async () => {
+    const client = createClient()
+    client.supportsSecondaryModelConfigWrite.mockResolvedValue(true)
+    client.setConfig.mockImplementation(async (patch: Record<string, unknown> = {}) => ({
+      ...await client.getConfig(),
+      ...patch
+    }))
+    let preference = { mode: 'disabled' as const, model: null, defaultEffort: null }
+    const store = {
+      load: vi.fn(async () => preference),
+      save: vi.fn(async (next) => { preference = next })
+    }
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.36.0', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      appliedSecondaryModelPreference: { mode: 'disabled', model: null, defaultEffort: null },
+      appliedSecondaryModelSource: 'disabled',
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+    const bridge = new KimiSettingsBridge(runtime, store)
+
+    const snapshot = await bridge.setSecondaryModel({ model: 'local-coder', defaultEffort: 'low' })
+
+    // REST 写入落盘，但运行中进程的实验开关仍关闭，重新启用需重启。
+    expect(client.setConfig).toHaveBeenCalledWith({
+      secondary_model: { model: 'local-coder', default_effort: 'low' }
+    })
+    expect(snapshot.secondaryModelControl).toEqual(expect.objectContaining({
+      preference: { mode: 'configured', model: 'local-coder', defaultEffort: 'low' },
+      appliedPreference: { mode: 'disabled', model: null, defaultEffort: null },
+      requiresRestart: true
+    }))
+  })
+
+  it('surfaces a leftover secondary section after switching back to inherit', async () => {
+    const client = createClient()
+    client.supportsSecondaryModelConfigWrite.mockResolvedValue(true)
+    let preference = { mode: 'configured' as const, model: 'local-coder' as string | null, defaultEffort: 'low' as string | null }
+    const store = {
+      load: vi.fn(async () => preference),
+      save: vi.fn(async (next) => { preference = next })
+    }
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.36.0', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      appliedSecondaryModelPreference: { mode: 'configured', model: 'local-coder', defaultEffort: 'low' },
+      appliedSecondaryModelSource: 'moon-code-environment',
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+    const bridge = new KimiSettingsBridge(runtime, store)
+
+    const snapshot = await bridge.inheritSecondaryModel()
+
+    // /config 没有删除通道：config.toml 残留的 [secondary_model] 继续生效，
+    // inherit 偏好与有效配置的分歧如实展示，不假装已跟随主模型。
+    expect(client.setConfig).not.toHaveBeenCalled()
+    expect(snapshot.secondaryModelControl).toEqual(expect.objectContaining({
+      preference: { mode: 'inherit', model: null, defaultEffort: null },
+      appliedPreference: { mode: 'configured', model: 'local-coder', defaultEffort: 'low' },
+      appliedSource: 'kimi-config',
+      requiresRestart: false
+    }))
   })
 
   it('rejects local max-output overrides and cannot alter a shared Runtime environment', async () => {

@@ -99,7 +99,8 @@ export class KimiSettingsBridge {
         this.runtime,
         secondaryPreference,
         this.secondaryModelPreferencesStore !== null,
-        secondaryModelRestWritable
+        secondaryModelRestWritable,
+        mapSecondaryModel(config)
       ),
       capabilities: {
         canAddProvider: true,
@@ -135,18 +136,42 @@ export class KimiSettingsBridge {
     ) {
       throw new TypeError(`Kimi secondary effort is not supported by ${input.model}`)
     }
-    if (this.#canControlOwnedRuntimeEnvironment()) {
-      if (input.maxOutputSize !== undefined && !restWritable) {
-        throw new Error(SECONDARY_MODEL_MAX_OUTPUT_ENV_UNAVAILABLE)
+    // v2 后端（0.36）的子 Agent 绑定只读 config.toml 的 [secondary_model]；
+    // KIMI_SECONDARY_MODEL 环境变量不影响绑定（仅 v1 读取）。声明了
+    // secondary_model 可写的 Runtime 一律走官方 REST：写入即生效，
+    // 之后派发的子 Agent 立即使用新模型，无需重启
+    // （进程以禁用态启动时实验开关仍关闭，该情形下重新启用需重启）。
+    if (restWritable) {
+      const updated = await client.setConfig({
+        secondary_model: {
+          model: input.model,
+          ...(input.defaultEffort === undefined ? {} : { default_effort: input.defaultEffort }),
+          ...(input.maxOutputSize === undefined ? {} : { max_output_size: input.maxOutputSize })
+        }
+      })
+      const effective = mapSecondaryModel(updated)
+      if (
+        effective.model !== input.model ||
+        (input.defaultEffort !== undefined && effective.defaultEffort !== input.defaultEffort) ||
+        (input.maxOutputSize !== undefined && effective.maxOutputSize !== input.maxOutputSize)
+      ) {
+        throw new Error(
+          'Kimi Runtime did not apply the requested secondary model configuration; check environment overrides and Runtime warnings.'
+        )
       }
-      if (input.maxOutputSize !== undefined) {
-        await client.setConfig({
-          secondary_model: {
-            model: input.model,
-            ...(input.defaultEffort === undefined ? {} : { default_effort: input.defaultEffort }),
-            max_output_size: input.maxOutputSize
-          }
+      // 自有 Runtime 同步本地偏好：禁用（环境变量开关）与旧 Runtime 的环境路径仍以它为据。
+      if (this.#canControlOwnedRuntimeEnvironment()) {
+        await this.secondaryModelPreferencesStore!.save({
+          mode: 'configured',
+          model: input.model,
+          defaultEffort: input.defaultEffort ?? null
         })
+      }
+      return await this.getSnapshot()
+    }
+    if (this.#canControlOwnedRuntimeEnvironment()) {
+      if (input.maxOutputSize !== undefined) {
+        throw new Error(SECONDARY_MODEL_MAX_OUTPUT_ENV_UNAVAILABLE)
       }
       await this.secondaryModelPreferencesStore!.save({
         mode: 'configured',
@@ -155,25 +180,7 @@ export class KimiSettingsBridge {
       })
       return await this.getSnapshot()
     }
-    if (!restWritable) throw new Error(this.#secondaryModelUnavailableReason())
-    const updated = await client.setConfig({
-      secondary_model: {
-        model: input.model,
-        ...(input.defaultEffort === undefined ? {} : { default_effort: input.defaultEffort }),
-        ...(input.maxOutputSize === undefined ? {} : { max_output_size: input.maxOutputSize })
-      }
-    })
-    const effective = mapSecondaryModel(updated)
-    if (
-      effective.model !== input.model ||
-      (input.defaultEffort !== undefined && effective.defaultEffort !== input.defaultEffort) ||
-      (input.maxOutputSize !== undefined && effective.maxOutputSize !== input.maxOutputSize)
-    ) {
-      throw new Error(
-        'Kimi Runtime did not apply the requested secondary model configuration; check environment overrides and Runtime warnings.'
-      )
-    }
-    return await this.getSnapshot()
+    throw new Error(this.#secondaryModelUnavailableReason())
   }
 
   async disableSecondaryModel(): Promise<KimiSettingsSnapshot> {
@@ -192,6 +199,9 @@ export class KimiSettingsBridge {
     if (!this.#canControlOwnedRuntimeEnvironment()) {
       throw new Error(this.#secondaryModelUnavailableReason())
     }
+    // 官方 /config 是 merge 语义且没有删除 section 的通道（null 会被 schema 拒绝），
+    // 此前 REST 写入的 [secondary_model] 无法在此清除：v2 下残留段会继续生效，
+    // 与 inherit 偏好的分歧经 appliedPreference 如实展示。
     await this.secondaryModelPreferencesStore!.save({
       mode: 'inherit',
       model: null,
@@ -632,20 +642,42 @@ function mapSecondaryModelControl(
   runtime: KimiRuntimeManager,
   preference: KimiSecondaryModelPreference,
   hasLocalStore: boolean,
-  restWritable: boolean
+  restWritable: boolean,
+  effective: KimiSettingsSnapshot['secondaryModel']
 ): KimiSettingsSnapshot['secondaryModelControl'] {
   const mode = runtime.state.mode
   const owned = mode === 'managed' || mode === 'system'
-  const appliedPreference = owned ? runtime.appliedSecondaryModelPreference : null
+  const spawnApplied = owned ? runtime.appliedSecondaryModelPreference : null
+  // REST 可写时以 Runtime 的有效配置为准（写入即时生效，无需重启）；
+  // 禁用只能通过进程环境变量随重启生效，以启动时应用的状态为准。
+  const appliedPreference = restWritable
+    ? spawnApplied?.mode === 'disabled'
+      ? spawnApplied
+      : effective.model !== null
+        ? { mode: 'configured' as const, model: effective.model, defaultEffort: effective.defaultEffort }
+        : { ...DEFAULT_SECONDARY_MODEL_PREFERENCE }
+    : spawnApplied
+  const appliedSource = owned
+    ? restWritable
+      ? spawnApplied?.mode === 'disabled'
+        ? runtime.appliedSecondaryModelSource ?? null
+        : 'kimi-config'
+      : runtime.appliedSecondaryModelSource ?? null
+    : null
+  // 禁用/重新启用只随进程环境生效；模型与推理强度的 REST 写入即时生效。
+  const disablePendingRestart = owned && hasLocalStore &&
+    (preference.mode === 'disabled') !== (spawnApplied?.mode === 'disabled')
+  const requiresRestart = owned && hasLocalStore &&
+    (disablePendingRestart || (!restWritable && !samePreference(preference, spawnApplied)))
   return {
     preference: { ...preference },
     appliedPreference,
-    appliedSource: owned ? runtime.appliedSecondaryModelSource ?? null : null,
-    requiresRestart: owned && hasLocalStore && !samePreference(preference, appliedPreference),
-    configurationMode: owned && hasLocalStore
-      ? 'runtime-env'
-      : restWritable
-        ? 'runtime-rest'
+    appliedSource,
+    requiresRestart,
+    configurationMode: restWritable
+      ? 'runtime-rest'
+      : owned && hasLocalStore
+        ? 'runtime-env'
         : 'read-only'
   }
 }

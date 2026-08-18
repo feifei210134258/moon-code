@@ -151,7 +151,10 @@ const secondaryModelSourceLabel = computed(() => {
 const secondaryFollowsPrimary = computed(() => {
   const settings = snapshot.value
   if (settings === null) return true
-  if (usesSecondaryRuntimePreference.value && settings.secondaryModelControl.preference.mode === 'disabled') return true
+  // runtime-env 模式看本地偏好（待应用）；runtime-rest 模式看启动时应用的状态。
+  const control = settings.secondaryModelControl
+  const statePreference = usesSecondaryRuntimePreference.value ? control.preference : control.appliedPreference
+  if (statePreference?.mode === 'disabled') return true
   return secondaryModelDescriptor.value === null
 })
 const secondaryOutcomeTitle = computed(() => {
