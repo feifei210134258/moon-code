@@ -30,6 +30,10 @@ const snapshot: KimiSettingsSnapshot = {
     {
       id: 'kimi-k2.5', providerId: 'managed:kimi-code', displayName: 'Kimi K2.5',
       maxContextSize: 262_144, capabilities: ['thinking', 'vision'], supportEfforts: ['low', 'high'], defaultEffort: 'high'
+    },
+    {
+      id: 'gpt-5-mini', providerId: 'openai-main', displayName: 'GPT-5 mini',
+      maxContextSize: 400_000, capabilities: ['thinking'], supportEfforts: ['low', 'medium', 'high'], defaultEffort: 'medium'
     }
   ],
   secondaryModelOptions: [

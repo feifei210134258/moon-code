@@ -17,6 +17,28 @@ export interface ProjectItem {
 
 export type ExtensionTab = 'changes' | 'files' | 'browser'
 
+/**
+ * 右侧栏文件树的渲染层状态。目录按需懒加载（每个目录一次官方 fs:list），
+ * 展开状态在会话内保留；所有数据仍以 Kimi Server 的返回为唯一事实源。
+ */
+export interface WorkspaceFileTreeState {
+  /** 根目录路径（'.' 表示 Session 工作目录）。 */
+  root: string
+  /** 目录路径 → 其子项；根目录的键为 root。 */
+  children: Record<string, import('@shared/contracts').WorkspaceFileEntry[]>
+  /** 已展开目录的路径集合。 */
+  expanded: Record<string, true>
+  /** 加载中的目录。 */
+  pending: Record<string, true>
+  /** 加载失败的目录及其错误。 */
+  errors: Record<string, string>
+  /** 根目录初次加载状态。 */
+  rootPending: boolean
+  rootError: string | null
+  /** 根目录清单被服务端截断。 */
+  truncated: boolean
+}
+
 export interface ChatActivity {
   id: string
   kind: 'thinking' | 'tool' | 'notice'
@@ -53,6 +75,7 @@ export type ChatBlock =
 
 export interface ChatTurn {
   id: string
+  promptId?: string | null
   role: 'user' | 'assistant'
   author: string
   time: string

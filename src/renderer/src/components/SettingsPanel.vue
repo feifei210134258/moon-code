@@ -48,9 +48,9 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; sessionRestored: [sessionId: string] }>()
 
 type SettingsTab = 'general' | 'models' | 'skills' | 'tools' | 'usage' | 'archives'
-type ModelSettingsView = 'primary' | 'secondary'
+type ModelSettingsView = 'providers' | 'agents'
 const activeTab = ref<SettingsTab>('general')
-const modelSettingsView = ref<ModelSettingsView>('secondary')
+const modelSettingsView = ref<ModelSettingsView>('providers')
 const snapshot = ref<KimiSettingsSnapshot | null>(null)
 const pending = ref(false)
 const actionPending = ref<string | null>(null)
@@ -65,8 +65,7 @@ const archivedSessions = ref<SessionNavigationItem[]>([])
 const archivesPending = ref(false)
 const cliUpdate = ref<KimiCliUpdateState | null>(null)
 const cliUpdateAction = ref<'check' | 'download' | null>(null)
-const secondaryModelDraft = ref({ model: '', defaultEffort: '', maxOutputSize: '' })
-const secondaryProviderId = ref('')
+const secondaryMaxOutputInput = ref('')
 const showSecondaryProviderForm = ref(false)
 const secondaryProviderDraft = ref<{
   id: string
@@ -96,7 +95,6 @@ const selectedCatalogId = ref<string | null>(null)
 const catalogDetail = ref<KimiCatalogProviderDetail | null>(null)
 const catalogDetailLoading = ref(false)
 const providerPickerOpen = ref(false)
-const expandedProviderId = ref<string | null>(null)
 const expandedDescriptions = ref(new Set<string>())
 const descriptionOverflow = ref(new Set<string>())
 const rootRef = ref<HTMLElement | null>(null)
@@ -157,30 +155,10 @@ const secondaryFollowsPrimary = computed(() => {
   if (statePreference?.mode === 'disabled') return true
   return secondaryModelDescriptor.value === null
 })
-const secondaryOutcomeTitle = computed(() => {
-  if (secondaryFollowsPrimary.value) return '跟随主模型'
-  return secondaryModelDescriptor.value?.displayName ?? snapshot.value?.secondaryModel.model ?? '未配置'
-})
-const secondaryOutcomeMeta = computed(() => {
-  const settings = snapshot.value
-  if (settings === null) return '新建子 Agent 将使用当前主模型。'
-  if (secondaryFollowsPrimary.value) return '新建子 Agent 将使用当前主模型；在下方列表选择模型并保存，可指定独立模型。'
-  const preference = settings.secondaryModelControl.preference
-  const effort = usesSecondaryRuntimePreference.value && preference.mode === 'configured'
-    ? preference.defaultEffort
-    : settings.secondaryModel.defaultEffort
-  const identity = [secondaryModelDescriptor.value?.providerId, secondaryModelDescriptor.value?.id]
-    .filter((part): part is string => Boolean(part))
-    .join(' / ')
-  return effort === null ? identity : `${identity}  推理强度 ${effort}`
-})
 const secondaryOutcomeState = computed(() => {
   if (snapshot.value?.secondaryModelControl.requiresRestart === true) return '待重启'
   return secondaryFollowsPrimary.value ? '跟随主模型' : '独立模型已启用'
 })
-const secondaryModelDraftDescriptor = computed(() =>
-  snapshot.value?.secondaryModelOptions.find((model) => model.id === secondaryModelDraft.value.model) ?? null
-)
 const secondaryProviders = computed(() => [...(snapshot.value?.providers ?? [])].sort((left, right) => {
   const leftManaged = left.id === managedProviderName.value ? 0 : 1
   const rightManaged = right.id === managedProviderName.value ? 0 : 1
@@ -302,10 +280,6 @@ const providerModelsEditorTitleSuffix = computed(() => {
   if (providerEditorModelFieldsRequired.value) return '（至少一个）'
   return '（留空则从 Kimi 目录自动补全）'
 })
-const secondarySettingsModelLabel = computed(() => {
-  if (secondaryModelDraft.value.model.length < 1) return '跟随主模型'
-  return secondaryModelDraftDescriptor.value?.displayName ?? secondaryModelDraft.value.model
-})
 const providerPickerLabel = computed(() => {
   if (providerEditorMode.value === 'manual') return '手动配置'
   const selected = catalogSelectedSummary.value
@@ -314,22 +288,6 @@ const providerPickerLabel = computed(() => {
 function providerModelsOf(providerId: string): KimiSettingsSnapshot['secondaryModelOptions'] {
   return snapshot.value?.secondaryModelOptions.filter((model) => model.providerId === providerId) ?? []
 }
-function providerCardInUse(providerId: string): boolean {
-  return currentSecondaryProviderId.value === providerId
-}
-function toggleProviderModels(providerId: string): void {
-  expandedProviderId.value = expandedProviderId.value === providerId ? null : providerId
-}
-function providerCardHasSelection(providerId: string): boolean {
-  return providerModelsOf(providerId).some((model) => model.id === secondaryModelDraft.value.model)
-}
-function providerCardModelLabel(providerId: string): string {
-  const models = providerModelsOf(providerId)
-  const selected = models.find((model) => model.id === secondaryModelDraft.value.model)
-  if (selected !== undefined) return selected.displayName
-  return models.length < 1 ? '暂无可用模型' : '选择模型…'
-}
-const currentSecondaryProviderId = computed(() => secondaryModelDescriptor.value?.providerId ?? null)
 const primaryModelDescriptor = computed(() => {
   const settings = snapshot.value
   if (settings === null) return null
@@ -409,7 +367,7 @@ async function loadSettings(): Promise<void> {
   try {
     const next = await api.getKimiSettings()
     snapshot.value = next
-    syncSecondaryModelDraft(next)
+    syncSecondaryInputs(next)
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -428,42 +386,8 @@ function effectiveSecondarySelection(): { model: string; defaultEffort: string }
   return { model: descriptor.id, defaultEffort: effort ?? '' }
 }
 
-function syncSecondaryModelDraft(settings: KimiSettingsSnapshot): void {
-  const effective = effectiveSecondarySelection()
-  secondaryModelDraft.value = {
-    model: effective?.model ?? '',
-    defaultEffort: effective?.defaultEffort ?? '',
-    maxOutputSize: settings.secondaryModel.maxOutputSize?.toString() ?? ''
-  }
-  const providerIds = new Set(settings.providers.map((provider) => provider.id))
-  secondaryProviderId.value = (effective !== null
-    ? settings.secondaryModelOptions.find((item) => item.id === effective.model)?.providerId
-    : undefined) ??
-    (providerIds.has(secondaryProviderId.value) ? secondaryProviderId.value : undefined) ??
-    (settings.preferences.defaultProvider !== null && providerIds.has(settings.preferences.defaultProvider)
-      ? settings.preferences.defaultProvider
-      : undefined) ??
-    settings.providers[0]?.id ?? ''
-}
-
-function onSecondaryModelDraftChange(): void {
-  const descriptor = secondaryModelDraftDescriptor.value
-  if (descriptor === null || descriptor.supportEfforts.length < 1) return
-  if (!descriptor.supportEfforts.includes(secondaryModelDraft.value.defaultEffort)) {
-    secondaryModelDraft.value.defaultEffort = descriptor.defaultEffort ?? ''
-  }
-}
-
-function selectSecondaryProvider(providerId: string): void {
-  secondaryProviderId.value = providerId
-  const options = snapshot.value?.secondaryModelOptions.filter((model) => model.providerId === providerId) ?? []
-  if (!options.some((model) => model.id === secondaryModelDraft.value.model)) {
-    const effective = effectiveSecondarySelection()
-    const restore = effective !== null && options.some((model) => model.id === effective.model) ? effective : null
-    secondaryModelDraft.value.model = restore?.model ?? ''
-    secondaryModelDraft.value.defaultEffort = restore?.defaultEffort ?? ''
-  }
-  onSecondaryModelDraftChange()
+function syncSecondaryInputs(settings: KimiSettingsSnapshot): void {
+  secondaryMaxOutputInput.value = settings.secondaryModel.maxOutputSize?.toString() ?? ''
 }
 
 function emptyProviderModelRow(): ProviderModelRow {
@@ -766,31 +690,25 @@ function thinkingEffortLabel(effort: string): string {
   }[effort.trim().toLocaleLowerCase()] ?? effort
 }
 
-async function setSecondaryModel(): Promise<void> {
+async function saveSecondaryModelConfig(input: {
+  model: string
+  defaultEffort?: string
+  maxOutputSize?: number
+}): Promise<void> {
   const api = window.kimiAgent
   if (
     api === undefined ||
     snapshot.value === null ||
     !snapshot.value.capabilities.secondaryModel.writable ||
-    secondaryModelDraft.value.model.length < 1 ||
     actionPending.value !== null
   ) return
   actionPending.value = 'secondary-model'
   error.value = null
   notice.value = null
   try {
-    const maxOutput = String(secondaryModelDraft.value.maxOutputSize).trim()
-    const next = await api.setSecondaryModel({
-      model: secondaryModelDraft.value.model,
-      ...(secondaryModelDraft.value.defaultEffort.length < 1
-        ? {}
-        : { defaultEffort: secondaryModelDraft.value.defaultEffort }),
-      ...(!snapshot.value.capabilities.secondaryModel.maxOutputSizeWritable || maxOutput.length < 1
-        ? {}
-        : { maxOutputSize: Number(maxOutput) })
-    })
+    const next = await api.setSecondaryModel(input)
     snapshot.value = next
-    syncSecondaryModelDraft(next)
+    syncSecondaryInputs(next)
     showNotice(next.secondaryModelControl.requiresRestart
       ? '子 Agent 模型已保存；重启 Kimi Runtime 后生效。'
       : '子 Agent 模型已更新；只影响之后新建的 Agent 和 AgentSwarm。')
@@ -801,13 +719,62 @@ async function setSecondaryModel(): Promise<void> {
   }
 }
 
-function selectFollowPrimaryModel(): void {
-  if (actionPending.value !== null || snapshot.value === null) return
-  secondaryModelDraft.value.model = ''
-  secondaryModelDraft.value.defaultEffort = ''
-  if (!secondaryFollowsPrimary.value && snapshot.value.capabilities.secondaryModel.canDisable) {
-    void disableSecondaryModel()
+/* 点选卡片立即生效：沿用当前强度与最大输出设置；目标模型不支持该强度时回落到模型默认。 */
+function selectSecondaryModel(modelId: string): void {
+  const settings = snapshot.value
+  if (settings === null) return
+  if (!secondaryFollowsPrimary.value && secondaryModelDescriptor.value?.id === modelId) return
+  const currentEffort = effectiveSecondarySelection()?.defaultEffort ?? ''
+  const descriptor = settings.secondaryModelOptions.find((model) => model.id === modelId)
+  const preservedEffort = currentEffort.length > 0 && descriptor?.supportEfforts.includes(currentEffort) === true
+    ? currentEffort
+    : undefined
+  const maxOutput = settings.capabilities.secondaryModel.maxOutputSizeWritable
+    ? settings.secondaryModel.maxOutputSize ?? undefined
+    : undefined
+  void saveSecondaryModelConfig({
+    model: modelId,
+    ...(preservedEffort === undefined ? {} : { defaultEffort: preservedEffort }),
+    ...(maxOutput === undefined ? {} : { maxOutputSize: maxOutput })
+  })
+}
+
+function updateSecondaryEffort(effort: string): void {
+  const current = effectiveSecondarySelection()
+  if (current === null || current.defaultEffort === effort) return
+  const maxOutput = snapshot.value?.capabilities.secondaryModel.maxOutputSizeWritable === true
+    ? snapshot.value.secondaryModel.maxOutputSize ?? undefined
+    : undefined
+  void saveSecondaryModelConfig({
+    model: current.model,
+    ...(effort.length < 1 ? {} : { defaultEffort: effort }),
+    ...(maxOutput === undefined ? {} : { maxOutputSize: maxOutput })
+  })
+}
+
+function updateSecondaryMaxOutput(): void {
+  const current = effectiveSecondarySelection()
+  const settings = snapshot.value
+  if (current === null || settings === null || !settings.capabilities.secondaryModel.maxOutputSizeWritable) return
+  /* type="number" 的 v-model 会把输入转成 number，先统一回字符串再校验。 */
+  const raw = String(secondaryMaxOutputInput.value).trim()
+  if (raw.length < 1) {
+    /* REST merge 语义无法清空已写入的值；留空时回显当前生效值，不做写入。 */
+    secondaryMaxOutputInput.value = settings.secondaryModel.maxOutputSize?.toString() ?? ''
+    return
   }
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    secondaryMaxOutputInput.value = settings.secondaryModel.maxOutputSize?.toString() ?? ''
+    error.value = '最大输出 Token 需为不小于 1 的整数。'
+    return
+  }
+  if (settings.secondaryModel.maxOutputSize === parsed) return
+  void saveSecondaryModelConfig({
+    model: current.model,
+    ...(current.defaultEffort.length < 1 ? {} : { defaultEffort: current.defaultEffort }),
+    maxOutputSize: parsed
+  })
 }
 
 async function disableSecondaryModel(): Promise<void> {
@@ -824,7 +791,7 @@ async function disableSecondaryModel(): Promise<void> {
   try {
     const next = await api.disableSecondaryModel()
     snapshot.value = next
-    syncSecondaryModelDraft(next)
+    syncSecondaryInputs(next)
     showNotice(next.secondaryModelControl.requiresRestart
       ? '已保存更改；重启 Kimi Runtime 后，子 Agent 将跟随主模型。'
       : '已改为跟随主模型。')
@@ -849,7 +816,7 @@ async function inheritSecondaryModel(): Promise<void> {
   try {
     const next = await api.inheritSecondaryModel()
     snapshot.value = next
-    syncSecondaryModelDraft(next)
+    syncSecondaryInputs(next)
     showNotice(next.secondaryModelControl.requiresRestart
       ? '已恢复 Kimi 原有设置；重启 Kimi Runtime 后生效。'
       : '已恢复 Kimi 原有设置。')
@@ -908,7 +875,6 @@ async function refreshProviderModels(providerId: string): Promise<void> {
   try {
     const result = await api.refreshKimiProviders({ scope: 'provider', providerId })
     await loadSettings()
-    selectSecondaryProvider(providerId)
     const failed = result.failed.find((item) => item.provider === providerId)
     if (failed !== undefined) throw new Error(failed.reason)
     const changed = result.changed.find((item) => item.providerId === providerId)
@@ -995,7 +961,6 @@ async function saveSecondaryProvider(): Promise<void> {
     showSecondaryProviderForm.value = false
     resetSecondaryProviderDraft()
     resetCatalogState()
-    selectSecondaryProvider(id)
     showNotice(oldId === null
       ? (providerModelsOf(id).length > 0
         ? `${id} 已连接并读取到 ${providerModelsOf(id).length} 个模型。`
@@ -1032,8 +997,6 @@ async function deleteProvider(providerId: string): Promise<void> {
   try {
     const next = await api.deleteKimiProvider(providerId)
     snapshot.value = next
-    const fallback = secondaryProviders.value.find((item) => item.id !== providerId)?.id ?? ''
-    selectSecondaryProvider(fallback)
     showNotice(`模型服务 ${providerTitle(providerId)} 已删除。`)
   } catch (reason) {
     error.value = errorMessage(reason)
@@ -1263,7 +1226,6 @@ function onWindowKeydown(event: KeyboardEvent): void {
 
 function onWindowMousedown(): void {
   if (providerPickerOpen.value) providerPickerOpen.value = false
-  if (expandedProviderId.value !== null) expandedProviderId.value = null
 }
 
 onMounted(() => {
@@ -1369,38 +1331,6 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
               <p v-else class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
             </section>
 
-            <section v-if="activeTab === 'general' && snapshot !== null" class="settings-section account-section">
-              <div class="settings-title"><div><h2>Kimi 账号</h2><p>使用官方 device-code 登录流程。</p></div></div>
-              <div class="settings-row account-row">
-                <div><strong>{{ managedProviderName }}</strong><span>{{ accountStatusLabel }}</span></div>
-                <button
-                  v-if="snapshot.auth.managedProvider?.status === 'authenticated'"
-                  class="secondary-button"
-                  type="button"
-                  :disabled="actionPending !== null"
-                  @click="logoutOAuth"
-                ><PhSignOut :size="15" />退出登录</button>
-                <button
-                  v-else
-                  class="primary-button"
-                  type="button"
-                  :disabled="actionPending !== null"
-                  @click="startOAuthLogin"
-                >登录 Kimi</button>
-              </div>
-              <div v-if="oauthFlow?.status === 'pending'" class="oauth-device-panel">
-                <span>在浏览器完成授权</span>
-                <strong>{{ oauthFlow.userCode }}</strong>
-                <a
-                  v-if="oauthFlow.verificationUriComplete"
-                  :href="oauthFlow.verificationUriComplete"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >打开 Kimi 授权页</a>
-                <button type="button" @click="cancelOAuthLogin">取消登录</button>
-              </div>
-            </section>
-
             <div v-else-if="!runtimeRunning" class="settings-empty">
               <strong>需要先连接 Kimi Runtime</strong>
               <span>设置直接来自 Kimi，不会读取或维护第二份配置。</span>
@@ -1416,103 +1346,35 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                     <h2>模型设置</h2>
                     <p>选择主 Agent 和子 Agent 使用的模型。</p>
                   </div>
-                  <button class="icon-text-button" type="button" :disabled="actionPending !== null" @click="refreshModels">
-                    <PhArrowClockwise :class="{ spin: actionPending?.startsWith('refresh:') }" :size="15" />刷新
-                  </button>
                 </div>
 
                 <div class="model-view-switch" role="tablist" aria-label="模型设置范围">
                   <button
                     type="button"
                     role="tab"
-                    :aria-selected="modelSettingsView === 'primary'"
-                    :class="{ 'is-active': modelSettingsView === 'primary' }"
-                    @click="modelSettingsView = 'primary'"
-                  >主模型</button>
+                    :aria-selected="modelSettingsView === 'providers'"
+                    :class="{ 'is-active': modelSettingsView === 'providers' }"
+                    @click="modelSettingsView = 'providers'"
+                  >供应商</button>
                   <button
                     type="button"
                     role="tab"
-                    :aria-selected="modelSettingsView === 'secondary'"
-                    :class="{ 'is-active': modelSettingsView === 'secondary' }"
-                    @click="modelSettingsView = 'secondary'"
-                  >子 Agent 模型</button>
+                    :aria-selected="modelSettingsView === 'agents'"
+                    :class="{ 'is-active': modelSettingsView === 'agents' }"
+                    @click="modelSettingsView = 'agents'"
+                  >主/子 Agent</button>
                 </div>
 
-                <section v-if="modelSettingsView === 'primary'" class="primary-model-panel" aria-labelledby="primary-model-title">
+                <section v-if="modelSettingsView === 'providers'" class="primary-model-panel provider-settings-panel" aria-labelledby="provider-settings-title">
                   <header>
                     <div>
-                      <h3 id="primary-model-title">主模型</h3>
-                      <p>创建新 Session 时使用；已打开的 Session 不会被改变。</p>
+                      <h3 id="provider-settings-title">供应商</h3>
+                      <p>配置模型服务并授权 Kimi 账号；主 Agent 与子 Agent 都从这里选择模型。</p>
                     </div>
-                    <span class="model-scope-chip">新 Session</span>
-                  </header>
-                  <div class="primary-model-grid">
-                    <button
-                      v-for="model in snapshot.models"
-                      :key="model.id"
-                      class="model-row"
-                      :class="{ 'is-selected': snapshot.preferences.defaultModel === model.id }"
-                      type="button"
-                      :disabled="actionPending !== null"
-                      @click="setDefaultModel(model.id)"
-                    >
-                      <span class="model-check"><PhCheck v-if="snapshot.preferences.defaultModel === model.id" :size="13" /></span>
-                      <span><strong>{{ model.displayName }}</strong><small>{{ model.id }} · {{ model.providerId }}</small></span>
-                      <small>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                    <button class="icon-text-button" type="button" :disabled="actionPending !== null" @click="refreshModels">
+                      <PhArrowClockwise :class="{ spin: actionPending?.startsWith('refresh:') }" :size="15" />刷新
                     </button>
-                  </div>
-                  <label class="preference-row primary-thinking-row">
-                    <span><strong>默认思考强度</strong><small>创建新 Session 时使用；不同模型支持的强度不同</small></span>
-                    <select
-                      v-if="primaryThinkingSelectOptions.length > 0"
-                      :value="primaryThinkingSelection"
-                      :disabled="actionPending !== null"
-                      @change="updatePrimaryThinkingEffort(($event.target as HTMLSelectElement).value)"
-                    >
-                      <option value="">跟随模型默认</option>
-                      <option v-for="effort in primaryThinkingSelectOptions" :key="effort" :value="effort">{{ thinkingEffortLabel(effort) }}</option>
-                    </select>
-                    <small v-else class="primary-thinking-fixed">当前模型的思考强度由模型自身决定</small>
-                  </label>
-                  <p v-if="primaryThinkingUnsupported" class="field-error">当前主模型不支持已配置的强度，Kimi 将回退到模型默认值。</p>
-                </section>
-
-                <section v-else class="secondary-model-workspace" aria-labelledby="secondary-model-title">
-                  <div class="secondary-outcome-bar" :class="{ 'is-pending': snapshot.secondaryModelControl.requiresRestart }">
-                    <div>
-                      <span>新子 Agent 将使用</span>
-                      <strong id="secondary-model-title">{{ secondaryOutcomeTitle }}</strong>
-                      <small>{{ secondaryOutcomeMeta }}</small>
-                    </div>
-                    <span class="secondary-outcome-state">{{ secondaryOutcomeState }}</span>
-                  </div>
-
-                  <div class="secondary-model-settings-bar">
-                    <div class="secondary-settings-selection">
-                      <span>当前选用</span>
-                      <strong>{{ secondarySettingsModelLabel }}</strong>
-                      <button v-if="!secondaryFollowsPrimary && snapshot.capabilities.secondaryModel.canDisable" class="secondary-button" type="button" :disabled="actionPending !== null" @click="selectFollowPrimaryModel">跟随主模型</button>
-                    </div>
-                    <div v-if="snapshot.capabilities.secondaryModel.writable" class="provider-form secondary-model-form">
-                      <label>
-                        <span>推理强度</span>
-                        <select v-if="(secondaryModelDraftDescriptor?.supportEfforts.length ?? 0) > 0" v-model="secondaryModelDraft.defaultEffort" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1">
-                          <option value="">使用模型默认值</option>
-                          <option v-for="effort in secondaryModelDraftDescriptor?.supportEfforts ?? []" :key="effort" :value="effort">{{ effort }}</option>
-                        </select>
-                        <input v-else v-model="secondaryModelDraft.defaultEffort" type="text" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
-                      </label>
-                      <label v-if="snapshot.capabilities.secondaryModel.maxOutputSizeWritable">
-                        <span>最大输出 Token</span>
-                        <input v-model="secondaryModelDraft.maxOutputSize" type="number" min="1" max="16777216" placeholder="使用模型默认值" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" />
-                      </label>
-                    </div>
-                    <div v-if="snapshot.capabilities.secondaryModel.writable" class="secondary-model-actions">
-                      <button class="primary-button" type="button" :disabled="actionPending !== null || secondaryModelDraft.model.length < 1" @click="setSecondaryModel">保存设置</button>
-                    </div>
-                  </div>
-                  <p v-if="!snapshot.capabilities.secondaryModel.writable" class="secondary-readonly-note">{{ snapshot.capabilities.secondaryModel.unavailableReason ?? '当前 Runtime 只能读取这项设置。' }}</p>
-
+                  </header>
                   <p v-if="snapshot.capabilities.providerManagementUnavailableReason" class="provider-management-note">
                     {{ snapshot.capabilities.providerManagementUnavailableReason }}
                   </p>
@@ -1527,51 +1389,43 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                           <strong>{{ providerTitle(provider.id) }}</strong>
                           <small>{{ provider.id === managedProviderName ? '内置' : provider.type }} · {{ providerStatusLabel(provider.status) }}</small>
                         </div>
-                        <span v-if="providerCardInUse(provider.id)" class="provider-card-current-badge">当前选用</span>
                         <span class="provider-catalog-status" :class="`is-${provider.status}`" :title="providerStatusLabel(provider.status)" />
                       </header>
                       <div class="provider-card-meta">
-                        <span>{{ provider.hasCredential ? 'API Key 已保存' : 'API Key 未配置' }}</span>
+                        <span v-if="provider.id === managedProviderName">{{ accountStatusLabel }}</span>
+                        <span v-else>{{ provider.hasCredential ? 'API Key 已保存' : 'API Key 未配置' }}</span>
                         <span>{{ provider.baseUrl ?? 'Kimi 默认地址' }}</span>
                         <span>{{ provider.models.length }} 个模型</span>
                       </div>
-                      <div class="provider-card-model-select">
-                        <button
-                          type="button"
-                          class="provider-model-select"
-                          :class="{ 'has-selection': providerCardHasSelection(provider.id) }"
-                          :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
-                          @mousedown.stop
-                          @click="toggleProviderModels(provider.id)"
-                        >
-                          <span class="provider-model-select-label">{{ providerCardModelLabel(provider.id) }}</span>
-                          <PhCaretDown :size="13" />
-                        </button>
-                        <div v-if="expandedProviderId === provider.id" class="provider-model-popover" @mousedown.stop>
-                          <p class="provider-model-popover-heading">{{ providerTitle(provider.id) }} · 选择子 Agent 模型</p>
-                          <div class="provider-model-popover-list">
-                            <button
-                              v-for="model in providerModelsOf(provider.id)"
-                              :key="model.id"
-                              class="provider-model-item"
-                              :class="{ 'is-selected': secondaryModelDraft.model === model.id }"
-                              type="button"
-                              :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
-                              @click="secondaryModelDraft.model = model.id; onSecondaryModelDraftChange(); expandedProviderId = null"
-                            >
-                              <span class="provider-model-radio"><PhCheck v-if="secondaryModelDraft.model === model.id" :size="12" /></span>
-                              <span><strong>{{ model.displayName }}</strong><small>{{ model.id }}</small></span>
-                              <span v-if="currentSecondaryProviderId === provider.id && secondaryModelDescriptor?.id === model.id" class="model-current-badge">当前选用</span>
-                              <small v-else>{{ Math.round(model.maxContextSize / 1024) }}k</small>
-                            </button>
-                            <p v-if="providerModelsOf(provider.id).length < 1" class="provider-model-empty">这个服务暂时没有可用模型。</p>
-                          </div>
-                        </div>
+                      <div v-if="provider.id === managedProviderName && oauthFlow?.status === 'pending'" class="oauth-device-panel">
+                        <span>在浏览器完成授权</span>
+                        <strong>{{ oauthFlow.userCode }}</strong>
+                        <a
+                          v-if="oauthFlow.verificationUriComplete"
+                          :href="oauthFlow.verificationUriComplete"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >打开 Kimi 授权页</a>
+                        <button type="button" @click="cancelOAuthLogin">取消登录</button>
                       </div>
                       <footer class="provider-card-actions">
                         <button class="provider-refresh-link" type="button" :disabled="actionPending !== null" @click="refreshProviderModels(provider.id)">
                           <PhArrowClockwise :class="{ spin: actionPending === `refresh:provider:${provider.id}` }" :size="15" />获取模型列表
                         </button>
+                        <button
+                          v-if="provider.id === managedProviderName && snapshot.auth.managedProvider?.status === 'authenticated'"
+                          class="provider-oauth-logout secondary-button"
+                          type="button"
+                          :disabled="actionPending !== null"
+                          @click="logoutOAuth"
+                        ><PhSignOut :size="14" />退出登录</button>
+                        <button
+                          v-else-if="provider.id === managedProviderName"
+                          class="provider-oauth-login primary-button"
+                          type="button"
+                          :disabled="actionPending !== null"
+                          @click="startOAuthLogin"
+                        >登录 Kimi</button>
                         <span class="provider-card-action-spacer" />
                         <button
                           v-if="snapshot.capabilities.canEditProvider && provider.id !== managedProviderName"
@@ -1602,8 +1456,6 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                       :disabled="actionPending !== null"
                       @click="beginAddSecondaryProvider"
                     ><PhPlus :size="16" />添加模型服务</button>
-
-
                   </div>
 
                   <Teleport to="body">
@@ -1730,6 +1582,107 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                       </form>
                     </div>
                   </Teleport>
+                </section>
+
+                <template v-else-if="modelSettingsView === 'agents'">
+                  <div v-if="snapshot.models.length < 1" class="agents-model-panel">
+                    <div class="primary-model-empty">
+                      <span>还没有可用模型。先在「供应商」页配置模型服务并授权。</span>
+                      <button class="secondary-button" type="button" @click="modelSettingsView = 'providers'">前往供应商设置</button>
+                    </div>
+                  </div>
+                  <div v-else class="agents-model-panel">
+                  <section class="primary-model-panel" aria-labelledby="primary-model-title">
+                  <header>
+                    <div>
+                      <h3 id="primary-model-title">主模型</h3>
+                      <p>创建新 Session 时使用；已打开的 Session 不会被改变。</p>
+                    </div>
+                    <span class="model-scope-chip">新 Session</span>
+                  </header>
+                  <div class="primary-model-grid">
+                    <button
+                      v-for="model in snapshot.models"
+                      :key="model.id"
+                      class="model-row"
+                      :class="{ 'is-selected': snapshot.preferences.defaultModel === model.id }"
+                      type="button"
+                      :disabled="actionPending !== null"
+                      @click="setDefaultModel(model.id)"
+                    >
+                      <span class="model-check"><PhCheck v-if="snapshot.preferences.defaultModel === model.id" :size="13" /></span>
+                      <span><strong>{{ model.displayName }}</strong><small>{{ model.id }} · {{ model.providerId }}</small></span>
+                      <small>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                    </button>
+                  </div>
+                  <label class="preference-row primary-thinking-row">
+                    <span><strong>默认思考强度</strong><small>创建新 Session 时使用；不同模型支持的强度不同</small></span>
+                    <select
+                      v-if="primaryThinkingSelectOptions.length > 0"
+                      :value="primaryThinkingSelection"
+                      :disabled="actionPending !== null"
+                      @change="updatePrimaryThinkingEffort(($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="">跟随模型默认</option>
+                      <option v-for="effort in primaryThinkingSelectOptions" :key="effort" :value="effort">{{ thinkingEffortLabel(effort) }}</option>
+                    </select>
+                    <small v-else class="primary-thinking-fixed">当前模型的思考强度由模型自身决定</small>
+                  </label>
+                  <p v-if="primaryThinkingUnsupported" class="field-error">当前主模型不支持已配置的强度，Kimi 将回退到模型默认值。</p>
+                </section>
+
+                <section class="secondary-model-workspace" aria-labelledby="secondary-model-title">
+                  <header class="agents-section-header">
+                    <div>
+                      <h3 id="secondary-model-title">子 Agent 模型</h3>
+                      <p>新建子 Agent / AgentSwarm 时使用。</p>
+                    </div>
+                    <span class="model-scope-chip">{{ secondaryOutcomeState }}</span>
+                  </header>
+                  <div class="secondary-follow-line">
+                    <template v-if="secondaryFollowsPrimary">
+                      <span>当前跟随主模型</span>
+                      <strong>{{ primaryModelDescriptor?.displayName ?? snapshot.preferences.defaultModel ?? '未配置' }}</strong>
+                      <small v-if="snapshot.capabilities.secondaryModel.writable">点选下方模型可指定独立模型</small>
+                    </template>
+                    <button v-else-if="snapshot.capabilities.secondaryModel.canDisable" class="secondary-button" type="button" :disabled="actionPending !== null" @click="disableSecondaryModel">跟随主模型</button>
+                  </div>
+
+                  <div class="primary-model-grid secondary-model-grid">
+                    <button
+                      v-for="model in snapshot.secondaryModelOptions"
+                      :key="model.id"
+                      class="model-row"
+                      :class="{ 'is-selected': !secondaryFollowsPrimary && secondaryModelDescriptor?.id === model.id }"
+                      type="button"
+                      :disabled="actionPending !== null || !snapshot.capabilities.secondaryModel.writable"
+                      @click="selectSecondaryModel(model.id)"
+                    >
+                      <span class="model-check"><PhCheck v-if="!secondaryFollowsPrimary && secondaryModelDescriptor?.id === model.id" :size="13" /></span>
+                      <span><strong>{{ model.displayName }}</strong><small>{{ model.id }} · {{ model.providerId }}</small></span>
+                      <small>{{ Math.round(model.maxContextSize / 1024) }}k</small>
+                    </button>
+                  </div>
+
+                  <template v-if="!secondaryFollowsPrimary && snapshot.capabilities.secondaryModel.writable">
+                    <label v-if="(secondaryModelDescriptor?.supportEfforts.length ?? 0) > 0" class="preference-row">
+                      <span><strong>默认思考强度</strong><small>只影响之后新建的子 Agent</small></span>
+                      <select
+                        :value="effectiveSecondarySelection()?.defaultEffort ?? ''"
+                        :disabled="actionPending !== null"
+                        @change="updateSecondaryEffort(($event.target as HTMLSelectElement).value)"
+                      >
+                        <option value="">使用模型默认值</option>
+                        <option v-for="effort in secondaryModelDescriptor?.supportEfforts ?? []" :key="effort" :value="effort">{{ thinkingEffortLabel(effort) }}</option>
+                      </select>
+                    </label>
+                    <label v-if="snapshot.capabilities.secondaryModel.maxOutputSizeWritable" class="preference-row">
+                      <span><strong>最大输出 Token</strong><small>留空使用模型默认值；修改即保存</small></span>
+                      <input v-model="secondaryMaxOutputInput" type="number" min="1" max="16777216" placeholder="使用模型默认值" :disabled="actionPending !== null" @change="updateSecondaryMaxOutput" />
+                    </label>
+                  </template>
+                  <p v-if="!snapshot.capabilities.secondaryModel.writable" class="secondary-readonly-note">{{ snapshot.capabilities.secondaryModel.unavailableReason ?? '当前 Runtime 只能读取这项设置。' }}</p>
+
                   <div v-if="snapshot.secondaryModelControl.requiresRestart" class="secondary-restart-notice">
                     <div><strong>重启后应用更改</strong><span>重启会中断正在执行的任务。</span></div>
                     <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForSecondaryModel">立即重启</button>
@@ -1746,6 +1699,8 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                     <button v-if="snapshot.secondaryModelControl.configurationMode === 'runtime-env' && snapshot.secondaryModelControl.preference.mode !== 'inherit'" class="provider-disclosure-button" type="button" :disabled="actionPending !== null" @click="inheritSecondaryModel">恢复 Kimi 原有设置</button>
                   </details>
                 </section>
+                  </div>
+                </template>
               </section>
 
               <section v-else-if="activeTab === 'skills'" class="settings-section">

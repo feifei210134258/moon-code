@@ -119,6 +119,22 @@ describe('Conversation controls', () => {
     wrapper.unmount()
   })
 
+  it('labels a steered pending prompt as 已引导 instead of 已排队', async () => {
+    const wrapper = mountConversation()
+    await wrapper.setProps({
+      turns: [{
+        id: 'turn-steer', promptId: 'prompt-steer', role: 'user' as const, author: 'You', time: '10:31',
+        blocks: [{ id: 'turn-steer:text:0', type: 'text' as const, text: '顺手指正一下' }],
+        queued: true
+      }]
+    })
+    expect(wrapper.get('.queued-chip').text()).toBe('已排队')
+
+    await wrapper.setProps({ steeredPromptIds: new Set(['prompt-steer']) })
+    expect(wrapper.get('.queued-chip').text()).toBe('已引导')
+    wrapper.unmount()
+  })
+
   it('no longer carries 目录/BTW/会话操作 inside the composer', () => {
     const wrapper = mountConversation()
     expect(wrapper.find('.composer-session-actions').exists()).toBe(false)

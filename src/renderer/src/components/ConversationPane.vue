@@ -40,6 +40,7 @@ import type { LocalPromptDraft } from '../utils/localPromptQueue'
 
 const props = withDefaults(defineProps<{
   turns: ChatTurn[]
+  steeredPromptIds?: ReadonlySet<string>
   phase: 'idle' | 'loading' | 'ready' | 'resyncing' | 'reconnecting' | 'error'
   error: string | null
   composerEnabled: boolean
@@ -170,6 +171,12 @@ const artifactPaths = computed<ReadonlySet<string>>(() => {
   }
   return paths
 })
+
+/* steer 发出的消息先落队再被立即引导，转录里与排队消息同为 pending；
+   用 promptId 命中 steer 记录时显示「已引导」。 */
+function isSteeredTurn(turn: ChatTurn): boolean {
+  return turn.promptId != null && props.steeredPromptIds?.has(turn.promptId) === true
+}
 
 /* Codex 式左侧刻度轨：每个 user 回合一枚紧凑刻度，
    横向长度反映回合高度，当前视口所在回合高亮。 */
@@ -453,7 +460,7 @@ watch(
           <header class="turn-header">
             <strong>{{ turn.author }}</strong>
             <span>{{ turn.time }}</span>
-            <span v-if="turn.queued" class="queued-chip">已排队</span>
+            <span v-if="turn.queued" class="queued-chip">{{ isSteeredTurn(turn) ? '已引导' : '已排队' }}</span>
           </header>
           <div class="turn-content">
             <div

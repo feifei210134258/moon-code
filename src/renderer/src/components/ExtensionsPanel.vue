@@ -2,15 +2,9 @@
 import {
   PhArrowClockwise,
   PhArrowSquareOut,
-  PhArrowUp,
-  PhCaretRight,
   PhChatCircleText,
   PhCheckCircle,
   PhFile,
-  PhFileCss,
-  PhFileHtml,
-  PhFileJs,
-  PhFileTs,
   PhFolderOpen,
   PhMagnifyingGlass,
   PhSpinnerGap,
@@ -19,7 +13,7 @@ import {
   PhWarningCircle,
   PhX
 } from '@phosphor-icons/vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   BrowserAnnotationDraft,
   BrowserAnnotationMode,
@@ -31,22 +25,21 @@ import type {
   KimiBackgroundTask,
   KimiTodoList,
   WorkspaceFileEntry,
-  WorkspaceFileList,
   WorkspaceFilePreview,
   WorkspaceFileSearchResult,
   WorkspaceGrepResult,
   WorkspaceGitStatus
 } from '@shared/contracts'
-import type { ExtensionTab } from '../types'
+import type { ExtensionTab, WorkspaceFileTreeState } from '../types'
 import BrowserPanel from './BrowserPanel.vue'
+import FileTreeNode from './FileTreeNode.vue'
 
 const props = withDefaults(defineProps<{
   width: number
   activeTab: ExtensionTab
   workspaceName: string
-  fileList: WorkspaceFileList | null
-  fileListPending: boolean
-  fileListError: string | null
+  fileTree: WorkspaceFileTreeState
+  fileTreeReveal?: string | null
   filePreview: WorkspaceFilePreview | null
   fileActionPending?: string | null
   fileActionError?: string | null
@@ -80,6 +73,7 @@ const props = withDefaults(defineProps<{
   browserAnnotationPicking: false,
   browserAnnotationSubmitting: false,
   browserAnnotationError: null,
+  fileTreeReveal: null,
   fileSearch: null,
   fileSearchPending: false,
   fileSearchError: null,
@@ -120,13 +114,8 @@ const emit = defineEmits<{
 const changedFiles = computed(() => Object.entries(props.gitStatus?.entries ?? {})
   .filter(([, status]) => status !== 'clean' && status !== 'ignored')
   .map(([path, status]) => ({ path, status })))
-const parentPath = computed(() => {
-  const path = props.fileList?.path ?? '.'
-  if (path === '.') return null
-  const parts = path.split('/').filter((part) => part.length > 0 && part !== '.')
-  parts.pop()
-  return parts.length === 0 ? '.' : parts.join('/')
-})
+const rootEntries = computed<WorkspaceFileEntry[]>(() => props.fileTree.children[props.fileTree.root] ?? [])
+const rootLoaded = computed(() => props.fileTree.children[props.fileTree.root] !== undefined)
 const activeTodo = computed(() => props.todos.at(-1) ?? null)
 const todoItems = computed(() => activeTodo.value?.items ?? [])
 const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
@@ -147,21 +136,6 @@ function submitGrep(): void {
 
 function todoStatusLabel(status: 'pending' | 'in_progress' | 'done'): string {
   return status === 'done' ? '完成' : status === 'in_progress' ? '进行中' : '待处理'
-}
-
-function fileIcon(entry: WorkspaceFileEntry) {
-  if (entry.kind === 'directory') return PhFolderOpen
-  const extension = entry.name.split('.').pop()?.toLowerCase()
-  if (extension === 'html' || extension === 'htm') return PhFileHtml
-  if (extension === 'css' || extension === 'scss' || extension === 'less') return PhFileCss
-  if (extension === 'ts' || extension === 'tsx') return PhFileTs
-  if (extension === 'js' || extension === 'jsx' || extension === 'mjs') return PhFileJs
-  return PhFile
-}
-
-function isHtmlFile(entry: WorkspaceFileEntry): boolean {
-  const extension = entry.name.split('.').pop()?.toLowerCase()
-  return entry.kind === 'file' && (extension === 'html' || extension === 'htm')
 }
 
 function statusLabel(status: string): string {
@@ -225,6 +199,20 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeContextMenuOnOutsideClick)
   window.removeEventListener('keydown', onWindowKeydown)
+})
+
+/* 搜索结果跳转目录后，等树渲染完成再滚动到目标行的视口中央。 */
+watch(() => props.fileTreeReveal, (path) => {
+  if (path === null) return
+  void nextTick(() => {
+    const rows = document.querySelectorAll('.files-view .file-row')
+    for (const row of rows) {
+      if ((row as HTMLElement).dataset.path === path) {
+        row.scrollIntoView?.({ block: 'nearest' })
+        break
+      }
+    }
+  })
 })
 
 </script>
@@ -329,7 +317,7 @@ onBeforeUnmount(() => {
     <div v-else-if="activeTab === 'files'" class="extension-content files-view">
       <header class="files-toolbar">
         <strong><PhFolderOpen :size="18" />{{ workspaceName }}</strong>
-        <span>{{ fileList?.path ?? '.' }}</span>
+        <span>{{ fileTree.root }}</span>
       </header>
       <p v-if="fileActionError" class="files-action-message is-error" role="alert">{{ fileActionError }}</p>
       <p v-else-if="fileActionNotice" class="files-action-message">{{ fileActionNotice }}</p>
@@ -379,34 +367,22 @@ onBeforeUnmount(() => {
           <div v-if="fileGrep.truncated" class="diff-context">结果已按 Kimi Server 限制截断。</div>
         </template>
       </section>
-      <button v-if="parentPath" type="button" class="file-row file-parent-row" @click="emit('openDirectory', parentPath)">
-        <PhArrowUp :size="16" /><span>返回上一级</span>
-      </button>
-      <div v-if="fileListPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取目录…</div>
-      <div v-else-if="fileListError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ fileListError }}</div>
-      <button
-        v-for="entry in fileList?.items ?? []"
-        :key="entry.path"
-        type="button"
-        class="file-row"
-        :class="{ 'is-active': filePreview?.path === entry.path }"
-        @click="emit('openEntry', entry)"
-        @contextmenu.prevent.stop="openEntryContextMenu(entry, $event)"
-      >
-        <PhCaretRight v-if="entry.kind === 'directory'" :size="13" />
-        <span v-else class="file-row-spacer" />
-        <component
-          :is="fileIcon(entry)"
-          :size="17"
-          :weight="entry.kind === 'file' ? 'fill' : 'regular'"
-          :class="{ 'is-html-file': isHtmlFile(entry) }"
+      <div v-if="fileTree.rootPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取目录…</div>
+      <div v-else-if="fileTree.rootError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ fileTree.rootError }}</div>
+      <template v-else-if="rootLoaded">
+        <FileTreeNode
+          v-for="entry in rootEntries"
+          :key="entry.path"
+          :file-tree="fileTree"
+          :entry="entry"
+          :depth="0"
+          :active-path="filePreview?.path ?? null"
+          @open-entry="emit('openEntry', $event)"
+          @open-context-menu="openEntryContextMenu"
         />
-        <span>{{ entry.name }}</span>
-        <small v-if="entry.gitStatus && entry.gitStatus !== 'clean'" :class="`git-${entry.gitStatus}`">{{ statusLabel(entry.gitStatus) }}</small>
-      </button>
-      <div v-if="fileList?.truncated" class="extension-state">目录内容已按 Kimi Server 限制截断。</div>
-      <div v-if="fileList && fileList.items.length === 0" class="extension-state">这个目录是空的。</div>
-
+        <div v-if="rootEntries.length === 0" class="extension-state">这个目录是空的。</div>
+        <div v-if="fileTree.truncated" class="extension-state">目录内容已按 Kimi Server 限制截断。</div>
+      </template>
     </div>
 
     <BrowserPanel

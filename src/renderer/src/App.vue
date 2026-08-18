@@ -421,7 +421,7 @@ function cancelTask(taskId: string): void {
 }
 
 function openWorkspaceEntry(entry: WorkspaceFileEntry): void {
-  if (entry.kind === 'directory') void runtimeBridge.loadDirectory(entry.path)
+  if (entry.kind === 'directory') void runtimeBridge.toggleDirectory(entry.path)
   else openWorkspaceFile(entry.path)
 }
 
@@ -741,6 +741,7 @@ onBeforeUnmount(() => {
         :turns="visibleTurns"
         :phase="transcriptPhase"
         :error="transcriptError"
+        :steered-prompt-ids="runtimeBridge.steeredPromptIds"
         :composer-enabled="composerEnabled"
         :draft-active="draftActive"
         :draft-workspace-id="draftWorkspaceId"
@@ -829,9 +830,8 @@ onBeforeUnmount(() => {
           :width="rightPanelWidth"
           :active-tab="activeExtension"
           :workspace-name="activeWorkspaceName"
-          :file-list="runtimeBridge.fileList.value"
-          :file-list-pending="runtimeBridge.fileListPending.value"
-          :file-list-error="runtimeBridge.fileListError.value"
+          :file-tree="runtimeBridge.fileTree"
+          :file-tree-reveal="runtimeBridge.fileTreeReveal.value"
           :file-preview="runtimeBridge.filePreview.value"
           :file-action-pending="runtimeBridge.fileActionPending.value"
           :file-action-error="runtimeBridge.fileActionError.value"
@@ -862,7 +862,7 @@ onBeforeUnmount(() => {
           @select-tab="selectExtension"
           @open-entry="openWorkspaceEntry"
           @open-file="openWorkspaceFile"
-          @open-directory="runtimeBridge.loadDirectory"
+          @open-directory="runtimeBridge.revealDirectory"
           @open-system="openWorkspaceFileSystem"
           @trash-entry="trashWorkspaceEntry"
           @attach-to-session="attachFileToSession"

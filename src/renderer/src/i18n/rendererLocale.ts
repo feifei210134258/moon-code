@@ -76,6 +76,7 @@ const enUS: Record<string, string> = {
   '这个会话还没有消息': 'This session has no messages yet',
   '这个会话还没有消息，从下方输入框开始一个新任务。': 'This session has no messages yet. Start a new task from the composer below.',
   '已排队': 'Queued',
+  '已引导': 'Steered',
   'Kimi 已接收任务，正在生成回复…': 'Kimi received the task and is preparing a response…',
   'Kimi 等待你的操作': 'Kimi is waiting for your action',
   '正在读取 Kimi 会话控制…': 'Loading Kimi session controls…',
@@ -405,7 +406,23 @@ const enUS: Record<string, string> = {
   '已禁用': 'Disabled',
   'Kimi 配置和仅本机的产品偏好会明确分开保存。': 'Kimi configuration and local product preferences are stored separately.',
   'Telemetry': 'Telemetry',
-  '只控制 Kimi 官方遥测，不增加客户端追踪': 'Controls only Kimi telemetry and adds no client tracking'
+  '只控制 Kimi 官方遥测，不增加客户端追踪': 'Controls only Kimi telemetry and adds no client tracking',
+  '供应商': 'Providers',
+  '配置模型服务并授权 Kimi 账号；主 Agent 与子 Agent 都从这里选择模型。': 'Configure model services and authorize your Kimi account. Both the main and sub Agents pick their models here.',
+  '主/子 Agent': 'Primary / Sub Agent',
+  '主模型': 'Primary model',
+  '子 Agent 模型': 'Sub Agent model',
+  '新建子 Agent / AgentSwarm 时使用。': 'Used by newly spawned sub Agents and AgentSwarms.',
+  '当前跟随主模型': 'Following the primary model',
+  '点选下方模型可指定独立模型': 'Pick a model below to use a dedicated model',
+  '跟随主模型': 'Follow primary model',
+  '默认思考强度': 'Default thinking effort',
+  '只影响之后新建的子 Agent': 'Only applies to sub Agents created afterward',
+  '使用模型默认值': 'Use model default',
+  '留空使用模型默认值；修改即保存': 'Leave empty for the model default; saves on change',
+  '选择子 Agent 模型': 'Choose the sub Agent model',
+  '还没有可用模型。先在「供应商」页配置模型服务并授权。': 'No models are available yet. Configure and authorize a model service on the Providers page first.',
+  '前往供应商设置': 'Go to Providers'
 }
 
 let locale: RendererLocale = 'zh-CN'

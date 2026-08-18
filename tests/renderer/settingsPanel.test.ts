@@ -20,6 +20,10 @@ const snapshot: KimiSettingsSnapshot = {
     {
       id: 'kimi-fast', providerId: 'managed:kimi-code', displayName: 'Kimi Fast',
       maxContextSize: 131_072, capabilities: [], supportEfforts: [], defaultEffort: null
+    },
+    {
+      id: 'gpt-5-mini', providerId: 'openai-main', displayName: 'GPT-5 mini',
+      maxContextSize: 400_000, capabilities: ['thinking'], supportEfforts: ['low', 'medium', 'high'], defaultEffort: 'medium'
     }
   ],
   secondaryModelOptions: [
@@ -92,6 +96,16 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/** 模型 tab 是两视图（供应商 / 主·子 Agent 同页），按下拉标签文字精确切换。 */
+async function clickModelViewSwitch(
+  wrapper: { findAll: (selector: string) => Array<{ text: () => string; trigger: (event: string) => Promise<void> }> },
+  label: string
+): Promise<void> {
+  const button = wrapper.findAll('.model-view-switch button').find((candidate) => candidate.text() === label)
+  expect(button).toBeDefined()
+  await button!.trigger('click')
+}
+
 describe('SettingsPanel', () => {
   it('reloads the visible settings from Kimi after a cross-client Config invalidation', async () => {
     const updated = {
@@ -117,7 +131,7 @@ describe('SettingsPanel', () => {
 
     expect(api.getKimiSettings).toHaveBeenCalledTimes(2)
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
     expect(wrapper.findAll('.model-row')[1]!.classes()).toContain('is-selected')
     wrapper.unmount()
   })
@@ -140,14 +154,14 @@ describe('SettingsPanel', () => {
 
     expect(api.getKimiSettings).toHaveBeenCalledOnce()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
-    const modelRows = wrapper.findAll('.model-row')
-    expect(modelRows).toHaveLength(2)
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
+    const modelRows = wrapper.findAll('.primary-model-panel .model-row')
+    expect(modelRows).toHaveLength(3)
     await modelRows[1]!.trigger('click')
     await flushPromises()
 
     expect(api.setDefaultModel).toHaveBeenCalledWith('kimi-fast')
-    expect(wrapper.findAll('.model-row')[1]!.classes()).toContain('is-selected')
+    expect(wrapper.findAll('.primary-model-panel .model-row')[1]!.classes()).toContain('is-selected')
     wrapper.unmount()
   })
 
@@ -163,7 +177,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.findAll('.model-view-switch button')[0]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
     const thinkingRow = wrapper.get('.primary-thinking-row')
     const select = thinkingRow.get('select')
@@ -207,23 +221,21 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
     expect(wrapper.text()).toContain('跟随主模型')
-    expect(wrapper.get('.secondary-settings-selection strong').text()).toBe('跟随主模型')
-    expect(wrapper.find('.provider-model-item.is-selected').exists()).toBe(false)
-    expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('.secondary-model-workspace .model-scope-chip').text()).toBe('跟随主模型')
+    expect(wrapper.get('.secondary-follow-line').text()).toContain('当前跟随主模型')
+    expect(wrapper.get('.secondary-follow-line strong').text()).toBe('Kimi for Coding')
+    expect(wrapper.find('.secondary-model-workspace .model-row.is-selected').exists()).toBe(false)
 
-    const openaiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
-    await openaiCard.get('.provider-model-select').trigger('click')
-    await openaiCard.get('.provider-model-item').trigger('click')
-    expect(wrapper.find('.provider-model-item').exists()).toBe(false)
-    expect(openaiCard.get('.provider-model-select').classes()).toContain('has-selection')
-    expect(openaiCard.get('.provider-model-select').text()).toContain('GPT-5 mini')
-    expect(wrapper.get('.secondary-model-actions .primary-button').attributes('disabled')).toBeUndefined()
-    await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
+    // 点选卡片立即生效：调用 typed setSecondaryModel，返回的 snapshot 同步回网格。
+    const gptRow = wrapper.findAll('.secondary-model-workspace .model-row').find((row) => row.text().includes('GPT-5 mini'))!
+    await gptRow.trigger('click')
     await flushPromises()
-
-    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'medium' })
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini' })
+    expect(wrapper.findAll('.secondary-model-workspace .model-row').find((row) => row.text().includes('GPT-5 mini'))!.classes()).toContain('is-selected')
+    expect(wrapper.get('.secondary-model-workspace .model-scope-chip').text()).toBe('独立模型已启用')
     wrapper.unmount()
   })
 
@@ -243,14 +255,19 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
     expect(wrapper.text()).toContain('子 Agent 模型')
     expect(wrapper.text()).toContain('Kimi Fast')
-    expect(wrapper.text()).toContain('独立模型已启用')
-    expect(wrapper.text()).toContain('Config API does not accept secondary_model yet')
-    expect(wrapper.findAll('.provider-model-select')).toHaveLength(2)
-    expect((wrapper.get('.provider-model-select').element as HTMLButtonElement).disabled).toBe(true)
-    expect(wrapper.findAll('.provider-model-item')).toHaveLength(0)
+    expect(wrapper.get('.secondary-model-workspace .model-scope-chip').text()).toBe('独立模型已启用')
+    // 只读 Runtime：网格按钮全部禁用，写控件不渲染，只展示只读说明。
+    const secondaryRows = wrapper.findAll('.secondary-model-workspace .model-row')
+    expect(secondaryRows).toHaveLength(3)
+    for (const row of secondaryRows) expect((row.element as HTMLButtonElement).disabled).toBe(true)
+    expect(wrapper.get('.secondary-model-workspace .secondary-readonly-note').text())
+      .toContain('Config API does not accept secondary_model yet')
+    expect(wrapper.find('.secondary-model-workspace .preference-row').exists()).toBe(false)
+    expect(wrapper.find('.secondary-follow-line .secondary-button').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -287,6 +304,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
     expect(wrapper.text()).toContain('外部环境变量覆盖')
     wrapper.unmount()
@@ -328,15 +346,17 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.find('.secondary-model-form input[type="number"]').setValue('4096')
-    const saveButton = wrapper.find('.secondary-model-actions .primary-button')
-    expect(saveButton.attributes('disabled')).toBeUndefined()
-    await saveButton.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
+    // 独立模型 + 可写：直接暴露「最大输出 Token」输入，修改即走 typed write API。
+    const maxOutputInput = wrapper.get('.secondary-model-workspace input[type="number"]')
+    expect((maxOutputInput.element as HTMLInputElement).value).toBe('8192')
+    await maxOutputInput.setValue('4096')
+    await maxOutputInput.trigger('change')
     await flushPromises()
     expect(api.setSecondaryModel).toHaveBeenCalledWith({
       model: 'kimi-fast', defaultEffort: 'low', maxOutputSize: 4096
     })
-    expect((wrapper.get('.secondary-model-form input[type="number"]').element as HTMLInputElement).value).toBe('4096')
+    expect((wrapper.get('.secondary-model-workspace input[type="number"]').element as HTMLInputElement).value).toBe('4096')
     expect(wrapper.text()).toContain('子 Agent 模型已更新')
     wrapper.unmount()
   })
@@ -414,29 +434,34 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
-    expect(wrapper.find('.secondary-model-form input[type="number"]').exists()).toBe(false)
-    await wrapper.find('.secondary-model-actions .primary-button').trigger('click')
+    // runtime-env 本地控制：不提供 maxOutputSize 输入（maxOutputSizeWritable=false）。
+    expect(wrapper.find('.secondary-model-workspace input[type="number"]').exists()).toBe(false)
+
+    // 点选卡片即选即存：目标模型支持当前强度时沿用 defaultEffort（gpt-5-mini 支持 low）。
+    const gptRow = wrapper.findAll('.secondary-model-workspace .model-row').find((row) => row.text().includes('GPT-5 mini'))!
+    await gptRow.trigger('click')
     await flushPromises()
-    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'kimi-fast', defaultEffort: 'low' })
-    expect(wrapper.text()).toContain('等待重启生效')
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'low' })
+    expect(wrapper.get('.secondary-model-workspace .model-scope-chip').text()).toBe('待重启')
+    expect(wrapper.text()).toContain('子 Agent 模型已保存')
 
-    const disableButton = wrapper.findAll('.secondary-settings-selection .secondary-button')
-      .find((button) => button.text().includes('跟随主模型'))
-    expect(disableButton).toBeDefined()
-    await disableButton!.trigger('click')
+    // 可改回跟随主模型：待重启状态下点击跟随按钮，配置本地禁用。
+    await wrapper.get('.secondary-follow-line .secondary-button').trigger('click')
     await flushPromises()
     expect(api.disableSecondaryModel).toHaveBeenCalledOnce()
     expect(wrapper.text()).toContain('子 Agent 将跟随主模型')
 
-    const restartButton = wrapper.findAll('button').find((button) => button.text().includes('立即重启'))
-    expect(restartButton).toBeDefined()
-    await restartButton!.trigger('click')
+    // 立即重启 Kimi Runtime 使设置生效。
+    await wrapper.get('.secondary-restart-notice .primary-button').trigger('click')
     await flushPromises()
     expect(confirm).toHaveBeenCalledOnce()
     expect(api.restartRuntime).toHaveBeenCalledOnce()
-    expect(wrapper.text()).toContain('已禁用')
-    expect(wrapper.text()).not.toContain('等待重启生效')
+    expect(api.getKimiSettings).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('.secondary-model-workspace .model-scope-chip').text()).toBe('跟随主模型')
+    expect(wrapper.find('.secondary-restart-notice').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Kimi Runtime 已重启')
     wrapper.unmount()
   })
 
@@ -481,17 +506,18 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
-    /* 已配置独立模型时，“跟随主模型”按钮未选中，当前模型行选中；点击跟随按钮后直接切回 */
-    const kimiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('Kimi'))!
-    await kimiCard.get('.provider-model-select').trigger('click')
-    expect(wrapper.get('.provider-model-item.is-selected').text()).toContain('Kimi Fast')
-    await wrapper.get('.secondary-settings-selection .secondary-button').trigger('click')
+    /* 已配置独立模型时，“跟随主模型”按钮可用，当前模型卡片选中；点击后直接切回跟随主模型 */
+    const kimiFastRow = wrapper.findAll('.secondary-model-workspace .model-row').find((row) => row.text().includes('kimi-fast'))!
+    expect(kimiFastRow.classes()).toContain('is-selected')
+    await wrapper.get('.secondary-follow-line .secondary-button').trigger('click')
     await flushPromises()
 
     expect(api.disableSecondaryModel).toHaveBeenCalledOnce()
-    expect(wrapper.get('.secondary-settings-selection strong').text()).toBe('跟随主模型')
-    expect(wrapper.find('.provider-model-item.is-selected').exists()).toBe(false)
+    expect(wrapper.get('.secondary-model-workspace .model-scope-chip').text()).toBe('跟随主模型')
+    expect(wrapper.find('.secondary-model-workspace .model-row.is-selected').exists()).toBe(false)
+    expect(wrapper.get('.secondary-follow-line').text()).toContain('当前跟随主模型')
     wrapper.unmount()
   })
 
@@ -538,6 +564,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
     await wrapper.get('.secondary-runtime-details summary').trigger('click')
     const inheritButton = wrapper.findAll('.secondary-runtime-details .provider-disclosure-button')
@@ -580,7 +607,7 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    await wrapper.get('.model-view-switch button:first-child').trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
 
     // 官方 set_default 不接受供应商限制：自定义供应商的模型也列在主模型候选中。
     const customRow = wrapper.findAll('.primary-model-grid .model-row')
@@ -605,9 +632,17 @@ describe('SettingsPanel', () => {
 
     expect(wrapper.findAll('.settings-tab').map((button) => button.text())).not.toContain('Provider')
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    // 供应商视图（默认）展示卡片网格，但只读 Runtime 不提供任何写入控件。
     expect(wrapper.findAll('.provider-card')).toHaveLength(2)
-    expect(wrapper.find('.secondary-model-form').exists()).toBe(false)
-    expect(wrapper.text()).toContain('新子 Agent 将使用')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
+    // 子 Agent 网格按钮禁用并展示只读说明，不渲染思考强度/最大输出控件与跟随按钮。
+    const secondaryRows = wrapper.findAll('.secondary-model-workspace .model-row')
+    expect(secondaryRows).toHaveLength(3)
+    for (const row of secondaryRows) expect((row.element as HTMLButtonElement).disabled).toBe(true)
+    expect(wrapper.get('.secondary-model-workspace .secondary-readonly-note').text())
+      .toContain('Config API does not accept secondary_model yet')
+    expect(wrapper.find('.secondary-model-workspace .preference-row').exists()).toBe(false)
+    expect(wrapper.find('.secondary-follow-line .secondary-button').exists()).toBe(false)
     expect(wrapper.text()).toContain('子 Agent 模型')
     wrapper.unmount()
   })
@@ -643,9 +678,14 @@ describe('SettingsPanel', () => {
         }
       ]
     }
+    const selected: KimiSettingsSnapshot = {
+      ...connected,
+      secondaryModel: { model: 'claude-sonnet-4-5', defaultEffort: 'low', maxOutputSize: null }
+    }
     const api = {
       getKimiSettings: vi.fn(async () => writableSnapshot),
-      addKimiProvider: vi.fn(async () => connected)
+      addKimiProvider: vi.fn(async () => connected),
+      setSecondaryModel: vi.fn(async () => selected)
     } as unknown as KimiAgentDesktopApi
     window.kimiAgent = api
     const wrapper = mount(SettingsPanel, {
@@ -688,12 +728,15 @@ describe('SettingsPanel', () => {
       models: [{ model: 'claude-sonnet-4-5', maxContextSize: 200_000 }]
     })
     expect(wrapper.find('.secondary-provider-form').exists()).toBe(false)
-    const anthropicCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('anthropic-main'))!
-    await anthropicCard.get('.provider-model-select').trigger('click')
-    await anthropicCard.get('.provider-model-item').trigger('click')
-    expect(anthropicCard.get('.provider-model-select').text()).toContain('Claude Sonnet 4.5')
-    expect(anthropicCard.get('.provider-model-select').classes()).toContain('has-selection')
     expect(wrapper.text()).toContain('anthropic-main 已连接并读取到 1 个模型')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
+    const claudeRow = wrapper.findAll('.secondary-model-workspace .model-row')
+      .find((row) => row.text().includes('Claude Sonnet 4.5'))!
+    await claudeRow.trigger('click')
+    await flushPromises()
+    expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'claude-sonnet-4-5', defaultEffort: 'low' })
+    expect(wrapper.findAll('.secondary-model-workspace .model-row')
+      .find((row) => row.text().includes('Claude Sonnet 4.5'))!.classes()).toContain('is-selected')
     wrapper.unmount()
   })
 
@@ -1292,15 +1335,13 @@ describe('SettingsPanel', () => {
     })
     await flushPromises()
     await wrapper.findAll('.settings-tab')[1]!.trigger('click')
-    const openaiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('openai-main'))!
-    await openaiCard.get('.provider-model-select').trigger('click')
-    await openaiCard.get('.provider-model-item').trigger('click')
-    await wrapper.get('.secondary-model-actions .primary-button').trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
+    // 跨供应商点选即存：沿用已生效的思考强度（gpt-5-mini 支持 'low'）。
+    const gptRow = wrapper.findAll('.secondary-model-workspace .model-row').find((row) => row.text().includes('GPT-5 mini'))!
+    await gptRow.trigger('click')
     await flushPromises()
-
-    // Switching model keeps the previously applied effort (gpt-5-mini supports 'low').
     expect(api.setSecondaryModel).toHaveBeenCalledWith({ model: 'gpt-5-mini', defaultEffort: 'low' })
-    expect(wrapper.text()).toContain('子 Agent 模型已保存')
+    expect(wrapper.text()).toContain('子 Agent 模型已保存；重启 Kimi Runtime 后生效。')
     wrapper.unmount()
   })
 
@@ -1351,7 +1392,7 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
-  it('starts the official device-code flow and renders its authorization link', async () => {
+  it('starts the official device-code flow from the Kimi provider card and renders its authorization link', async () => {
     const api = {
       getKimiSettings: vi.fn(async () => snapshot),
       startOAuthLogin: vi.fn(async () => ({
@@ -1368,8 +1409,10 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
-
-    await wrapper.get('.account-row .primary-button').trigger('click')
+    // OAuth 入口现在位于「模型 → 供应商」视图的 Kimi 内置服务卡片上。
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    const kimiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('Kimi'))!
+    await kimiCard.get('.provider-oauth-login').trigger('click')
     await flushPromises()
 
     expect(api.startOAuthLogin).toHaveBeenCalledWith('managed:kimi-code')
@@ -1609,6 +1652,59 @@ describe('SettingsPanel', () => {
     expect(api.restoreSession).toHaveBeenCalledWith('session-archived')
     expect(wrapper.emitted('sessionRestored')).toEqual([['session-archived']])
     expect(wrapper.text()).toContain('当前没有已归档任务')
+    wrapper.unmount()
+  })
+
+  it('merges primary and sub Agent models into one page, with Providers as the default view', async () => {
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => snapshot)
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+
+    // 默认进入供应商视图：纯管理卡片（不带模型选择控件）与添加入口直接可见。
+    expect(wrapper.get('.model-view-switch button.is-active').text()).toBe('供应商')
+    expect(wrapper.findAll('.provider-card')).toHaveLength(2)
+    expect(wrapper.find('.provider-add-card').exists()).toBe(true)
+    expect(wrapper.find('.provider-card .provider-model-select').exists()).toBe(false)
+
+    // 主/子 Agent 同页：主模型网格在上、子 Agent 网格在下，断言按作用域分开。
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
+    expect(wrapper.get('.model-view-switch button.is-active').text()).toBe('主/子 Agent')
+    expect(wrapper.findAll('.primary-model-panel .model-row')).toHaveLength(3)
+    expect(wrapper.findAll('.secondary-model-workspace .model-row')).toHaveLength(snapshot.secondaryModelOptions.length)
+    expect(wrapper.findAll('.secondary-provider-model-group')).toHaveLength(0)
+    expect(wrapper.find('.provider-card').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('guides the user to the Providers view when the model catalog is empty', async () => {
+    const emptySnapshot: KimiSettingsSnapshot = {
+      ...snapshot,
+      models: [],
+      preferences: { ...snapshot.preferences, defaultModel: null }
+    }
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => emptySnapshot)
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    await clickModelViewSwitch(wrapper, '主/子 Agent')
+
+    expect(wrapper.findAll('.model-row')).toHaveLength(0)
+    expect(wrapper.find('.secondary-model-workspace').exists()).toBe(false)
+    const guidance = wrapper.get('.primary-model-empty')
+    expect(guidance.text()).toContain('供应商')
+    await guidance.get('.secondary-button').trigger('click')
+    expect(wrapper.get('.model-view-switch button.is-active').text()).toBe('供应商')
     wrapper.unmount()
   })
 })

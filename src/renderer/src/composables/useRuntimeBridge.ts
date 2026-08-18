@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import {
   appendLocalPromptDraft,
   moveLocalPromptDraft,
@@ -33,7 +33,6 @@ import type {
   SessionNavigationItem,
   SessionViewState,
   WorkspaceFileDiff,
-  WorkspaceFileList,
   WorkspaceFilePreview,
   WorkspaceFileSearchItem,
   WorkspaceFileSearchResult,
@@ -43,6 +42,7 @@ import type {
   WorkspaceOpenApp,
   WorkspaceNavigationItem
 } from '@shared/contracts'
+import type { WorkspaceFileTreeState } from '../types'
 
 const stoppedState: RuntimePublicState = {
   status: 'stopped',
@@ -99,9 +99,17 @@ export function useRuntimeBridge() {
   const sessionSkillsError = ref<string | null>(null)
   const skillActivationPending = ref(false)
   const skillActivationError = ref<string | null>(null)
-  const fileList = ref<WorkspaceFileList | null>(null)
-  const fileListPending = ref(false)
-  const fileListError = ref<string | null>(null)
+  const fileTree = reactive<WorkspaceFileTreeState>({
+    root: '.',
+    children: {},
+    expanded: {},
+    pending: {},
+    errors: {},
+    rootPending: false,
+    rootError: null,
+    truncated: false
+  })
+  const fileTreeReveal = ref<string | null>(null)
   const filePreview = ref<WorkspaceFilePreview | null>(null)
   const filePreviewPending = ref(false)
   const filePreviewError = ref<string | null>(null)
@@ -131,7 +139,6 @@ export function useRuntimeBridge() {
   let workspaceTreeGeneration = 0
   let loadedSessionPageCount = 0
   let workspaceGeneration = 0
-  let directoryGeneration = 0
   let branchesGeneration = 0
   let previewGeneration = 0
   let diffGeneration = 0
@@ -152,6 +159,9 @@ export function useRuntimeBridge() {
      Vue flush 时会被合并掉，不能依赖它完成重连。 */
   let detachedSessionId: string | null = null
   const awaitingPromptCycleAt = new Map<string, number>()
+  /* steer 发出的 Prompt 先落队再立即 steer，转录中仍是 pending；
+     记录其 promptId，让会话页显示「已引导」而非「已排队」。 */
+  const steeredPromptIds = reactive(new Set<string>())
   const localPromptQueue = computed(() => {
     const sessionId = activeQueueSessionId.value
     return sessionId === null ? [] : localPromptDraftsBySession.value[sessionId] ?? []
@@ -629,6 +639,9 @@ export function useRuntimeBridge() {
       const accepted = result.status === 'running' || result.status === 'queued'
       if (accepted) {
         awaitingPromptCycleAt.set(sessionId, Date.now())
+        if (cloneableInput.deliveryMode === 'steer' && result.status === 'queued') {
+          steeredPromptIds.add(result.promptId)
+        }
       }
       if (cloneableInput.goalObjective !== undefined) goalMode.value = false
       return accepted
@@ -856,6 +869,41 @@ export function useRuntimeBridge() {
     await loadDirectoryForSession(sessionId, path, workspaceGeneration)
   }
 
+  /** 展开/收起一个目录；首次展开时按需加载子项。 */
+  const toggleDirectory = async (path: string): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null) return
+    if (fileTree.expanded[path] === true) {
+      const expanded = { ...fileTree.expanded }
+      delete expanded[path]
+      fileTree.expanded = expanded
+      return
+    }
+    fileTree.expanded = { ...fileTree.expanded, [path]: true }
+    if (fileTree.children[path] === undefined && fileTree.pending[path] !== true) {
+      await loadDirectoryForSession(sessionId, path, workspaceGeneration)
+    }
+  }
+
+  /** 展开整条祖先链并定位到目标目录（搜索结果跳转用）。 */
+  const revealDirectory = async (path: string): Promise<void> => {
+    const sessionId = requestedSessionId
+    if (window.kimiAgent === undefined || sessionId === null) return
+    const segments = path.split('/').filter((part) => part.length > 0 && part !== '.')
+    let current = ''
+    for (const segment of segments) {
+      current = current.length > 0 ? `${current}/${segment}` : segment
+      if (fileTree.expanded[current] !== true) {
+        fileTree.expanded = { ...fileTree.expanded, [current]: true }
+      }
+      if (fileTree.children[current] === undefined && fileTree.pending[current] !== true) {
+        await loadDirectoryForSession(sessionId, current, workspaceGeneration)
+        if (sessionId !== requestedSessionId) return
+      }
+    }
+    fileTreeReveal.value = path
+  }
+
   const openFile = async (path: string): Promise<void> => {
     const sessionId = requestedSessionId
     if (window.kimiAgent === undefined || sessionId === null) return
@@ -1045,8 +1093,11 @@ export function useRuntimeBridge() {
     const generation = ++workspaceGeneration
     gitStatusPending.value = true
     gitStatusError.value = null
-    const currentPath = fileList.value?.path ?? '.'
-    const directoryPromise = loadDirectoryForSession(sessionId, currentPath, generation)
+    // 刷新根目录和全部已展开目录，保留用户的展开状态。
+    const paths = [fileTree.root, ...Object.keys(fileTree.expanded)]
+    const directoryPromise = Promise.all(
+      paths.map((path) => loadDirectoryForSession(sessionId, path, generation))
+    ).then(() => undefined)
     const gitPromise = window.kimiAgent.getGitStatus(sessionId)
       .then((status) => {
         if (generation === workspaceGeneration && sessionId === requestedSessionId) gitStatus.value = status
@@ -1084,44 +1135,63 @@ export function useRuntimeBridge() {
     workspaceAtStart: number
   ): Promise<void> => {
     if (window.kimiAgent === undefined) return
-    const generation = ++directoryGeneration
-    fileListPending.value = true
-    fileListError.value = null
+    /* per-path 状态：根目录单列 rootPending/rootError，其余目录走 pending/errors。
+       不用单一 directoryGeneration——不同目录的并发加载互不取消。 */
+    if (path === fileTree.root) {
+      fileTree.rootPending = true
+      fileTree.rootError = null
+    } else {
+      fileTree.pending = { ...fileTree.pending, [path]: true }
+      const errors = { ...fileTree.errors }
+      delete errors[path]
+      fileTree.errors = errors
+    }
     try {
       const listing = await window.kimiAgent.listFiles(sessionId, path)
-      if (
-        generation !== directoryGeneration ||
-        workspaceAtStart !== workspaceGeneration ||
-        sessionId !== requestedSessionId
-      ) return
-      fileList.value = listing
+      if (workspaceAtStart !== workspaceGeneration || sessionId !== requestedSessionId) return
+      if (path === fileTree.root) {
+        fileTree.rootPending = false
+        fileTree.rootError = null
+        fileTree.truncated = listing.truncated
+      } else {
+        const pending = { ...fileTree.pending }
+        delete pending[path]
+        fileTree.pending = pending
+      }
+      fileTree.children = { ...fileTree.children, [path]: listing.items }
       filePreview.value = null
       filePreviewError.value = null
     } catch (error) {
-      if (
-        generation === directoryGeneration &&
-        workspaceAtStart === workspaceGeneration &&
-        sessionId === requestedSessionId
-      ) {
-        fileList.value = null
-        fileListError.value = errorMessage(error)
+      if (workspaceAtStart === workspaceGeneration && sessionId === requestedSessionId) {
+        if (path === fileTree.root) {
+          fileTree.rootPending = false
+          fileTree.rootError = errorMessage(error)
+        } else {
+          fileTree.errors = { ...fileTree.errors, [path]: errorMessage(error) }
+          const pending = { ...fileTree.pending }
+          delete pending[path]
+          fileTree.pending = pending
+        }
       }
-    } finally {
-      if (generation === directoryGeneration) fileListPending.value = false
     }
   }
 
   const resetWorkspaceContext = (): void => {
     workspaceGeneration += 1
-    directoryGeneration += 1
     previewGeneration += 1
     diffGeneration += 1
     fileSearchGeneration += 1
     fileGrepGeneration += 1
     fileActionGeneration += 1
-    fileList.value = null
-    fileListPending.value = false
-    fileListError.value = null
+    fileTree.root = '.'
+    fileTree.children = {}
+    fileTree.expanded = {}
+    fileTree.pending = {}
+    fileTree.errors = {}
+    fileTree.rootPending = false
+    fileTree.rootError = null
+    fileTree.truncated = false
+    fileTreeReveal.value = null
     filePreview.value = null
     filePreviewPending.value = false
     filePreviewError.value = null
@@ -1190,7 +1260,7 @@ export function useRuntimeBridge() {
         sessionId !== requestedSessionId
       ) return
       const model = status.model ?? settings.preferences.defaultModel ?? settings.models[0]?.id ?? null
-      if (model === null) throw new Error('Kimi 没有可用模型，请先在设置中配置 Provider 与默认模型')
+      if (model === null) throw new Error('Kimi 没有可用模型，请先在设置 → 模型 → 供应商 中配置并授权')
       const descriptor = settings.models.find((item) => item.id === model)
       const thinking = resolveSessionThinkingEffort(status.thinking, descriptor, settings.preferences.thinkingEffort)
       sessionRuntimeStatus.value = status
@@ -1225,7 +1295,7 @@ export function useRuntimeBridge() {
       const settings = await window.kimiAgent.getKimiSettings()
       if (generation !== controlsGeneration || requestedSessionId !== null) return
       const model = settings.preferences.defaultModel ?? settings.models[0]?.id ?? null
-      if (model === null) throw new Error('Kimi 没有可用模型，请先在设置中配置 Provider 与默认模型')
+      if (model === null) throw new Error('Kimi 没有可用模型，请先在设置 → 模型 → 供应商 中配置并授权')
       const descriptor = settings.models.find((item) => item.id === model)
       const thinking = resolveSessionThinkingEffort('', descriptor, settings.preferences.thinkingEffort)
       sessionModels.value = settings.models
@@ -1462,6 +1532,7 @@ export function useRuntimeBridge() {
     agentTranscriptPending,
     agentTranscriptError,
     localPromptQueue,
+    steeredPromptIds,
     sessionRuntimeStatus,
     sessionModels,
     promptControls,
@@ -1483,9 +1554,8 @@ export function useRuntimeBridge() {
     sessionSkillsError,
     skillActivationPending,
     skillActivationError,
-    fileList,
-    fileListPending,
-    fileListError,
+    fileTree,
+    fileTreeReveal,
     filePreview,
     filePreviewPending,
     filePreviewError,
@@ -1546,6 +1616,8 @@ export function useRuntimeBridge() {
     respondQuestion,
     dismissQuestion,
     loadDirectory,
+    toggleDirectory,
+    revealDirectory,
     openFile,
     closeFilePreview,
     searchMentionFiles,

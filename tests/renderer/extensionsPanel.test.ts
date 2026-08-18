@@ -2,28 +2,35 @@
 
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import ExtensionsPanel from '../../src/renderer/src/components/ExtensionsPanel.vue'
 
 const baseProps = {
   width: 382,
   activeTab: 'changes' as const,
       workspaceName: 'moon-code',
-  fileList: {
-    path: '.',
-    items: [
-      {
-        path: 'src', name: 'src', kind: 'directory' as const, size: null, modifiedAt: null,
-        mime: null, languageId: null, isBinary: false, gitStatus: 'modified' as const, childCount: 2
-      },
-      {
-        path: 'README.md', name: 'README.md', kind: 'file' as const, size: 42, modifiedAt: null,
-        mime: 'text/markdown', languageId: 'markdown', isBinary: false, gitStatus: null, childCount: null
-      }
-    ],
+  fileTree: {
+    root: '.',
+    children: {
+      '.': [
+        {
+          path: 'src', name: 'src', kind: 'directory' as const, size: null, modifiedAt: null,
+          mime: null, languageId: null, isBinary: false, gitStatus: 'modified' as const, childCount: 2
+        },
+        {
+          path: 'README.md', name: 'README.md', kind: 'file' as const, size: 42, modifiedAt: null,
+          mime: 'text/markdown', languageId: 'markdown', isBinary: false, gitStatus: null, childCount: null
+        }
+      ]
+    },
+    expanded: {},
+    pending: {},
+    errors: {},
+    rootPending: false,
+    rootError: null,
     truncated: false
   },
-  fileListPending: false,
-  fileListError: null,
+  fileTreeReveal: null,
   filePreview: {
     path: 'README.md', content: '# Kimi Agent', encoding: 'utf-8' as const, size: 12,
     truncated: false, mime: 'text/markdown', languageId: 'markdown', lineCount: 1, isBinary: false
@@ -159,23 +166,118 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.findAll('.file-row')[1]!.classes()).toContain('is-active')
   })
 
-  it('keeps the parent directory label visible and colors HTML file icons blue', () => {
+  it('renders expanded directories as an indented tree and hides collapsed children', async () => {
     const wrapper = mount(ExtensionsPanel, {
       props: {
         ...baseProps,
         activeTab: 'files',
-        fileList: {
-          ...baseProps.fileList,
-          path: 'src/pages',
-          items: [{
-            path: 'src/pages/index.html', name: 'index.html', kind: 'file' as const, size: 42,
-            modifiedAt: null, mime: 'text/html', languageId: 'html', isBinary: false, gitStatus: null, childCount: null
-          }]
+        fileTree: {
+          ...baseProps.fileTree,
+          expanded: { src: true },
+          children: {
+            ...baseProps.fileTree.children,
+            src: [{
+              path: 'src/App.vue', name: 'App.vue', kind: 'file' as const, size: 10, modifiedAt: null,
+              mime: 'text/x-vue', languageId: 'vue', isBinary: false, gitStatus: 'modified' as const, childCount: null
+            }]
+          }
+        }
+      },
+      global: { stubs: { Teleport: true } }
+    })
+
+    const rows = wrapper.findAll('.file-row')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]!.classes()).toContain('is-expanded')
+    expect(rows[0]!.attributes('style')).toContain('padding-left: 8px')
+    expect(rows[1]!.attributes('style')).toContain('padding-left: 22px')
+    expect(rows[1]!.text()).toContain('App.vue')
+    expect(rows[2]!.attributes('style')).toContain('padding-left: 8px')
+
+    await rows[1]!.trigger('contextmenu', { clientX: 100, clientY: 100 })
+    expect(wrapper.get('.file-context-menu').text()).toContain('添加至会话')
+    expect(wrapper.emitted('openEntry')).toBeUndefined()
+
+    await wrapper.setProps({ fileTree: { ...baseProps.fileTree } })
+    expect(wrapper.findAll('.file-row')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('keeps per-directory loading, errors and empty states under the expanded row', async () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: {
+        ...baseProps,
+        activeTab: 'files',
+        fileTree: {
+          ...baseProps.fileTree,
+          expanded: { src: true },
+          pending: { src: true },
+          errors: {},
+          children: { ...baseProps.fileTree.children, src: [] }
         }
       }
     })
 
-    expect(wrapper.get('.file-parent-row').text()).toContain('返回上一级')
+    expect(wrapper.findAll('.file-row')[0]!.find('.spin').exists()).toBe(true)
+
+    await wrapper.setProps({
+      fileTree: {
+        ...baseProps.fileTree,
+        expanded: { src: true },
+        children: { ...baseProps.fileTree.children, src: [] }
+      }
+    })
+    expect(wrapper.findAll('.file-row')[0]!.find('.spin').exists()).toBe(false)
+    expect(wrapper.text()).toContain('这个目录是空的。')
+
+    await wrapper.setProps({
+      fileTree: {
+        ...baseProps.fileTree,
+        expanded: { src: true },
+        errors: { src: 'list failed' },
+        children: { ...baseProps.fileTree.children, src: [] }
+      }
+    })
+    expect(wrapper.get('.extension-state.is-error').text()).toContain('list failed')
+    wrapper.unmount()
+  })
+
+  it('scrolls the revealed directory row into view after a search jump', async () => {
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(window.Element.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+    const wrapper = mount(ExtensionsPanel, {
+      props: { ...baseProps, activeTab: 'files' },
+      attachTo: document.body
+    })
+
+    await wrapper.setProps({ fileTreeReveal: 'src' })
+    await nextTick()
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView.mock.calls[0]?.[0]).toEqual({ block: 'nearest' })
+    wrapper.unmount()
+    Object.defineProperty(window.Element.prototype, 'scrollIntoView', { configurable: true, value: undefined })
+  })
+
+  it('removes the parent-navigation row and colors HTML file icons blue', () => {
+    const wrapper = mount(ExtensionsPanel, {
+      props: {
+        ...baseProps,
+        activeTab: 'files',
+        fileTree: {
+          ...baseProps.fileTree,
+          children: {
+            '.': [{
+              path: 'index.html', name: 'index.html', kind: 'file' as const, size: 42,
+              modifiedAt: null, mime: 'text/html', languageId: 'html', isBinary: false, gitStatus: null, childCount: null
+            }]
+          }
+        }
+      }
+    })
+
+    expect(wrapper.find('.file-parent-row').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('返回上一级')
     expect(wrapper.get('.file-row .is-html-file').classes()).toContain('is-html-file')
   })
 
@@ -191,7 +293,7 @@ describe('ExtensionsPanel', () => {
     await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
     expect(wrapper.get('.file-context-menu').text()).toContain('添加至会话')
     await wrapper.findAll('.file-context-menu button')[0]!.trigger('click')
-    expect(wrapper.emitted('attachToSession')).toEqual([[baseProps.fileList.items[1]]])
+    expect(wrapper.emitted('attachToSession')).toEqual([[baseProps.fileTree.children['.']![1]]])
 
     await fileRow.trigger('contextmenu', { clientX: 120, clientY: 160 })
     expect(wrapper.get('.file-context-menu').text()).toContain('系统打开')

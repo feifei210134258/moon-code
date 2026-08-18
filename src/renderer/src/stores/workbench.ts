@@ -459,6 +459,7 @@ function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
   }
   return {
     id: message.id,
+    promptId: message.promptId,
     role: message.role === 'user' ? 'user' : 'assistant',
     author: message.role === 'user' ? 'You' : message.role === 'tool' ? 'Tool' : 'Kimi',
     time: formatMessageTime(message.createdAt),

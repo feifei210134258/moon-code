@@ -4972,6 +4972,14 @@ body.is-panel-resizing {
   background: rgba(0, 0, 0, 0.04);
 }
 
+.file-caret {
+  transition: transform 0.15s ease;
+}
+
+.file-row.is-expanded .file-caret {
+  transform: rotate(90deg);
+}
+
 .file-row > span:not(.file-row-spacer) {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4981,16 +4989,6 @@ body.is-panel-resizing {
 .file-row small {
   font-size: var(--type-micro-size);
   font-weight: 650;
-}
-
-.file-parent-row {
-  grid-template-columns: 18px minmax(0, 1fr);
-}
-
-.file-parent-row > span {
-  min-width: 0;
-  overflow: visible;
-  text-overflow: clip;
 }
 
 .file-row .is-html-file {
@@ -6580,6 +6578,22 @@ body.is-panel-resizing {
   gap: 8px;
 }
 
+.primary-model-empty {
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 11px;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.02);
+  font-size: var(--type-caption-size);
+  text-align: center;
+}
+
 .model-row {
   min-height: 62px;
   display: grid;
@@ -6647,65 +6661,33 @@ body.is-panel-resizing {
   gap: 12px;
 }
 
-.secondary-outcome-bar {
-  min-height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 10px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.13);
-  border-radius: 10px;
-  background: var(--accent-soft);
-}
-
-.secondary-outcome-bar.is-pending {
-  border-color: rgba(165, 103, 18, 0.22);
-  background: rgba(165, 103, 18, 0.07);
-}
-
-.secondary-outcome-bar > div {
-  min-width: 0;
+/* 主/子 Agent 合并页：两节纵向堆叠，子 Agent 节用细分隔线划出边界。 */
+.agents-model-panel {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 2px 9px;
-  align-items: baseline;
+  gap: 26px;
+  padding-top: 4px;
 }
 
-.secondary-outcome-bar > div > span {
+.agents-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.agents-section-header h3 {
+  margin: 0;
+  font-size: var(--type-title-size);
+  letter-spacing: -0.01em;
+}
+
+.agents-section-header p {
+  margin: 4px 0 0;
   color: var(--muted);
   font-size: var(--type-caption-size);
-}
-
-.secondary-outcome-bar strong {
-  overflow: hidden;
-  font-size: var(--type-ui-size);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.secondary-outcome-bar small {
-  grid-column: 1 / -1;
-  color: var(--muted);
-  font-size: var(--type-caption-size);
-}
-
-.secondary-outcome-state {
-  flex: none;
-  width: max-content;
-  padding: 0 9px;
-  border-radius: 999px;
-  color: var(--accent);
-  background: rgba(0, 0, 0, 0.09);
-  font-size: var(--type-micro-size);
-  font-weight: 620;
-  line-height: 22px;
-  white-space: nowrap;
-}
-
-.secondary-outcome-bar.is-pending .secondary-outcome-state {
-  color: var(--amber);
-  background: rgba(165, 103, 18, 0.12);
+  line-height: 1.5;
 }
 
 /* ---------- 子 Agent：模型服务卡片流 ---------- */
@@ -6822,16 +6804,6 @@ body.is-panel-resizing {
   font-size: var(--type-caption-size);
 }
 
-.provider-card-current-badge {
-  flex: none;
-  padding: 4px 9px;
-  border-radius: 999px;
-  color: var(--accent);
-  background: var(--accent-soft);
-  font-size: var(--type-caption-size);
-  font-weight: 610;
-}
-
 .provider-card-meta {
   min-width: 0;
   display: flex;
@@ -6845,84 +6817,6 @@ body.is-panel-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.provider-card-model-select {
-  position: relative;
-  min-width: 0;
-}
-
-.provider-model-select {
-  width: 100%;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 2px;
-  border: 0;
-  border-bottom: 1px dashed var(--border);
-  color: var(--muted);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font-size: var(--type-ui-small-size);
-}
-
-.provider-model-select:hover {
-  color: var(--text);
-  border-bottom-color: var(--border-strong);
-}
-
-.provider-model-select .provider-model-select-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.provider-model-select.has-selection {
-  color: var(--text);
-}
-
-.provider-model-select.has-selection .provider-model-select-label {
-  font-weight: 620;
-}
-
-.provider-model-select svg {
-  flex: none;
-  transition: transform 150ms ease;
-}
-
-.provider-model-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 30;
-  display: grid;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
-  animation: provider-dialog-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.provider-model-popover-heading {
-  margin: 0;
-  padding: 0 4px;
-  color: var(--muted);
-  font-size: var(--type-caption-size);
-  font-weight: 560;
-}
-
-.provider-model-popover-list {
-  max-height: 240px;
-  display: grid;
-  gap: 5px;
-  overflow: auto;
 }
 
 .provider-card-actions {
@@ -6999,123 +6893,6 @@ body.is-panel-resizing {
   border-color: rgba(0, 0, 0, 0.32);
   color: var(--accent);
   background: var(--accent-soft);
-}
-
-.provider-model-item {
-  width: 100%;
-  min-height: 52px;
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 11px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  background: #ffffff;
-  cursor: pointer;
-  text-align: left;
-}
-
-.provider-model-item:hover {
-  border-color: var(--border-strong);
-}
-
-.provider-model-item.is-selected {
-  border-color: rgba(0, 0, 0, 0.3);
-  background: var(--accent-soft);
-}
-
-.provider-model-radio {
-  width: 18px;
-  height: 18px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  color: #ffffff;
-}
-
-.provider-model-item.is-selected .provider-model-radio {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-
-.provider-model-item > span:nth-child(2) {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.provider-model-item strong,
-.provider-model-item small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.provider-model-item strong {
-  font-size: var(--type-ui-size);
-}
-
-.provider-model-item small {
-  color: var(--muted);
-  font-size: var(--type-caption-size);
-}
-
-.model-current-badge {
-  width: max-content;
-  flex: none;
-  padding: 4px 8px;
-  border-radius: 999px;
-  color: var(--green);
-  background: var(--green-soft);
-  font-size: var(--type-caption-size);
-  font-weight: 610;
-}
-
-.provider-model-empty {
-  min-height: 92px;
-  display: grid;
-  place-items: center;
-  border: 1px dashed var(--border-strong);
-  border-radius: 10px;
-  color: var(--muted);
-  font-size: var(--type-caption-size);
-}
-
-/* ---------- 子 Agent：设置条与添加表单 ---------- */
-
-.secondary-model-settings-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: end;
-  gap: 14px;
-  padding: 13px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #ffffff;
-}
-
-.secondary-settings-selection {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 9px;
-}
-
-.secondary-settings-selection span {
-  color: var(--muted);
-  font-size: var(--type-caption-size);
-}
-
-.secondary-settings-selection strong {
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--type-ui-size);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .provider-picker-field {
@@ -7318,51 +7095,26 @@ body.is-panel-resizing {
   font-size: var(--type-caption-size);
 }
 
-/* ---------- 子 Agent：保存区与表单 ---------- */
-
-.secondary-model-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 14px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-
-.secondary-model-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.secondary-model-form label {
-  width: 216px;
-  flex: none;
-}
+/* ---------- 子 Agent：供应商表单 ---------- */
 
 .secondary-provider-form {
   display: grid;
   gap: 0;
 }
 
-.secondary-provider-form label,
-.secondary-model-form label {
+.secondary-provider-form label {
   display: grid;
   gap: 5px;
 }
 
-.secondary-provider-form label > span,
-.secondary-model-form label > span {
+.secondary-provider-form label > span {
   color: var(--muted);
   font-size: var(--type-caption-size);
   font-weight: 560;
 }
 
 .secondary-provider-form select,
-.secondary-provider-form input,
-.secondary-model-form select,
-.secondary-model-form input {
+.secondary-provider-form input {
   width: 100%;
   height: 34px;
   padding: 0 9px;
@@ -7373,16 +7125,13 @@ body.is-panel-resizing {
   font-size: var(--type-ui-small-size);
 }
 
-.secondary-provider-form input::placeholder,
-.secondary-model-form input::placeholder {
+.secondary-provider-form input::placeholder {
   color: var(--faint);
   opacity: 1;
 }
 
 .secondary-provider-form select:focus,
-.secondary-provider-form input:focus,
-.secondary-model-form select:focus,
-.secondary-model-form input:focus {
+.secondary-provider-form input:focus {
   border-color: var(--input-focus-border);
   outline: 0;
   box-shadow: var(--focus-ring);
@@ -7456,8 +7205,7 @@ body.is-panel-resizing {
   color: var(--red);
 }
 
-.provider-form-actions,
-.secondary-model-actions {
+.provider-form-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -7468,6 +7216,21 @@ body.is-panel-resizing {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+.secondary-follow-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  line-height: 1.6;
+}
+
+.secondary-follow-line strong {
+  color: var(--text);
+  font-weight: 610;
 }
 
 .secondary-readonly-note,
@@ -7598,14 +7361,6 @@ body.is-panel-resizing {
 
   .provider-add-button {
     margin-top: 10px;
-  }
-
-  .secondary-model-footer {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .secondary-model-actions {
-    justify-content: flex-start;
   }
 }
 
