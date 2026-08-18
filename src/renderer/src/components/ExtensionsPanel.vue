@@ -15,11 +15,7 @@ import {
 } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
-  BrowserAnnotationDraft,
-  BrowserAnnotationMode,
-  BrowserAnnotationSubmitInput,
   BrowserBounds,
-  BrowserCaptureResult,
   BrowserViewState,
   BrowserViewport,
   KimiBackgroundTask,
@@ -56,23 +52,14 @@ const props = withDefaults(defineProps<{
   browserState: BrowserViewState
   browserPending: boolean
   browserError: string | null
-  browserCapture: BrowserCaptureResult | null
-  browserAnnotationBackdrop?: BrowserCaptureResult | null
-  browserAnnotationDrafts?: BrowserAnnotationDraft[]
-  browserAnnotationPicking?: boolean
-  browserAnnotationSubmitting?: boolean
-  browserAnnotationError?: string | null
+  browserElementPicking?: boolean
   todos?: KimiTodoList[]
   tasks?: KimiBackgroundTask[]
   tasksPending?: boolean
   tasksError?: string | null
   operationalActionPending?: string | null
 }>(), {
-  browserAnnotationDrafts: () => [],
-  browserAnnotationBackdrop: null,
-  browserAnnotationPicking: false,
-  browserAnnotationSubmitting: false,
-  browserAnnotationError: null,
+  browserElementPicking: false,
   fileTreeReveal: null,
   fileSearch: null,
   fileSearchPending: false,
@@ -103,11 +90,10 @@ const emit = defineEmits<{
   refresh: []
   browserBounds: [bounds: BrowserBounds]
   browserViewport: [viewport: BrowserViewport]
-  browserCapturePage: [fullPage: boolean]
-  browserPickAnnotation: [mode: BrowserAnnotationMode]
-  browserDeleteAnnotation: [draftId: string]
-  browserSubmitAnnotation: [input: BrowserAnnotationSubmitInput]
-  browserOverlay: [open: boolean]
+  browserPickElements: []
+  browserStopPicking: []
+  browserReload: []
+  browserOpenExternal: []
   cancelTask: [taskId: string]
 }>()
 
@@ -390,19 +376,13 @@ watch(() => props.fileTreeReveal, (path) => {
       :state="browserState"
       :pending="browserPending"
       :error="browserError"
-      :capture="browserCapture"
-      :annotation-backdrop="browserAnnotationBackdrop"
-      :annotation-drafts="browserAnnotationDrafts"
-      :annotation-picking="browserAnnotationPicking"
-      :annotation-submitting="browserAnnotationSubmitting"
-      :annotation-error="browserAnnotationError"
+      :element-picking="browserElementPicking"
       @bounds="emit('browserBounds', $event)"
       @viewport="emit('browserViewport', $event)"
-      @capture-page="emit('browserCapturePage', $event)"
-      @pick-annotation="emit('browserPickAnnotation', $event)"
-      @delete-annotation="emit('browserDeleteAnnotation', $event)"
-      @submit-annotation="emit('browserSubmitAnnotation', $event)"
-      @overlay="emit('browserOverlay', $event)"
+      @pick-elements="emit('browserPickElements')"
+      @stop-picking="emit('browserStopPicking')"
+      @reload="emit('browserReload')"
+      @open-external="emit('browserOpenExternal')"
     />
   </aside>
 

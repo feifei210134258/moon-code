@@ -1,5 +1,5 @@
 import type {
-  BrowserAnnotationSubmitInput,
+  BrowserPickedElement,
   KimiPromptControls,
   KimiPromptInput,
   KimiSideChatPromptInput,
@@ -39,6 +39,9 @@ export function toCloneablePromptInput(input: KimiPromptInput): KimiPromptInput 
   if (input.attachments !== undefined) {
     cloneable.attachments = input.attachments.map(toCloneableUploadedFile)
   }
+  if (input.webElements !== undefined) {
+    cloneable.webElements = toCloneableWebElements(input.webElements)
+  }
   if (input.goalObjective !== undefined) cloneable.goalObjective = input.goalObjective
   if (input.deliveryMode !== undefined) cloneable.deliveryMode = input.deliveryMode
   return cloneable
@@ -53,17 +56,23 @@ export function toCloneableSideChatPromptInput(
   }
 }
 
-export function toCloneableBrowserAnnotationInput(
-  input: BrowserAnnotationSubmitInput
-): BrowserAnnotationSubmitInput {
-  return {
-    draftId: input.draftId,
-    comment: input.comment,
-    pageUrl: input.pageUrl,
-    includeSelector: input.includeSelector,
-    includeText: input.includeText,
-    includeScreenshot: input.includeScreenshot
-  }
+export function toCloneableWebElements(elements: BrowserPickedElement[]): BrowserPickedElement[] {
+  return elements.map((element) => ({
+    selector: element.selector,
+    xpath: element.xpath,
+    tag: element.tag,
+    ariaLabel: element.ariaLabel,
+    textSnippet: element.textSnippet,
+    rect: {
+      x: element.rect.x,
+      y: element.rect.y,
+      width: element.rect.width,
+      height: element.rect.height
+    },
+    pageUrl: element.pageUrl,
+    pageTitle: element.pageTitle,
+    ...(element.styles === undefined ? {} : { styles: { ...element.styles } })
+  }))
 }
 
 export function toCloneableApprovalResponse(response: ApprovalResponse): ApprovalResponse {

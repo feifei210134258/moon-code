@@ -3,6 +3,7 @@ import {
   PhAt,
   PhCaretDown,
   PhCube,
+  PhCursorClick,
   PhFile,
   PhFolderOpen,
   PhImage,
@@ -15,6 +16,7 @@ import {
 } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
+  BrowserPickedElement,
   KimiModelCatalogItem,
   KimiPromptControls,
   KimiSkill,
@@ -43,7 +45,8 @@ const emit = defineEmits<{
     attachments: KimiUploadedFile[],
     controls: KimiPromptControls,
     goalMode: boolean,
-    deliveryMode: 'queue' | 'steer'
+    deliveryMode: 'queue' | 'steer',
+    webElements: BrowserPickedElement[]
   ]
   abort: []
   activateSkill: [skillName: string, args?: string]
@@ -54,6 +57,8 @@ const emit = defineEmits<{
 const value = ref('')
 const selectedSkill = ref<KimiSkill | null>(null)
 const attachments = ref<KimiUploadedFile[]>([])
+const webElements = ref<BrowserPickedElement[]>([])
+const webElementsOpen = ref(false)
 const attachmentPending = ref(false)
 const attachmentError = ref<string | null>(null)
 const optionsOpen = ref(false)
@@ -74,14 +79,16 @@ const advancedTrigger = ref<HTMLButtonElement | null>(null)
 const commandTrigger = ref<HTMLButtonElement | null>(null)
 const mentionTrigger = ref<HTMLButtonElement | null>(null)
 const deliveryTrigger = ref<HTMLButtonElement | null>(null)
+const webElementTrigger = ref<HTMLButtonElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
-type PopoverKind = 'options' | 'advanced' | 'command' | 'mention' | 'delivery'
+type PopoverKind = 'options' | 'advanced' | 'command' | 'mention' | 'delivery' | 'webElements'
 const popoverStyles = ref<Record<PopoverKind, Record<string, string>>>({
   options: {},
   advanced: {},
   command: {},
   mention: {},
-  delivery: {}
+  delivery: {},
+  webElements: {}
 })
 let mentionTimer: ReturnType<typeof setTimeout> | null = null
 let mentionGeneration = 0
@@ -137,7 +144,7 @@ function submit(): void {
     props.pending === true ||
     props.activationPending === true ||
     props.controls === null ||
-    (!hasText && attachments.value.length === 0) ||
+    (!hasText && attachments.value.length === 0 && webElements.value.length === 0) ||
     (props.goalMode === true && !hasText)
   ) return
   const selected = selectedSkill.value
@@ -160,12 +167,15 @@ function submit(): void {
       [...attachments.value],
       props.controls,
       props.goalMode === true,
-      props.running === true ? deliveryMode.value : 'queue'
+      props.running === true ? deliveryMode.value : 'queue',
+      [...webElements.value]
     )
   }
   value.value = ''
   selectedSkill.value = null
   attachments.value = []
+  webElements.value = []
+  webElementsOpen.value = false
   commandOpen.value = false
   closeMention()
   void nextTick(() => input.value?.focus())
@@ -497,6 +507,33 @@ function addAttachments(files: KimiUploadedFile[]): void {
   void nextTick(() => input.value?.focus())
 }
 
+function webElementKey(element: BrowserPickedElement): string {
+  return `${element.selector}\n${element.xpath}\n${element.pageUrl}`
+}
+
+function addWebElements(elements: BrowserPickedElement[]): void {
+  if (elements.length === 0 || props.disabled === true) return
+  const existing = new Set(webElements.value.map(webElementKey))
+  webElements.value = [...webElements.value, ...elements.filter((element) => !existing.has(webElementKey(element)))]
+  void nextTick(() => input.value?.focus())
+}
+
+function removeWebElement(element: BrowserPickedElement): void {
+  const key = webElementKey(element)
+  webElements.value = webElements.value.filter((item) => webElementKey(item) !== key)
+  if (webElements.value.length === 0) webElementsOpen.value = false
+}
+
+function clearWebElements(): void {
+  webElements.value = []
+  webElementsOpen.value = false
+}
+
+function toggleWebElements(): void {
+  webElementsOpen.value = !webElementsOpen.value
+  if (webElementsOpen.value) void nextTick(() => positionPopover('webElements'))
+}
+
 function mentionIcon(item: WorkspaceFileSearchItem) {
   return item.kind === 'directory' ? PhFolderOpen : PhFile
 }
@@ -552,14 +589,16 @@ function positionPopover(kind: PopoverKind): void {
         ? commandTrigger.value
         : kind === 'mention'
           ? mentionTrigger.value
-          : deliveryTrigger.value
+          : kind === 'delivery'
+            ? deliveryTrigger.value
+            : webElementTrigger.value
   if (trigger === null) return
   const rect = trigger.getBoundingClientRect()
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
   const preferredWidth = kind === 'options' || kind === 'advanced'
     ? 344
-    : kind === 'command' ? 420 : kind === 'mention' ? 460 : 250
+    : kind === 'command' ? 420 : kind === 'mention' ? 460 : kind === 'webElements' ? 320 : 250
   const width = Math.max(240, Math.min(preferredWidth, viewportWidth - 16))
   const alignedLeft = kind === 'options' || kind === 'advanced' ? rect.right - width : rect.left
   const left = Math.max(8, Math.min(alignedLeft, viewportWidth - width - 8))
@@ -583,6 +622,7 @@ function positionOpenPopovers(): void {
   if (commandOpen.value) positionPopover('command')
   if (mentionOpen.value) positionPopover('mention')
   if (deliveryOpen.value) positionPopover('delivery')
+  if (webElementsOpen.value) positionPopover('webElements')
 }
 
 function closeComposerPopovers(): void {
@@ -596,7 +636,11 @@ function closeComposerPopovers(): void {
 
 function onDocumentPointerdown(event: PointerEvent): void {
   const target = event.target
-  if (!(target instanceof Node) || composerRoot.value?.contains(target)) return
+  if (!(target instanceof Node)) return
+  if (webElementsOpen.value && !(target instanceof Element && target.closest('.composer-web-elements'))) {
+    webElementsOpen.value = false
+  }
+  if (composerRoot.value?.contains(target)) return
   if (optionsOpen.value || advancedOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
@@ -606,7 +650,7 @@ function onDocumentFocusin(event: FocusEvent): void {
   if (optionsOpen.value || advancedOpen.value || commandOpen.value || mentionOpen.value || deliveryOpen.value) closeComposerPopovers()
 }
 
-defineExpose({ loadDraft, insertFileMention, addAttachments })
+defineExpose({ loadDraft, insertFileMention, addAttachments, addWebElements })
 
 function onKeydown(event: KeyboardEvent): void {
   if (
@@ -684,10 +728,11 @@ function onWindowKeydown(event: KeyboardEvent): void {
   if (event.defaultPrevented) return
   if (
     event.key !== 'Escape' ||
-    (!optionsOpen.value && !advancedOpen.value && !commandOpen.value && !mentionOpen.value && !deliveryOpen.value)
+    (!optionsOpen.value && !advancedOpen.value && !commandOpen.value && !mentionOpen.value && !deliveryOpen.value && !webElementsOpen.value)
   ) return
   event.preventDefault()
   closeComposerPopovers()
+  webElementsOpen.value = false
   void nextTick(() => input.value?.focus())
 }
 
@@ -716,7 +761,7 @@ watch(() => props.running, (running) => {
 
 <template>
   <div ref="composerRoot" class="composer-wrap" :class="{ 'is-disabled': disabled }">
-    <div v-if="attachments.length > 0 || attachmentPending" class="composer-attachments" aria-label="待发送附件">
+    <div v-if="attachments.length > 0 || attachmentPending || webElements.length > 0" class="composer-attachments" aria-label="待发送附件">
       <div v-for="file in attachments" :key="file.fileId" class="composer-attachment-chip">
         <PhImage v-if="file.mediaType.startsWith('image/')" :size="15" />
         <PhFile v-else :size="15" />
@@ -724,6 +769,38 @@ watch(() => props.running, (running) => {
         <button type="button" :aria-label="`移除附件 ${file.name}`" @click="removeAttachment(file)"><PhX :size="13" /></button>
       </div>
       <div v-if="attachmentPending" class="composer-attachment-chip is-loading"><PhSpinnerGap class="spin" :size="15" /><span>正在上传到 Kimi…</span></div>
+      <div v-if="webElements.length > 0" class="composer-web-elements" aria-label="网页元素">
+        <button
+          ref="webElementTrigger"
+          type="button"
+          class="composer-web-elements-chip"
+          :aria-expanded="webElementsOpen"
+          aria-haspopup="dialog"
+          aria-controls="composer-web-elements-popup"
+          :aria-label="`${webElements.length} 个网页元素`"
+          @click.stop="toggleWebElements"
+        >
+          <PhCursorClick :size="15" />
+          <span>{{ webElements.length }} 个网页元素</span>
+        </button>
+        <button type="button" class="composer-web-elements-clear" aria-label="移除全部网页元素" @click="clearWebElements"><PhX :size="13" /></button>
+        <div
+          v-if="webElementsOpen"
+          id="composer-web-elements-popup"
+          class="composer-web-elements-popup"
+          role="dialog"
+          aria-label="已选择的网页元素"
+          :style="popoverStyles.webElements"
+        >
+          <div v-for="element in webElements" :key="webElementKey(element)" class="composer-web-element-row">
+            <span class="composer-web-element-text">
+              <strong>{{ element.ariaLabel ?? element.textSnippet }}</strong>
+              <small>{{ element.tag }}{{ element.textSnippet.length > 0 ? ` · ${element.textSnippet}` : '' }}</small>
+            </span>
+            <button type="button" :aria-label="`移除元素 ${element.ariaLabel ?? element.textSnippet}`" @click="removeWebElement(element)"><PhX :size="13" /></button>
+          </div>
+        </div>
+      </div>
     </div>
     <div v-if="attachmentError" class="composer-attachment-error" role="alert">{{ attachmentError }}</div>
     <div class="composer-input-area" :class="{ 'has-selected-skill': selectedSkill !== null }">
@@ -850,7 +927,7 @@ watch(() => props.running, (running) => {
           class="send-button"
           type="button"
           :aria-label="running ? (deliveryMode === 'steer' ? '发送引导' : '加入队列') : '发送任务'"
-          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (selectedSkill === null && value.trim().length === 0 && attachments.length === 0) || (goalMode && selectedSkill === null && value.trim().length === 0)"
+          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (selectedSkill === null && value.trim().length === 0 && attachments.length === 0 && webElements.length === 0) || (goalMode && selectedSkill === null && value.trim().length === 0)"
           @click="submit"
         >
           <PhPaperPlaneTilt :size="19" weight="fill" />

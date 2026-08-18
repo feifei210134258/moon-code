@@ -40,6 +40,34 @@ describe('prompt inputs', () => {
     })).toThrow()
   })
 
+  it('passes picked web elements through with bounds and allows element-only prompts', () => {
+    const webElement = {
+      selector: 'button.save',
+      xpath: '/html/body/button[1]',
+      tag: 'button',
+      ariaLabel: '保存',
+      textSnippet: '保存',
+      rect: { x: 0, y: 0, width: 90, height: 36 },
+      pageUrl: 'preview://workspace/index.html',
+      pageTitle: '预览页',
+      styles: {
+        display: 'inline-block', position: 'static', fontFamily: 'PingFang SC', fontSize: '13px',
+        fontWeight: '600', lineHeight: '1.5', color: '#fff', background: '#1d4ed8',
+        padding: '8px 18px', margin: '0px', border: 'none', borderRadius: '6px'
+      }
+    }
+    expect(validatePromptInput({ text: '改样式', controls, webElements: [webElement] })).toEqual({
+      text: '改样式', controls, webElements: [webElement]
+    })
+    expect(validatePromptInput({ text: '', controls, webElements: [webElement] })).toEqual({
+      text: '', controls, webElements: [webElement]
+    })
+    expect(() => validateSideChatPromptInput({ text: '只检查测试', controls, webElements: [webElement] }))
+      .toThrow('Kimi Side Chat only accepts text prompts')
+    expect(() => validatePromptInput({ text: '继续', controls, webElements: [{ ...webElement, selector: 42 }] }))
+      .toThrow('Invalid picked element selector')
+  })
+
   it('keeps BTW Side Chat text-only at the Main trust boundary', () => {
     expect(validateSideChatPromptInput({ text: '只检查测试', controls })).toEqual({ text: '只检查测试', controls })
     expect(() => validateSideChatPromptInput({

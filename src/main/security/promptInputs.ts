@@ -5,6 +5,7 @@ import type {
   KimiSideChatPromptInput,
   KimiUploadedFile
 } from '../../shared/contracts.js'
+import { sanitizePickedElements } from '../browser/elementPickSanitize.js'
 
 const MAX_PROMPT_TEXT = 200_000
 const MAX_MODEL_ID = 512
@@ -35,13 +36,6 @@ export function validatePromptControls(value: unknown): KimiPromptControls {
 export function validatePromptInput(value: unknown): KimiPromptInput {
   if (!isRecord(value)) throw new TypeError('Invalid Kimi prompt')
   const attachments = value.attachments === undefined ? [] : validatePromptAttachments(value.attachments)
-  if (
-    typeof value.text !== 'string' ||
-    value.text.length > MAX_PROMPT_TEXT ||
-    (value.text.trim().length < 1 && attachments.length === 0)
-  ) {
-    throw new TypeError('Invalid Kimi prompt text')
-  }
   const goalObjective = value.goalObjective
   if (
     goalObjective !== undefined &&
@@ -51,10 +45,23 @@ export function validatePromptInput(value: unknown): KimiPromptInput {
   if (deliveryMode !== undefined && deliveryMode !== 'queue' && deliveryMode !== 'steer') {
     throw new TypeError('Invalid Kimi prompt delivery mode')
   }
+  const webElements = value.webElements === undefined
+    ? undefined
+    : sanitizePickedElements(value.webElements, (item) => String(item), (item) => String(item))
+  const text = value.text
+  const hasWebElements = webElements !== undefined && webElements.length > 0
+  if (
+    typeof text !== 'string' ||
+    text.length > MAX_PROMPT_TEXT ||
+    (text.trim().length < 1 && attachments.length === 0 && !hasWebElements)
+  ) {
+    throw new TypeError('Invalid Kimi prompt text')
+  }
   return {
-    text: value.text,
+    text,
     controls: validatePromptControls(value.controls),
     ...(attachments.length === 0 ? {} : { attachments }),
+    ...(webElements === undefined || webElements.length === 0 ? {} : { webElements }),
     ...(goalObjective === undefined ? {} : { goalObjective: goalObjective.trim() }),
     ...(deliveryMode === undefined ? {} : { deliveryMode })
   }
@@ -62,7 +69,10 @@ export function validatePromptInput(value: unknown): KimiPromptInput {
 
 export function validateSideChatPromptInput(value: unknown): KimiSideChatPromptInput {
   const input = validatePromptInput(value)
-  if (input.attachments !== undefined || input.goalObjective !== undefined || input.deliveryMode !== undefined) {
+  if (
+    input.attachments !== undefined || input.goalObjective !== undefined ||
+    input.deliveryMode !== undefined || input.webElements !== undefined
+  ) {
     throw new TypeError('Kimi Side Chat only accepts text prompts')
   }
   return { text: input.text, controls: input.controls }

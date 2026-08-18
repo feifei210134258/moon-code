@@ -1,4 +1,4 @@
-import type { BrowserNetworkDetails, BrowserViewState } from '@shared/contracts'
+import type { BrowserElementPickResult, BrowserNetworkDetails, BrowserPickedElement, BrowserViewState } from '@shared/contracts'
 
 export const browserFixtureState: BrowserViewState = {
   url: 'preview://workspace-1/dist/index.html',
@@ -32,4 +32,47 @@ export const browserFixtureDetails: BrowserNetworkDetails = {
   body: 'console.log("Preview ready")',
   bodyTruncated: false,
   bodyUnavailableReason: null
+}
+
+/* 页内选择器 fixture：让「选择网页元素」→ 聚合 chip 的流程不依赖真实注入通道即可演示。 */
+export const browserPickElementsFixture: BrowserPickedElement[] = [
+  {
+    selector: '.hero h1',
+    xpath: '//h1',
+    tag: 'h1',
+    ariaLabel: null,
+    textSnippet: 'Moon Code 预览',
+    rect: { x: 24, y: 48, width: 320, height: 42 },
+    pageUrl: 'preview://workspace-1/dist/index.html',
+    pageTitle: 'Moon Code Preview',
+    styles: {
+      display: 'block',
+      position: 'static',
+      fontFamily: 'PingFang SC',
+      fontSize: '28px',
+      fontWeight: '600',
+      lineHeight: '1.2',
+      color: 'rgb(17, 24, 39)',
+      background: 'rgba(0, 0, 0, 0)',
+      padding: '0px',
+      margin: '0px',
+      border: 'none',
+      borderRadius: '0px'
+    }
+  },
+  {
+    selector: 'button[aria-label="开始"]',
+    xpath: '//button[1]',
+    tag: 'button',
+    ariaLabel: '开始',
+    textSnippet: '开始',
+    rect: { x: 24, y: 104, width: 96, height: 36 },
+    pageUrl: 'preview://workspace-1/dist/index.html',
+    pageTitle: 'Moon Code Preview'
+  }
+]
+
+export const browserPickElementsResult: BrowserElementPickResult = {
+  cancelled: false,
+  elements: browserPickElementsFixture
 }

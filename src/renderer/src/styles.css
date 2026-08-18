@@ -804,8 +804,7 @@ select:focus-visible {
 }
 
 /* The search shell owns the focus indicator; never draw a second focused field inside it. */
-.session-search input:focus-visible,
-.browser-address input:focus-visible {
+.session-search input:focus-visible {
   outline: 0;
   box-shadow: none;
 }
@@ -2730,6 +2729,113 @@ select:focus-visible {
 .composer-attachment-chip > button:hover { color: var(--red); background: rgba(183, 72, 72, 0.07); }
 .composer-attachment-chip.is-loading { grid-template-columns: auto auto; color: var(--muted); font-size: var(--type-caption-size); }
 .composer-attachment-error { margin: -3px 0 7px; color: var(--red); font-size: var(--type-micro-size); }
+
+.composer-web-elements {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 38px;
+  padding: 4px 5px 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.composer-web-elements-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: var(--type-caption-size)/1.2 var(--font-sans);
+}
+
+.composer-web-elements-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-web-elements-chip[aria-expanded='true'] svg { color: var(--accent); }
+
+.composer-web-elements-clear {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--faint);
+  background: transparent;
+  cursor: pointer;
+}
+
+.composer-web-elements-clear:hover { color: var(--red); background: rgba(183, 72, 72, 0.07); }
+
+.composer-web-elements-popup {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+}
+
+.composer-web-element-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 6px 8px;
+  border-radius: 8px;
+}
+
+.composer-web-element-row:hover { background: rgba(0, 0, 0, 0.04); }
+
+.composer-web-element-text {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.composer-web-element-text strong,
+.composer-web-element-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-web-element-text strong {
+  color: var(--text);
+  font-size: var(--type-caption-size);
+  font-weight: 600;
+}
+
+.composer-web-element-text small { color: var(--faint); font-size: var(--type-micro-size); }
+
+.composer-web-element-row > button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--faint);
+  background: transparent;
+  cursor: pointer;
+}
+
+.composer-web-element-row > button:hover { color: var(--red); background: rgba(183, 72, 72, 0.07); }
 
 .composer-stack {
   position: relative;
@@ -5272,22 +5378,17 @@ body.is-panel-resizing {
   padding: 8px 10px 12px;
 }
 
-.browser-toolbar,
 .browser-options {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-.browser-options {
   overflow-x: auto;
   scrollbar-width: none;
 }
 
 .browser-options::-webkit-scrollbar { display: none; }
 
-.browser-toolbar > button,
 .browser-options button,
 .browser-diagnostics > header button {
   min-width: 28px;
@@ -5304,41 +5405,23 @@ body.is-panel-resizing {
   font: var(--type-micro-size)/1.2 var(--font-sans);
 }
 
-.browser-toolbar > button:disabled,
 .browser-options button:disabled {
   cursor: default;
   opacity: 0.38;
 }
 
-.browser-address {
-  min-width: 0;
-  flex: 1;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  background: #ffffff;
+.browser-options .browser-open-external span {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.18s ease, opacity 0.18s ease;
 }
 
-.browser-address:focus-within {
-  border-color: var(--input-focus-border);
-  box-shadow: var(--focus-ring);
-}
-
-.browser-address input {
-  min-width: 0;
-  width: 100%;
-  -webkit-appearance: none;
-  appearance: none;
-  border: 0;
-  outline: 0;
-  box-shadow: none;
-  color: var(--text);
-  background: transparent;
-  font: var(--type-micro-size)/1.2 var(--font-mono);
+.browser-options .browser-open-external:hover span,
+.browser-options .browser-open-external:focus-visible span {
+  max-width: 7.5em;
+  opacity: 1;
 }
 
 .browser-options {
@@ -5400,164 +5483,7 @@ body.is-panel-resizing {
   min-height: 0;
 }
 
-.browser-overlay-backdrop {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-  background: #ffffff;
-}
 
-.browser-annotation-target {
-  position: absolute;
-  z-index: 2;
-  box-sizing: border-box;
-  border: 2px solid var(--accent);
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.08);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
-  pointer-events: none;
-}
-
-.browser-annotation-target.is-region {
-  border-style: dashed;
-  border-radius: 2px;
-}
-
-.browser-annotation-popover,
-.browser-capture-popover,
-.browser-annotation-reopen {
-  position: absolute;
-  z-index: 4;
-  border: 0;
-  background: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.browser-annotation-popover {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 18px;
-}
-
-.browser-annotation-popover > header,
-.browser-annotation-popover > footer,
-.browser-capture-popover figcaption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.browser-annotation-popover > header strong {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--accent);
-  font-size: var(--type-micro-size);
-}
-
-.browser-annotation-popover > header button,
-.browser-capture-popover button {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  color: var(--muted);
-  background: transparent;
-  cursor: pointer;
-}
-
-.browser-annotation-popover > header button:hover,
-.browser-capture-popover button:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.browser-annotation-popover > p {
-  margin: -3px 0 0;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-}
-
-.browser-annotation-popover textarea {
-  width: 100%;
-  min-height: 60px;
-  resize: vertical;
-  padding: 8px 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  color: var(--text);
-  background: #ffffff;
-  font: var(--type-caption-size)/1.45 var(--font-sans);
-}
-
-.browser-annotation-popover textarea:focus {
-  border-color: var(--input-focus-border);
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.browser-annotation-popover > footer button {
-  height: 29px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-  font-size: var(--type-micro-size);
-}
-
-.browser-annotation-popover > footer button.is-primary {
-  margin-left: auto;
-  border-color: rgba(0, 0, 0, 0.17);
-  color: white;
-  background: var(--accent);
-}
-
-.browser-annotation-popover > footer button:disabled { cursor: default; opacity: 0.5; }
-
-.browser-annotation-reopen {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 32px;
-  padding: 0 11px;
-  border-radius: 16px;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: var(--type-micro-size);
-}
-
-.browser-capture-popover {
-  right: 12px;
-  bottom: 12px;
-  width: min(190px, 42%);
-  margin: 0;
-  overflow: hidden;
-  border-radius: 11px;
-}
-
-.browser-capture-popover figcaption {
-  min-height: 29px;
-  padding: 0 5px 0 8px;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-}
-
-.browser-capture-popover img {
-  display: block;
-  width: 100%;
-  max-height: 150px;
-  object-fit: contain;
-  border-top: 1px solid var(--border);
-  background: white;
-}
 
 .browser-empty {
   position: absolute;
@@ -5648,131 +5574,10 @@ body.is-panel-resizing {
 }
 
 .browser-console,
-.browser-network,
-.browser-capture-preview,
-.browser-annotations {
+.browser-network {
   min-height: 0;
   overflow: auto;
 }
-
-.browser-annotations {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 7px;
-}
-
-.browser-annotations > p {
-  margin: 0;
-  padding: 18px 8px;
-  color: var(--muted);
-  text-align: center;
-}
-
-.browser-annotation-card {
-  display: grid;
-  gap: 7px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #ffffff;
-}
-
-.browser-annotation-card > header,
-.browser-annotation-card > footer,
-.browser-annotation-options {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.browser-annotation-card > header,
-.browser-annotation-card > footer {
-  justify-content: space-between;
-}
-
-.browser-annotation-card > header span {
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-}
-
-.browser-annotation-card > img {
-  width: 100%;
-  max-height: 132px;
-  object-fit: contain;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: #fff;
-}
-
-.browser-annotation-card > label {
-  display: grid;
-  gap: 4px;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-}
-
-.browser-annotation-card input:not([type='checkbox']),
-.browser-annotation-card textarea {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--text);
-  background: #ffffff;
-  font: var(--type-micro-size)/1.4 var(--font-sans);
-}
-
-.browser-annotation-card input:not([type='checkbox']):focus,
-.browser-annotation-card textarea:focus {
-  border-color: var(--input-focus-border);
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.browser-annotation-card input:not([type='checkbox']) { height: 27px; padding: 0 7px; }
-.browser-annotation-card textarea { resize: vertical; min-height: 54px; padding: 6px 7px; }
-
-.browser-annotation-card > code,
-.browser-annotation-card > p {
-  overflow-wrap: anywhere;
-  margin: 0;
-  padding: 5px 6px;
-  border-radius: 6px;
-  color: var(--text);
-  background: rgba(0, 0, 0, 0.04);
-  font: var(--type-micro-size)/1.4 var(--font-mono);
-}
-
-.browser-annotation-options {
-  flex-wrap: wrap;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-}
-
-.browser-annotation-options label {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.browser-annotation-card > footer button {
-  height: 27px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.72);
-  cursor: pointer;
-  font-size: var(--type-micro-size);
-}
-
-.browser-annotation-card > footer button.is-primary {
-  margin-left: auto;
-  border-color: rgba(0, 0, 0, 0.17);
-  color: white;
-  background: var(--accent);
-}
-
-.browser-annotation-card > footer button:disabled { cursor: default; opacity: 0.5; }
 
 .browser-console > div {
   display: grid;
@@ -5883,27 +5688,6 @@ body.is-panel-resizing {
   background: rgba(0, 0, 0, 0.04);
   font: var(--type-micro-size)/1.4 var(--font-mono);
   white-space: pre-wrap;
-}
-
-.browser-capture-preview {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 6px;
-  padding: 7px;
-}
-
-.browser-capture-preview header {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
-}
-
-.browser-capture-preview img {
-  width: 100%;
-  min-height: 0;
-  object-fit: contain;
-  border-radius: 6px;
-  background: #fff;
 }
 
 .runtime-connect-backdrop {

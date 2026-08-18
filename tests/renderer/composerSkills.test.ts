@@ -80,7 +80,7 @@ describe('ComposerBar Skills menu', () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('textarea').setValue('/unknown continue')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['/unknown continue', [], controls, false, 'queue']])
+    expect(wrapper.emitted('submit')).toEqual([['/unknown continue', [], controls, false, 'queue', []]])
   })
 
   it('filters slash commands as the user types and shows a Chinese empty state', async () => {
@@ -127,7 +127,7 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.get('.delivery-trigger').text()).toContain('排队')
     await wrapper.get('textarea').setValue('继续检查测试')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['继续检查测试', [], controls, false, 'queue']])
+    expect(wrapper.emitted('submit')).toEqual([['继续检查测试', [], controls, false, 'queue', []]])
 
     await wrapper.get('.delivery-trigger').trigger('click')
     expect(wrapper.get('.delivery-popover').text()).toContain('引导当前任务')
@@ -137,8 +137,8 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('textarea').setValue('先不要收尾，补充检查边界情况')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('submit')).toEqual([
-      ['继续检查测试', [], controls, false, 'queue'],
-      ['先不要收尾，补充检查边界情况', [], controls, false, 'steer']
+      ['继续检查测试', [], controls, false, 'queue', []],
+      ['先不要收尾，补充检查边界情况', [], controls, false, 'steer', []]
     ])
     await wrapper.get('.stop-button').trigger('click')
     expect(wrapper.emitted('abort')).toEqual([[]])
@@ -267,7 +267,7 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.get('.composer-attachment-chip').text()).toContain('design.png')
     await wrapper.get('textarea').setValue('看看这里')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['看看这里', [attachment], controls, false, 'queue']])
+    expect(wrapper.emitted('submit')).toEqual([['看看这里', [attachment], controls, false, 'queue', []]])
   })
 
   it('matches Kimi Web file mentions with debounced search, keyboard selection, and path insertion', async () => {
@@ -291,7 +291,7 @@ describe('ComposerBar Skills menu', () => {
 
     await wrapper.get('textarea').setValue('docs/adr 检查')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['docs/adr 检查', [], controls, false, 'queue']])
+    expect(wrapper.emitted('submit')).toEqual([['docs/adr 检查', [], controls, false, 'queue', []]])
   })
 
   it('distinguishes mention-search failure from no results and supports retry', async () => {

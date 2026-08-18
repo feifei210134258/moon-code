@@ -1,19 +1,10 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import {
-  ipcErrorMessage,
-  toCloneableBrowserAnnotationInput,
-  toCloneablePromptControls
-} from '../utils/ipcPayloads'
 import type {
-  BrowserAnnotationDraft,
-  BrowserAnnotationMode,
-  BrowserAnnotationSubmitInput,
   BrowserBounds,
-  BrowserCaptureResult,
   BrowserNetworkDetails,
+  BrowserPickedElement,
   BrowserViewState,
-  BrowserViewport,
-  KimiPromptControls
+  BrowserViewport
 } from '@shared/contracts'
 
 export function useBrowserBridge() {
@@ -22,24 +13,18 @@ export function useBrowserBridge() {
   const error = ref<string | null>(null)
   const networkDetails = ref<BrowserNetworkDetails | null>(null)
   const networkDetailsPending = ref(false)
-  const capture = ref<BrowserCaptureResult | null>(null)
-  const annotationBackdrop = ref<BrowserCaptureResult | null>(null)
+  const elementPicking = ref(false)
   const localServers = ref<string[]>([])
   const localServersPending = ref(false)
-  const annotationDrafts = ref<BrowserAnnotationDraft[]>([])
-  const annotationPicking = ref(false)
-  const annotationSubmitting = ref(false)
-  const annotationError = ref<string | null>(null)
   let localServersDiscovered = false
   let unsubscribe: (() => void) | undefined
   let detailsGeneration = 0
+  let pickArmed = false
 
   const clearPageArtifacts = (): void => {
     detailsGeneration += 1
     networkDetails.value = null
     networkDetailsPending.value = false
-    capture.value = null
-    annotationBackdrop.value = null
   }
 
   const runStateOperation = async (operation: () => Promise<BrowserViewState>): Promise<void> => {
@@ -79,16 +64,6 @@ export function useBrowserBridge() {
     }
   }
 
-  /* 弹层（批注编辑/截图预览）打开时让主进程摘下原生 guest 视图，避免 DOM 被遮挡。 */
-  const setOverlay = async (open: boolean): Promise<void> => {
-    if (window.kimiAgent === undefined) return
-    try {
-      await window.kimiAgent.setBrowserOverlay(open)
-    } catch (reason) {
-      error.value = errorMessage(reason)
-    }
-  }
-
   const setVisible = async (visible: boolean): Promise<void> => {
     if (window.kimiAgent === undefined) return
     try {
@@ -102,7 +77,6 @@ export function useBrowserBridge() {
   const setWorkspaceScope = async (scope: string | null): Promise<void> => {
     if (window.kimiAgent === undefined) return
     clearPageArtifacts()
-    annotationDrafts.value = []
     try {
       state.value = await window.kimiAgent.setBrowserWorkspace(scope)
     } catch (reason) {
@@ -149,19 +123,6 @@ export function useBrowserBridge() {
     }
   }
 
-  const capturePage = async (fullPage: boolean): Promise<void> => {
-    if (window.kimiAgent === undefined || pending.value) return
-    pending.value = true
-    error.value = null
-    try {
-      capture.value = await window.kimiAgent.captureBrowser(fullPage)
-    } catch (reason) {
-      error.value = errorMessage(reason)
-    } finally {
-      pending.value = false
-    }
-  }
-
   const openExternal = async (): Promise<void> => {
     if (window.kimiAgent === undefined) return
     try {
@@ -171,61 +132,31 @@ export function useBrowserBridge() {
     }
   }
 
-  const pickAnnotation = async (mode: BrowserAnnotationMode): Promise<void> => {
-    if (window.kimiAgent === undefined || annotationPicking.value || state.value.url.length === 0) return
-    annotationPicking.value = true
-    annotationError.value = null
+  /* 页内点选元素：保持会话循环，每次点击注入的选择器在页内直接返回一个元素并立即回调，
+     直到 Esc / 工具栏切换 / 导航等原因取消；真实错误上抛到 error 并结束会话。 */
+  const pickElements = async (onElements: (elements: BrowserPickedElement[]) => void): Promise<void> => {
+    if (window.kimiAgent === undefined || elementPicking.value || state.value.url.length === 0) return
+    elementPicking.value = true
+    error.value = null
+    pickArmed = true
     try {
-      const draft = await window.kimiAgent.pickBrowserAnnotation(mode)
-      // 原生 BrowserView 必须在 DOM 批注层显示时暂时摘下；先捕获页面快照，
-      // 以保持批注时的页面上下文，捕获失败时至少展示选中区域。
-      try {
-        annotationBackdrop.value = await window.kimiAgent.captureBrowser(false)
-      } catch {
-        annotationBackdrop.value = { ...draft.screenshot }
+      while (pickArmed) {
+        const result = await window.kimiAgent.pickBrowserElements()
+        if (result.cancelled) break
+        if (result.elements.length > 0) onElements(result.elements)
       }
-      annotationDrafts.value = [...annotationDrafts.value, draft]
     } catch (reason) {
       const message = errorMessage(reason)
-      if (!message.includes('Annotation selection cancelled')) annotationError.value = message
+      if (!message.includes('cancelled')) error.value = message
     } finally {
-      annotationPicking.value = false
+      elementPicking.value = false
+      pickArmed = false
     }
   }
 
-  const deleteAnnotation = async (draftId: string): Promise<void> => {
-    if (window.kimiAgent === undefined) return
-    annotationError.value = null
-    try {
-      await window.kimiAgent.deleteBrowserAnnotation(draftId)
-      annotationDrafts.value = annotationDrafts.value.filter((draft) => draft.id !== draftId)
-      if (annotationDrafts.value.length === 0) annotationBackdrop.value = null
-    } catch (reason) {
-      annotationError.value = errorMessage(reason)
-    }
-  }
-
-  const submitAnnotation = async (
-    sessionId: string,
-    input: BrowserAnnotationSubmitInput,
-    controls: KimiPromptControls
-  ): Promise<void> => {
-    if (window.kimiAgent === undefined || annotationSubmitting.value || sessionId.length === 0) return
-    annotationSubmitting.value = true
-    annotationError.value = null
-    try {
-      await window.kimiAgent.submitBrowserAnnotation(
-        sessionId,
-        toCloneableBrowserAnnotationInput(input),
-        toCloneablePromptControls(controls)
-      )
-      annotationDrafts.value = annotationDrafts.value.filter((draft) => draft.id !== input.draftId)
-      if (annotationDrafts.value.length === 0) annotationBackdrop.value = null
-    } catch (reason) {
-      annotationError.value = ipcErrorMessage(reason)
-    } finally {
-      annotationSubmitting.value = false
-    }
+  const stopPicking = (): void => {
+    pickArmed = false
+    void window.kimiAgent?.cancelBrowserElementPick()
   }
 
   onMounted(() => {
@@ -242,14 +173,9 @@ export function useBrowserBridge() {
     error,
     networkDetails,
     networkDetailsPending,
-    capture,
-    annotationBackdrop,
+    elementPicking,
     localServers,
     localServersPending,
-    annotationDrafts,
-    annotationPicking,
-    annotationSubmitting,
-    annotationError,
     openHtml,
     navigate,
     back,
@@ -257,17 +183,14 @@ export function useBrowserBridge() {
     reload,
     stop,
     setBounds,
-    setOverlay,
     setVisible,
     setWorkspaceScope,
     setViewport,
     clearConsole,
     clearNetwork,
     loadNetworkDetails,
-    capturePage,
-    pickAnnotation,
-    deleteAnnotation,
-    submitAnnotation,
+    pickElements,
+    stopPicking,
     openExternal,
     discoverLocalServers
   }

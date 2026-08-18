@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { constants } from 'node:fs'
+import { constants, watch, type FSWatcher } from 'node:fs'
 import { open, realpath, stat, type FileHandle } from 'node:fs/promises'
 import { createServer, type Server, type ServerResponse } from 'node:http'
 import { dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
@@ -7,17 +7,33 @@ import { validateWorkspacePath } from '../security/workspaceInputs.js'
 
 const MAX_PREVIEW_PATH = 4_096
 const PREVIEW_CAPABILITY_HEADER = 'x-kimi-preview-capability'
+const PREVIEW_TICKET_PARAM = 'kimi-preview-ticket'
+const PREVIEW_CAPABILITY_COOKIE = '__kimi_preview_cap'
 const PUBLISH_ROOT_MARKERS = new Set(['dist', 'build', 'out', 'public', 'site', 'www'])
 const PUBLISHABLE_EXTENSIONS = new Set([
   '.html', '.htm', '.css', '.js', '.mjs', '.json', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp',
   '.avif', '.ico', '.woff', '.woff2', '.ttf', '.otf', '.txt', '.xml', '.wasm', '.mp3', '.mp4', '.webm'
 ])
+const DEFAULT_WATCH_DEBOUNCE_MS = 280
+
+export interface WorkspacePreviewServerOptions {
+  /** 文件变更事件的去抖窗口；测试可调短。 */
+  watchDebounceMs?: number
+}
 
 export class WorkspacePreviewServer {
   readonly #token = randomBytes(24).toString('hex')
   readonly #roots = new Map<string, string>()
+  readonly #watchDebounceMs: number
   #server: Server | null = null
   #port: number | null = null
+  #watcher: FSWatcher | null = null
+  #watchTimer: NodeJS.Timeout | null = null
+  #watchOnChange: (() => void) | null = null
+
+  constructor(options: WorkspacePreviewServerOptions = {}) {
+    this.#watchDebounceMs = options.watchDebounceMs ?? DEFAULT_WATCH_DEBOUNCE_MS
+  }
 
   async open(workspaceRoot: string, workspacePath: string): Promise<string> {
     const safePath = validateWorkspacePath(workspacePath)
@@ -59,7 +75,98 @@ export class WorkspacePreviewServer {
     }
   }
 
+  /**
+   * 给“在默认浏览器中打开”使用：外部浏览器无法注入 capability 请求头，
+   * 因此为已发布的预览 URL 附加会话票据；预览服校验后换成 HttpOnly cookie
+   * 并跳转去参，后续子资源请求凭 cookie 通过鉴权。非预览 URL 返回 null。
+   */
+  externalUrlFor(url: string): string | null {
+    if (this.#port === null) return null
+    try {
+      const parsed = new URL(url)
+      const match = /^([a-f0-9]{16})\.localhost$/.exec(parsed.hostname.toLowerCase())
+      if (
+        parsed.protocol !== 'http:' || Number(parsed.port) !== this.#port || match === null ||
+        !this.#roots.has(match[1]!)
+      ) return null
+      parsed.searchParams.set(PREVIEW_TICKET_PARAM, this.#token)
+      return parsed.toString()
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 监听当前预览 URL 的发布根目录的文件变更（去抖后回调 onChange），用于
+   * 自动刷新预览。url 为 null 或不是已注册的预览来源时停止监听；同一时刻
+   * 只保留一个 watcher，重复调用会替换旧的。递归 fs.watch 在当前产品目标
+   * （macOS/Windows）可用，创建失败时静默降级，绝不影响预览本身。
+   */
+  watchForUrl(url: string | null, onChange: () => void): void {
+    this.#watchOnChange = onChange
+    const root = url === null ? null : this.#publishRootForUrl(url)
+    if (root === null) {
+      this.#stopWatching()
+      return
+    }
+    if (this.#watchTimer !== null) clearTimeout(this.#watchTimer)
+    this.#watchTimer = null
+    if (this.#watcher !== null) {
+      this.#watcher.close()
+      this.#watcher = null
+    }
+    try {
+      const startedAt = Date.now()
+      this.#watcher = watch(root, { recursive: true }, (_eventType, filename) => {
+        // 递归 watch 注册瞬间会回放目录现有内容（并非真实变更），用一个去抖窗口的宽限期跳过。
+        if (Date.now() - startedAt < this.#watchDebounceMs) return
+        if (filename === null) return
+        const eventPath = isAbsolute(filename) ? filename : join(root, filename)
+        // macOS 递归 watch 会为任何变更额外发一条以被监听目录自身为名的
+        // change 事件（归因不到具体文件，且常因点文件变更触发），真正的
+        // 文件级事件总会紧随其后，因此直接跳过目录自身事件。
+        if (eventPath === root) return
+        if (hasDotfileSegment(relative(root, eventPath))) return
+        if (this.#watchTimer !== null) clearTimeout(this.#watchTimer)
+        const onChangeNow = this.#watchOnChange ?? onChange
+        this.#watchTimer = setTimeout(() => {
+          this.#watchTimer = null
+          onChangeNow()
+        }, this.#watchDebounceMs)
+        this.#watchTimer.unref()
+      })
+    } catch {
+      // 平台不支持递归 watch（如 Linux）：预览照常，只是不自动刷新。
+      this.#watcher = null
+    }
+  }
+
+  /** 与 authorizationHeadersFor 相同的来源匹配逻辑，返回发布的根目录；非预览 URL 返回 null。 */
+  #publishRootForUrl(url: string): string | null {
+    if (this.#port === null) return null
+    try {
+      const parsed = new URL(url)
+      const match = /^([a-f0-9]{16})\.localhost$/.exec(parsed.hostname.toLowerCase())
+      if (
+        parsed.protocol !== 'http:' || Number(parsed.port) !== this.#port || match === null
+      ) return null
+      return this.#roots.get(match[1]!) ?? null
+    } catch {
+      return null
+    }
+  }
+
+  #stopWatching(): void {
+    if (this.#watchTimer !== null) clearTimeout(this.#watchTimer)
+    this.#watchTimer = null
+    if (this.#watcher !== null) {
+      this.#watcher.close()
+      this.#watcher = null
+    }
+  }
+
   async close(): Promise<void> {
+    this.#stopWatching()
     const server = this.#server
     this.#server = null
     this.#port = null
@@ -78,6 +185,7 @@ export class WorkspacePreviewServer {
         request.method ?? 'GET',
         request.headers.host,
         request.headers[PREVIEW_CAPABILITY_HEADER],
+        request.headers.cookie,
         request.url,
         request.socket.remoteAddress,
         response
@@ -104,6 +212,7 @@ export class WorkspacePreviewServer {
     method: string,
     rawHost: string | undefined,
     rawCapability: string | string[] | undefined,
+    rawCookie: string | string[] | undefined,
     rawUrl: string | undefined,
     remoteAddress: string | undefined,
     response: ServerResponse
@@ -111,7 +220,15 @@ export class WorkspacePreviewServer {
     applySecurityHeaders(response)
     if (!isLoopback(remoteAddress)) return sendText(response, 403, 'Forbidden')
     if (method !== 'GET' && method !== 'HEAD') return sendText(response, 405, 'Method not allowed')
+    const ticket = ticketFromUrl(rawUrl)
+    if (ticket !== null) {
+      if (ticket !== this.#token || this.#rootIdForHost(rawHost) === null) {
+        return sendText(response, 403, 'Invalid preview capability')
+      }
+      return this.#acceptTicket(rawUrl, response)
+    }
     const root = this.#rootForHost(rawHost, rawCapability)
+      ?? this.#rootForHost(rawHost, cookieCapability(rawCookie) ?? undefined)
     if (root === null) return sendText(response, 403, 'Invalid preview capability')
     const pathname = parsePathname(rawUrl)
     if (pathname === null) return sendText(response, 400, 'Invalid preview path')
@@ -188,10 +305,29 @@ export class WorkspacePreviewServer {
     rawHost: string | undefined,
     rawCapability: string | string[] | undefined
   ): string | null {
-    if (rawHost === undefined || rawCapability !== this.#token) return null
+    if (rawCapability !== this.#token) return null
+    const rootId = this.#rootIdForHost(rawHost)
+    return rootId === null ? null : this.#roots.get(rootId) ?? null
+  }
+
+  #rootIdForHost(rawHost: string | undefined): string | null {
+    if (rawHost === undefined) return null
     const hostname = rawHost.replace(/:\d+$/, '').toLowerCase()
     const match = /^([a-f0-9]{16})\.localhost$/.exec(hostname)
-    return match === null ? null : this.#roots.get(match[1]!) ?? null
+    return match !== null && this.#roots.has(match[1]!) ? match[1]! : null
+  }
+
+  /** 票据校验通过：种下 HttpOnly cookie 并 302 跳转到去参后的地址。 */
+  #acceptTicket(rawUrl: string | undefined, response: ServerResponse): void {
+    const url = new URL(rawUrl ?? '/', 'http://preview.local')
+    url.searchParams.delete(PREVIEW_TICKET_PARAM)
+    response.statusCode = 302
+    response.setHeader('location', `${url.pathname}${url.search}`)
+    response.setHeader(
+      'set-cookie',
+      `${PREVIEW_CAPABILITY_COOKIE}=${this.#token}; Path=/; SameSite=Lax; HttpOnly`
+    )
+    response.end()
   }
 }
 
@@ -261,9 +397,32 @@ function parsePathname(rawUrl: string | undefined): string | null {
   }
 }
 
+function ticketFromUrl(rawUrl: string | undefined): string | null {
+  if (rawUrl === undefined || rawUrl.length > MAX_PREVIEW_PATH * 3) return null
+  try {
+    return new URL(rawUrl, 'http://preview.local').searchParams.get(PREVIEW_TICKET_PARAM)
+  } catch {
+    return null
+  }
+}
+
+function cookieCapability(rawCookie: string | string[] | undefined): string | null {
+  const header = Array.isArray(rawCookie) ? rawCookie.join(';') : rawCookie
+  if (header === undefined) return null
+  for (const part of header.split(';')) {
+    const [name, ...rest] = part.trim().split('=')
+    if (name === PREVIEW_CAPABILITY_COOKIE) return rest.join('=')
+  }
+  return null
+}
+
 function isInside(root: string, target: string): boolean {
   const offset = relative(root, target)
   return offset === '' || (!offset.startsWith(`..${sep}`) && offset !== '..' && !isAbsolute(offset))
+}
+
+function hasDotfileSegment(path: string): boolean {
+  return path.split(/[\\/]/).some((segment) => segment.startsWith('.'))
 }
 
 function isLoopback(value: string | undefined): boolean {

@@ -98,6 +98,8 @@ const snapshot: KimiSettingsSnapshot = {
 }
 
 export function installSettingsApiFixture(): void {
+  /* 点选轮询 fixture 先返回一次元素，之后按取消结束会话，避免纯前端调试时循环空转。 */
+  let browserPickRounds = 0
   const api = {
     getBootstrapState: async () => ({
       appVersion: '0.2.0',
@@ -139,6 +141,12 @@ export function installSettingsApiFixture(): void {
       ],
       hasMoreMessages: false, resyncCount: 0, unknownEventCount: 0, error: null
     }),
+    getSessionWarnings: async () => [],
+    getSessionRuntimeStatus: async () => ({
+      busy: false, model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
+      planMode: false, swarmMode: false, contextTokens: 4200, maxContextTokens: 262_144, contextUsage: 0.02
+    }),
+    getSessionOperationalState: async () => ({ goal: null, tasks: [], prompts: { active: null, queued: [] } }),
     listFiles: async () => ({ path: '.', items: [], truncated: false }),
     listWorkspaceFiles: async () => ({ path: '.', items: [], truncated: false }),
     getGitStatus: async () => ({
@@ -237,6 +245,7 @@ export function installSettingsApiFixture(): void {
     ],
     restartMcpServer: async () => ({ restarting: true as const }),
     openHtmlPreview: async () => browserState(),
+    setBrowserWorkspace: async (_scope: string | null) => browserState(),
     navigateBrowser: async () => browserState(),
     browserBack: async () => browserState(),
     browserForward: async () => browserState(),
@@ -244,7 +253,6 @@ export function installSettingsApiFixture(): void {
     browserStop: async () => browserState(),
     setBrowserBounds: async () => undefined,
     setBrowserVisible: async (visible: boolean) => ({ ...browserState(), visible }),
-    setBrowserOverlay: async () => undefined,
     setBrowserViewport: async () => browserState(),
     clearBrowserConsole: async () => browserState(),
     clearBrowserNetwork: async () => browserState(),
@@ -252,24 +260,21 @@ export function installSettingsApiFixture(): void {
       requestId, requestHeaders: {}, responseHeaders: {}, body: null,
       bodyTruncated: false, bodyUnavailableReason: 'fixture'
     }),
-    captureBrowser: async (fullPage: boolean) => ({
-      dataUrl: 'data:image/png;base64,AA==', width: 1, height: 1, fullPage
-    }),
-    pickBrowserAnnotation: async (mode: 'element' | 'region') => ({
-      id: 'fixture-annotation',
-      annotation: {
-        schemaVersion: 1 as const,
-        page: { url: 'preview://fixture/index.html', title: 'Fixture', viewport: { width: 800, height: 600, dpr: 1 } },
-        target: { kind: mode, rect: { x: 20, y: 20, width: 180, height: 80 } },
-        comment: '',
-        capturedAt: new Date().toISOString()
-      },
-      screenshot: { dataUrl: 'data:image/png;base64,AA==', width: 196, height: 96, fullPage: false }
-    }),
-    deleteBrowserAnnotation: async () => undefined,
-    submitBrowserAnnotation: async () => ({
-      promptId: 'fixture-prompt', userMessageId: 'fixture-message', status: 'running' as const
-    }),
+    pickBrowserElements: async () => {
+      browserPickRounds += 1
+      if (browserPickRounds > 1) return { cancelled: true, elements: [] }
+      return {
+        cancelled: false,
+        elements: [
+          {
+            selector: 'h1', xpath: '/html/body/h1', tag: 'h1', ariaLabel: null,
+            textSnippet: 'Fixture heading', rect: { x: 20, y: 20, width: 180, height: 32 },
+            pageUrl: 'preview://fixture/index.html', pageTitle: 'Fixture'
+          }
+        ]
+      }
+    },
+    cancelBrowserElementPick: async () => undefined,
     openBrowserExternal: async () => ({ opened: true as const }),
     discoverBrowserLocalServers: async () => [],
     onRuntimeStateChanged: () => () => {},
@@ -292,7 +297,8 @@ export function installSettingsApiFixture(): void {
 
 function browserState() {
   return {
-    url: '', title: '', loading: false, canGoBack: false, canGoForward: false, visible: false,
+    url: 'preview://workspace-1/dist/index.html', title: 'Moon Code Preview', loading: false,
+    canGoBack: false, canGoForward: false, visible: true,
     viewport: { mode: 'auto' as const, width: null, height: null, deviceScaleFactor: 1 },
     consoleEntries: [], networkEntries: [], error: null
   }

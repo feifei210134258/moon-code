@@ -5,6 +5,7 @@ import type { ChatTurn, ProjectItem } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
 import type {
   ApprovalRequestView,
+  BrowserPickedElement,
   KimiModelCatalogItem,
   KimiAgentTranscript,
   KimiPromptQueueState,
@@ -107,7 +108,8 @@ const emit = defineEmits<{
     attachments: KimiUploadedFile[],
     controls: KimiPromptControls,
     goalMode: boolean,
-    deliveryMode: 'queue' | 'steer'
+    deliveryMode: 'queue' | 'steer',
+    webElements: BrowserPickedElement[]
   ]
   abort: []
   selectDraftWorkspace: [workspaceId: string]
@@ -283,6 +285,10 @@ function attachFiles(files: KimiUploadedFile[]): void {
   composer.value?.addAttachments(files)
 }
 
+function addWebElements(elements: BrowserPickedElement[]): void {
+  composer.value?.addWebElements(elements)
+}
+
 function scrollToTurn(turnId: string): void {
   document.getElementById(turnDomId(turnId))?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 }
@@ -378,7 +384,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', closeOutputMenuOnEscape)
 })
 
-defineExpose({ focusFromPet, loadPromptDraft, insertFileMention, attachFiles })
+defineExpose({ focusFromPet, loadPromptDraft, insertFileMention, attachFiles, addWebElements })
 
 watch(
   () => props.phase,
@@ -649,7 +655,7 @@ watch(
         :goal-mode="goalMode"
         :mention-search="mentionSearch"
         :disabled-reason="controlsPending ? '正在读取 Kimi 会话控制…' : '连接 Kimi 并选择一个会话后即可输入'"
-        @submit="(text, attachments, controls, goalMode, deliveryMode) => emit('submit', text, attachments, controls, goalMode, deliveryMode)"
+        @submit="(text, attachments, controls, goalMode, deliveryMode, webElements) => emit('submit', text, attachments, controls, goalMode, deliveryMode, webElements)"
         @abort="emit('abort')"
         @activate-skill="(skillName, args) => emit('activateSkill', skillName, args)"
         @update-controls="emit('updatePromptControls', $event)"

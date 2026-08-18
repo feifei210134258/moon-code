@@ -99,43 +99,33 @@ export async function runPackagedBrowserSmoke(timeoutMs = 15_000): Promise<void>
     const guest = webContents.getAllWebContents().find((contents) => (
       contents !== window.webContents && /\.localhost(?::\d+)?\//.test(contents.getURL())
     ))
-    if (guest === undefined) throw new Error('Browser guest WebContents was not found for annotation smoke')
-    const annotationPromise = browser.pickAnnotation('element')
+    if (guest === undefined) throw new Error('Browser guest WebContents was not found for element pick smoke')
+    const pickPromise = browser.pickElements()
     await delay(100)
     await guest.executeJavaScript(`(() => {
       const target = document.elementFromPoint(45, 40)
-      if (!target) throw new Error('annotation smoke target missing')
+      if (!target) throw new Error('element pick smoke target missing')
       target.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, composed: true, clientX: 45, clientY: 40 }))
       target.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, cancelable: true, clientX: 45, clientY: 40 }))
     })()`)
-    const annotation = await withTimeout(annotationPromise, 3_000, 'Annotation element pick timed out')
+    const picked = await withTimeout(pickPromise, 3_000, 'Element pick timed out')
     if (
-      annotation.annotation.target.kind !== 'element' ||
-      annotation.annotation.target.tag !== 'h1' ||
-      !annotation.screenshot.dataUrl.startsWith('data:image/png;base64,')
-    ) throw new Error(`Browser annotation was not safely captured: ${JSON.stringify(annotation.annotation)}`)
-    const annotationSubmission = browser.prepareAnnotationSubmission({
-      draftId: annotation.id,
-      comment: 'Reduce heading spacing',
-      pageUrl: annotation.annotation.page.url,
-      includeSelector: true,
-      includeText: false,
-      includeScreenshot: true
-    })
-    if (
-      annotationSubmission.annotation.target.textSnippet !== undefined ||
-      annotationSubmission.screenshot === null
-    ) throw new Error('Browser annotation privacy controls were not applied')
-    browser.deleteAnnotation(annotation.id)
-    await browser.setViewport({ mode: 'mobile', width: 390, height: 844, deviceScaleFactor: 2 })
-    const screenshot = await browser.capture(false)
-    process.stderr.write('browser-smoke:capture\n')
-    if (!screenshot.dataUrl.startsWith('data:image/png;base64,') || screenshot.width < 1 || screenshot.height < 1) {
-      throw new Error('Browser viewport screenshot was not captured')
+      picked.cancelled ||
+      picked.elements.length !== 1 ||
+      picked.elements[0]!.tag !== 'h1' ||
+      picked.elements[0]!.selector.length === 0 ||
+      !picked.elements[0]!.pageUrl.startsWith('preview://browser-smoke-workspace/')
+    ) {
+      throw new Error(`Browser element pick was not safely projected: ${JSON.stringify(picked)}`)
     }
-    const fullScreenshot = await browser.capture(true)
-    if (!fullScreenshot.fullPage || fullScreenshot.height < 1_100) {
-      throw new Error('Browser full-page screenshot was not captured')
+
+    await browser.cancelElementPick()
+    const cancelPromise = browser.pickElements()
+    await delay(100)
+    await browser.cancelElementPick()
+    const cancelled = await withTimeout(cancelPromise, 3_000, 'Element pick cancel timed out')
+    if (!cancelled.cancelled || cancelled.elements.length !== 0) {
+      throw new Error(`Browser element pick cancel was not projected: ${JSON.stringify(cancelled)}`)
     }
     await browser.navigate('file:///etc/passwd').then(
       () => { throw new Error('Unsafe file navigation was accepted') },

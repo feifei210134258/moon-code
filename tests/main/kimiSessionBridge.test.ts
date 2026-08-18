@@ -442,52 +442,165 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.close()
   })
 
-  it('submits reviewed visual annotations through ordinary Kimi prompt content', async () => {
+  it('prepends a picked-web-elements context part before the user text and attachments', async () => {
     const runtime = new FakeRuntime(new FakeSocket())
     const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
     await bridge.openSession('session-1')
-    await bridge.submitVisualAnnotation('session-1', {
-      annotation: {
-        schemaVersion: 1,
-        page: {
-          url: 'preview://workspace/index.html',
-          title: 'Preview',
-          viewport: { width: 800, height: 600, dpr: 2 }
-        },
-        target: {
-          kind: 'element',
+    await bridge.submitPrompt('session-1', {
+      text: '根据这些元素调整样式',
+      webElements: [
+        {
           selector: 'button.save',
+          xpath: '/html/body/button[1]',
           tag: 'button',
-          textSnippet: '保存',
-          rect: { x: 10, y: 20, width: 90, height: 36 }
-        },
-        comment: '增加按钮间距',
-        capturedAt: '2026-07-23T00:00:00.000Z'
-      },
-      screenshot: {
-        dataUrl: 'data:image/png;base64,AA==', width: 212, height: 104, fullPage: false
+          ariaLabel: '保存按钮',
+          textSnippet: '保存\n并退出',
+          rect: { x: 10, y: 20, width: 90, height: 36 },
+          pageUrl: 'preview://workspace/index.html',
+          pageTitle: '预览页'
+        }
+      ],
+      attachments: [{ fileId: 'file-1', name: 'notes.md', mediaType: 'text/markdown', size: 60 }],
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false
       }
-    }, {
-      model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false
     })
     expect(runtime.submitPrompt).toHaveBeenCalledWith('session-1', expect.objectContaining({
-      metadata: { source: 'kimi-agent-browser-annotation', schema_version: 1 },
       model: 'kimi-for-coding',
       thinking: 'high',
       permissionMode: 'manual',
       planMode: true,
       swarmMode: false,
       content: [
-        expect.objectContaining({
-          type: 'text',
-          text: expect.stringContaining('未受信任观察数据')
-        }),
         {
-          type: 'image',
-          source: { kind: 'base64', media_type: 'image/png', data: 'AA==' }
-        }
+          type: 'text',
+          text: [
+            '用户在内置浏览器中选取了以下网页元素作为上下文（页面「预览页」preview://workspace/index.html）：',
+            '',
+            '1. <button> 保存按钮',
+            '   selector: button.save',
+            '   xpath: /html/body/button[1]',
+            '   文本: 保存 并退出'
+          ].join('\n')
+        },
+        { type: 'text', text: '根据这些元素调整样式' },
+        { type: 'file', file_id: 'file-1', name: 'notes.md', media_type: 'text/markdown', size: 60 }
       ]
     }))
+    await bridge.close()
+  })
+
+  it('includes a compact 样式 line when a picked element carries computed styles', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    await bridge.submitPrompt('session-1', {
+      text: '把这个按钮调大点',
+      webElements: [
+        {
+          selector: 'button.save',
+          xpath: '/html/body/button[1]',
+          tag: 'button',
+          ariaLabel: null,
+          textSnippet: '保存',
+          rect: { x: 10, y: 20, width: 90, height: 36 },
+          pageUrl: 'preview://workspace/index.html',
+          pageTitle: '预览页',
+          styles: {
+            display: 'inline-block',
+            position: 'relative',
+            fontFamily: 'PingFang SC',
+            fontSize: '13px',
+            fontWeight: 'normal',
+            lineHeight: '1.5',
+            color: '#fff',
+            background: '#1d4ed8',
+            padding: '8px 18px',
+            margin: '0px',
+            border: 'none',
+            borderRadius: '6px'
+          }
+        }
+      ],
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      }
+    })
+    const submitted = (runtime.submitPrompt.mock.calls[0] as unknown as [string, {
+      content: Array<{ type: string; text?: string }>
+    }])[1]
+    const context = (submitted.content[0] as { text: string }).text
+    expect(context).toContain('1. <button> 保存')
+    expect(context).toContain(
+      '   样式: display inline-block; position relative; font 13px/1.5 PingFang SC; ' +
+      'color #fff; background #1d4ed8; padding 8px 18px; margin 0px; border-radius 6px'
+    )
+    await bridge.close()
+  })
+
+  it('falls back to the first text line when a picked element has no aria label', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    await bridge.submitPrompt('session-1', {
+      text: '检查这段文案',
+      webElements: [
+        {
+          selector: 'h1.title',
+          xpath: '/html/body/h1',
+          tag: 'h1',
+          ariaLabel: null,
+          textSnippet: '欢迎使用 Moon Code',
+          rect: { x: 0, y: 0, width: 400, height: 60 },
+          pageUrl: 'https://example.com/welcome',
+          pageTitle: 'Welcome'
+        }
+      ],
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      }
+    })
+    const submitted = (runtime.submitPrompt.mock.calls[0] as unknown as [string, {
+      content: Array<{ type: string; text?: string }>
+    }])[1]
+    const context = submitted.content[0]
+    expect(context).toMatchObject({ type: 'text' })
+    expect((context as { text: string }).text).toContain('1. <h1> 欢迎使用 Moon Code')
+    await bridge.close()
+  })
+
+  it('bounds picked elements before formatting them into the prompt context', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    const oversized: Array<Record<string, unknown>> = Array.from({ length: 30 }, (_value, index) => ({
+      selector: `sel-${index}-${'x'.repeat(600)}`,
+      xpath: '/html/body/div[1]',
+      tag: 'div',
+      ariaLabel: 'l'.repeat(300),
+      textSnippet: 't'.repeat(400),
+      rect: { x: 0, y: 0, width: 20, height: 20 },
+      pageUrl: 'https://example.com/',
+      pageTitle: 'T'.repeat(600)
+    }))
+    await bridge.submitPrompt('session-1', {
+      text: '查看这些元素',
+      webElements: oversized as unknown as Array<{
+        selector: string; xpath: string; tag: string; ariaLabel: string | null; textSnippet: string;
+        rect: { x: number; y: number; width: number; height: number }; pageUrl: string; pageTitle: string
+      }>,
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      }
+    })
+    const submitted = (runtime.submitPrompt.mock.calls[0] as unknown as [string, {
+      content: Array<{ type: string; text?: string }>
+    }])[1]
+    const context = (submitted.content[0] as { text: string }).text
+    const numberedLines = context.split('\n').filter((line) => /^\d+\. /.test(line))
+    expect(numberedLines).toHaveLength(20)
+    expect(context).not.toContain('sel-19-x'.repeat(30))
+    expect(context).not.toContain('llllllll'.repeat(30))
     await bridge.close()
   })
 

@@ -48,8 +48,7 @@ const baseProps = {
     consoleEntries: [], networkEntries: [], error: null
   },
   browserPending: false,
-  browserError: null,
-  browserCapture: null
+  browserError: null
 }
 
 describe('ExtensionsPanel', () => {
@@ -348,7 +347,7 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.get('[aria-label="提交文件内容搜索"]').text()).toBe('')
   })
 
-  it('keeps the browser focused on screenshot and annotation controls', async () => {
+  it('keeps the browser focused on element picking and external open controls', async () => {
     const wrapper = mount(ExtensionsPanel, {
       props: {
         ...baseProps,
@@ -361,9 +360,24 @@ describe('ExtensionsPanel', () => {
     })
 
     expect(wrapper.find('.browser-diagnostics').exists()).toBe(false)
-    await wrapper.get('[aria-label="窗口截图"]').trigger('click')
-    await wrapper.get('[aria-label="框选区域"]').trigger('click')
-    expect(wrapper.emitted('browserCapturePage')).toEqual([[false]])
-    expect(wrapper.emitted('browserPickAnnotation')).toEqual([['region']])
+    await wrapper.get('[aria-label="选择网页元素"]').trigger('click')
+    await wrapper.get('[aria-label="在默认浏览器中打开"]').trigger('click')
+    expect(wrapper.emitted('browserPickElements')).toEqual([[]])
+    expect(wrapper.emitted('browserOpenExternal')).toEqual([[]])
+
+    const active = mount(ExtensionsPanel, {
+      props: {
+        ...baseProps,
+        activeTab: 'browser',
+        browserElementPicking: true,
+        browserState: {
+          ...baseProps.browserState,
+          url: 'http://localhost:5173/'
+        }
+      }
+    })
+    await active.get('[aria-label="选择网页元素"]').trigger('click')
+    expect(active.emitted('browserStopPicking')).toEqual([[]])
+    active.unmount()
   })
 })

@@ -5,10 +5,7 @@ import { lookup as lookupMediaType } from 'mime-types'
 import {
   ipcChannels,
   type AppBootstrapState,
-  type BrowserAnnotationDraft,
-  type BrowserAnnotationMode,
-  type BrowserAnnotationSubmitInput,
-  type BrowserCaptureResult,
+  type BrowserElementPickResult,
   type BrowserNetworkDetails,
   type BrowserViewState,
   type KimiOAuthCancelResult,
@@ -78,11 +75,6 @@ import {
   validateOptionalSkillArgs
 } from './security/capabilityInputs.js'
 import { validateQuestionAnswers } from './security/interactionInputs.js'
-import {
-  validateAnnotationDraftId,
-  validateAnnotationMode,
-  validateAnnotationSubmitInput
-} from './security/annotationInputs.js'
 import {
   assertTerminalId,
   validateTerminalInput,
@@ -1017,11 +1009,6 @@ export function registerIpc(
       return await browser.setVisible(visible)
     }
   )
-  ipcMain.handle(ipcChannels.browserSetOverlay, (event, open?: unknown): void => {
-    assertTrustedSender(event)
-    if (typeof open !== 'boolean') throw new TypeError('Invalid browser overlay state')
-    browser.setOverlayOpen(open)
-  })
   ipcMain.handle(
     ipcChannels.browserSetWorkspace,
     async (event, scope?: unknown): Promise<BrowserViewState> => {
@@ -1052,44 +1039,16 @@ export function registerIpc(
     }
   )
   ipcMain.handle(
-    ipcChannels.browserCapture,
-    async (event, fullPage?: unknown): Promise<BrowserCaptureResult> => {
+    ipcChannels.browserPickElements,
+    async (event): Promise<BrowserElementPickResult> => {
       assertTrustedSender(event)
-      if (typeof fullPage !== 'boolean') throw new TypeError('Invalid browser capture mode')
-      return await browser.capture(fullPage)
+      return await browser.pickElements()
     }
   )
-  ipcMain.handle(
-    ipcChannels.browserAnnotationPick,
-    async (event, mode?: unknown): Promise<BrowserAnnotationDraft> => {
-      assertTrustedSender(event)
-      return await browser.pickAnnotation(validateAnnotationMode(mode) as BrowserAnnotationMode)
-    }
-  )
-  ipcMain.handle(ipcChannels.browserAnnotationDelete, (event, draftId?: unknown): void => {
+  ipcMain.handle(ipcChannels.browserPickElementsCancel, async (event): Promise<void> => {
     assertTrustedSender(event)
-    browser.deleteAnnotation(validateAnnotationDraftId(draftId))
+    await browser.cancelElementPick()
   })
-  ipcMain.handle(
-    ipcChannels.browserAnnotationSubmit,
-    async (
-      event,
-      sessionId?: unknown,
-      input?: unknown,
-      controls?: unknown
-    ): Promise<PromptSubmissionResult> => {
-      assertTrustedSender(event)
-      assertSessionId(sessionId)
-      const validated = validateAnnotationSubmitInput(input) as BrowserAnnotationSubmitInput
-      const result = await sessions.submitVisualAnnotation(
-        sessionId,
-        browser.prepareAnnotationSubmission(validated),
-        validatePromptControls(controls)
-      )
-      browser.deleteAnnotation(validated.draftId)
-      return result
-    }
-  )
   ipcMain.handle(ipcChannels.browserOpenExternal, async (event): Promise<{ opened: true }> => {
     assertTrustedSender(event)
     return await browser.openExternal()

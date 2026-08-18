@@ -16,7 +16,8 @@ import { useWorkbenchStore } from './stores/workbench'
 import { normalizeWorkspaceFileReference, workspaceFileDestination } from './utils/fileRouting'
 import { setRendererLocale } from './i18n/rendererLocale'
 import type {
-  BrowserAnnotationSubmitInput,
+  BrowserElementPickResult,
+  BrowserPickedElement,
   KimiAgentTranscript,
   KimiSessionOperationalState,
   KimiPromptControls,
@@ -203,7 +204,8 @@ async function submitPrompt(
   attachments: KimiUploadedFile[],
   controls: KimiPromptControls,
   goalMode: boolean,
-  deliveryMode: 'queue' | 'steer'
+  deliveryMode: 'queue' | 'steer',
+  webElements: BrowserPickedElement[]
 ): Promise<void> {
   let sessionId = activeSessionId.value
   if (sessionId.length === 0) {
@@ -224,6 +226,7 @@ async function submitPrompt(
   const accepted = await runtimeBridge.submitPrompt(sessionId, {
     text,
     ...(attachments.length === 0 ? {} : { attachments }),
+    ...(webElements.length === 0 ? {} : { webElements }),
     controls,
     ...(goalMode ? { goalObjective: text.trim() } : {}),
     deliveryMode
@@ -231,10 +234,13 @@ async function submitPrompt(
   if (accepted) store.markConversationActivity(sessionId)
 }
 
-function submitBrowserAnnotation(input: BrowserAnnotationSubmitInput): void {
-  const controls = runtimeBridge.promptControls.value
-  if (activeSessionId.value.length === 0 || controls === null) return
-  void browserBridge.submitAnnotation(activeSessionId.value, input, controls)
+/* 页内点选元素：会话循环里每点一个元素立即加入输入框 chip，随下一条消息一起提交。 */
+function pickBrowserElements(): void {
+  void browserBridge.pickElements((elements) => conversationPane.value?.addWebElements(elements))
+}
+
+function stopBrowserElementPick(): void {
+  browserBridge.stopPicking()
 }
 
 function openSettings(): void {
@@ -488,7 +494,7 @@ function onWindowKeydown(event: KeyboardEvent): void {
   if (event.metaKey && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'a') {
     event.preventDefault()
     store.setExtension('browser')
-    void nextTick(() => browserBridge.pickAnnotation('element'))
+    void nextTick(() => void pickBrowserElements())
     return
   }
   if (event.metaKey && event.shiftKey && !event.altKey && event.key.toLowerCase() === 'u') {
@@ -509,10 +515,33 @@ onMounted(() => {
     store.selectSession(intent.sessionId)
   }) ?? null
   if (showBrowserFixture) {
-    void import('./dev/browserFixture').then(({ browserFixtureState, browserFixtureDetails }) => {
+    void import('./dev/browserFixture').then(({ browserFixtureState, browserFixtureDetails, browserPickElementsResult }) => {
       store.setExtension('browser')
       browserBridge.state.value = browserFixtureState
       browserBridge.networkDetails.value = browserFixtureDetails
+      /* 无真实注入通道时（纯前端调试）用 fixture 顶替选择接口：返回一次元素后按取消结束会话，
+         避免点选循环空转；同样补上取消接口的 no-op。 */
+      const api = window.kimiAgent
+      if (api !== undefined && typeof api.pickBrowserElements !== 'function') {
+        try {
+          let fixtureRounds = 0
+          Object.defineProperty(api, 'pickBrowserElements', {
+            configurable: true,
+            value: async (): Promise<BrowserElementPickResult> => {
+              fixtureRounds += 1
+              return fixtureRounds === 1
+                ? browserPickElementsResult
+                : { cancelled: true, elements: [] }
+            }
+          })
+          Object.defineProperty(api, 'cancelBrowserElementPick', {
+            configurable: true,
+            value: async (): Promise<void> => undefined
+          })
+        } catch {
+          /* contextBridge 暴露的对象可能不可写，忽略即可。 */
+        }
+      }
     })
   }
   if (showUsageFixture) {
@@ -852,12 +881,7 @@ onBeforeUnmount(() => {
           :browser-state="browserBridge.state.value"
           :browser-pending="browserBridge.pending.value"
           :browser-error="browserBridge.error.value"
-          :browser-capture="browserBridge.capture.value"
-          :browser-annotation-backdrop="browserBridge.annotationBackdrop.value"
-          :browser-annotation-drafts="browserBridge.annotationDrafts.value"
-          :browser-annotation-picking="browserBridge.annotationPicking.value"
-          :browser-annotation-submitting="browserBridge.annotationSubmitting.value"
-          :browser-annotation-error="browserBridge.annotationError.value"
+          :browser-element-picking="browserBridge.elementPicking.value"
           :todos="activeSessionView?.todos ?? []"
           :tasks="visibleOperational?.tasks ?? []"
           :tasks-pending="runtimeBridge.sessionOperationalPending.value"
@@ -875,11 +899,10 @@ onBeforeUnmount(() => {
           @refresh="runtimeBridge.refreshWorkspaceContext(activeSessionId)"
           @browser-bounds="browserBridge.setBounds"
           @browser-viewport="browserBridge.setViewport"
-          @browser-capture-page="browserBridge.capturePage"
-          @browser-pick-annotation="browserBridge.pickAnnotation"
-          @browser-delete-annotation="browserBridge.deleteAnnotation"
-          @browser-submit-annotation="submitBrowserAnnotation"
-          @browser-overlay="browserBridge.setOverlay"
+          @browser-pick-elements="pickBrowserElements"
+          @browser-stop-picking="stopBrowserElementPick"
+          @browser-reload="browserBridge.reload"
+          @browser-open-external="browserBridge.openExternal"
           @cancel-task="cancelTask"
         />
       </template>

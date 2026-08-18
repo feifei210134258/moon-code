@@ -1,7 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import {
-  nativeImage,
   shell,
   WebContentsView,
   type BrowserWindow,
@@ -10,31 +9,24 @@ import {
 import type { KimiRuntimeManager } from '../runtime/KimiRuntimeManager.js'
 import type {
   BrowserBounds,
-  BrowserAnnotationDraft,
-  BrowserAnnotationMode,
-  BrowserAnnotationSubmission,
-  BrowserAnnotationSubmitInput,
-  BrowserCaptureResult,
   BrowserConsoleEntry,
+  BrowserElementPickResult,
   BrowserNetworkDetails,
   BrowserNetworkEntry,
   BrowserViewState,
   BrowserViewport
 } from '../../shared/contracts.js'
 import { isAllowedBrowserNavigation } from '../security/browserInputs.js'
-import { captureSizeWithinBudget } from './captureBudget.js'
 import { registerGuestSessionGuards } from './guestSessionGuards.js'
 import { PreviewCapabilitySanitizer } from './PreviewCapabilitySanitizer.js'
 import { WorkspacePreviewServer } from './WorkspacePreviewServer.js'
-import { ANNOTATION_WORLD_ID, annotationPickScript } from './annotationScript.js'
+import { ELEMENT_PICK_WORLD_ID, elementPickScript } from './elementPickScript.js'
+import { sanitizePickedElements } from './elementPickSanitize.js'
 
 const MAX_CONSOLE_ENTRIES = 300
 const MAX_NETWORK_ENTRIES = 300
 const MAX_TEXT = 4_000
 const MAX_BODY_BYTES = 256 * 1024
-const MAX_SCREENSHOT_BASE64 = 20 * 1024 * 1024
-const MAX_ANNOTATION_DRAFTS = 20
-const ANNOTATION_PADDING = 8
 
 interface NetworkRecord {
   entry: BrowserNetworkEntry
@@ -43,30 +35,11 @@ interface NetworkRecord {
   responseHeaders: Record<string, string>
 }
 
-interface RawAnnotationSelection {
-  page: {
-    url: string
-    title: string
-    viewport: { width: number; height: number; dpr: number }
-  }
-  scroll: { x: number; y: number }
-  target: {
-    kind: BrowserAnnotationMode
-    selector?: string
-    xpath?: string
-    tag?: string
-    ariaLabel?: string
-    textSnippet?: string
-    rect: { x: number; y: number; width: number; height: number }
-  }
-}
-
 export class KimiBrowserManager extends EventEmitter {
   readonly #runtime: KimiRuntimeManager
   readonly #getMainWindow: () => BrowserWindow | null
   readonly #preview = new WorkspacePreviewServer()
   readonly #network = new Map<string, NetworkRecord>()
-  readonly #annotationDrafts = new Map<string, BrowserAnnotationDraft>()
   readonly #previewSanitizer = new PreviewCapabilitySanitizer()
   #view: WebContentsView | null = null
   #guestCleanup: (() => void) | null = null
@@ -75,15 +48,19 @@ export class KimiBrowserManager extends EventEmitter {
   #guestGeneration = 0
   #attachedWindow: BrowserWindow | null = null
   #bounds: BrowserBounds | null = null
-  /* 渲染端弹层（批注编辑/截图预览）打开时置 true：原生 WebContentsView 会盖住 DOM，
-     需暂时把 guest 从窗口摘下来，弹层关闭后再挂回。页面本身不销毁。 */
-  #overlayOpen = false
+  #pickInProgress = false
   #emitTimer: NodeJS.Timeout | null = null
   #operation: Promise<void> = Promise.resolve()
   #closing = false
   #consoleId = 0
   #activeActualUrl = ''
   #state: BrowserViewState = emptyState()
+
+  /** 预览发布根变化时刷新 guest；元素点选期间跳过，避免销毁注入上下文。 */
+  readonly #reloadPreviewFromWatch = (): void => {
+    if (this.#pickInProgress) return
+    this.#contents()?.reload()
+  }
 
   constructor(runtime: KimiRuntimeManager, getMainWindow: () => BrowserWindow | null) {
     super()
@@ -161,13 +138,6 @@ export class KimiBrowserManager extends EventEmitter {
     void this.#applyViewport()
   }
 
-  setOverlayOpen(open: boolean): void {
-    if (this.#overlayOpen === open) return
-    this.#overlayOpen = open
-    if (open) this.#detach()
-    else this.#attachIfNeeded()
-  }
-
   async setVisible(visible: boolean): Promise<BrowserViewState> {
     return await this.#serialize(async () => {
       this.#state.visible = visible
@@ -186,7 +156,6 @@ export class KimiBrowserManager extends EventEmitter {
     const nextScope = scope ?? 'unscoped'
     if (nextScope === this.#scope) return Promise.resolve(this.state)
     this.#scope = nextScope
-    this.#annotationDrafts.clear()
     const generation = ++this.#guestGeneration
     return this.#serialize(async () => {
       if (generation !== this.#guestGeneration) return this.state
@@ -206,8 +175,6 @@ export class KimiBrowserManager extends EventEmitter {
   destroyGuest(): void {
     this.#guestGeneration += 1
     this.#state.visible = false
-    this.#overlayOpen = false
-    this.#annotationDrafts.clear()
     this.#destroyView()
     this.#resetPageState()
     this.#scheduleState()
@@ -285,148 +252,65 @@ export class KimiBrowserManager extends EventEmitter {
     })
   }
 
-  async capture(fullPage: boolean): Promise<BrowserCaptureResult> {
-    return await this.#serialize(async () => {
-      const contents = this.#contents()
-      if (contents === null || !contents.debugger.isAttached()) throw new Error('Browser is not ready')
-      const metrics = await contents.debugger.sendCommand('Page.getLayoutMetrics') as {
-        cssContentSize?: { width?: unknown; height?: unknown }
-        contentSize?: { width?: unknown; height?: unknown }
-        cssVisualViewport?: { clientWidth?: unknown; clientHeight?: unknown }
-        visualViewport?: { clientWidth?: unknown; clientHeight?: unknown }
-      }
-      const contentSize = metrics.cssContentSize ?? metrics.contentSize
-      const viewportSize = metrics.cssVisualViewport ?? metrics.visualViewport
-      const measuredWidth = finiteNumber(fullPage ? contentSize?.width : viewportSize?.clientWidth)
-        ?? (fullPage ? null : this.#state.viewport.width ?? this.#bounds?.width ?? null)
-      const measuredHeight = finiteNumber(fullPage ? contentSize?.height : viewportSize?.clientHeight)
-        ?? (fullPage ? null : this.#state.viewport.height ?? this.#bounds?.height ?? null)
-      const deviceScaleFactor = this.#state.viewport.mode === 'auto'
-        ? 4
-        : this.#state.viewport.deviceScaleFactor
-      const { width, height } = captureSizeWithinBudget(
-        measuredWidth,
-        measuredHeight,
-        deviceScaleFactor,
-        fullPage
-      )
-
-      let clip: { x: number; y: number; width: number; height: number; scale: number } | undefined
-      if (fullPage) {
-        clip = { x: 0, y: 0, width, height, scale: 1 }
-      }
-      const result = await contents.debugger.sendCommand('Page.captureScreenshot', {
-        format: 'png',
-        fromSurface: true,
-        captureBeyondViewport: fullPage,
-        ...(clip === undefined ? {} : { clip })
-      }) as { data?: unknown }
-      if (typeof result.data !== 'string' || result.data.length > MAX_SCREENSHOT_BASE64) {
-        throw new Error('Browser screenshot exceeds the safe size limit')
-      }
-      const dataUrl = `data:image/png;base64,${result.data}`
-      const size = nativeImage.createFromDataURL(dataUrl).getSize()
-      return { dataUrl, width: size.width, height: size.height, fullPage }
-    })
-  }
-
-  async pickAnnotation(mode: BrowserAnnotationMode): Promise<BrowserAnnotationDraft> {
+  async pickElements(): Promise<BrowserElementPickResult> {
     const contents = this.#contents()
     if (contents === null || !contents.debugger.isAttached() || this.#activeActualUrl.length === 0) {
-      throw new Error('Browser is not ready for annotation')
+      throw new Error('Browser is not ready for element picking')
     }
+    if (this.#pickInProgress) throw new Error('A Browser element pick session is already in progress')
+    this.#pickInProgress = true
     try {
-      const raw = await contents.executeJavaScriptInIsolatedWorld(
-        ANNOTATION_WORLD_ID,
-        [{ code: annotationPickScript(mode), url: 'kimi-agent://annotation-picker' }]
+      let raw: unknown
+      try {
+        raw = await contents.executeJavaScriptInIsolatedWorld(
+          ELEMENT_PICK_WORLD_ID,
+          [{ code: elementPickScript(), url: 'kimi-agent://element-picker' }]
+        )
+      } catch (error) {
+        if (this.#contents() === null || isPickSessionAborted(error)) {
+          return { cancelled: true, elements: [] }
+        }
+        throw error
+      }
+      const root = asRecord(raw)
+      if (raw === null || raw === undefined || root.cancelled === true) {
+        return { cancelled: true, elements: [] }
+      }
+      const elements = sanitizePickedElements(
+        root.elements,
+        (value) => this.#displayUrl(value),
+        (value) => this.#sanitize(value)
       )
-      if (raw === null) throw new Error('Annotation selection cancelled')
-      const selection = validateRawAnnotationSelection(raw, mode)
-      const screenshot = await this.#captureAnnotation(selection)
-      const id = randomUUID()
-      const draft: BrowserAnnotationDraft = {
-        id,
-        annotation: {
-          schemaVersion: 1,
-          page: {
-            url: this.#displayUrl(selection.page.url),
-            title: boundedText(this.#sanitize(selection.page.title), 512),
-            viewport: { ...selection.page.viewport }
-          },
-          scroll: { ...selection.scroll },
-          target: {
-            kind: selection.target.kind,
-            ...(selection.target.selector === undefined ? {} : {
-              selector: boundedText(this.#sanitize(selection.target.selector), 1_000)
-            }),
-            ...(selection.target.xpath === undefined ? {} : {
-              xpath: boundedText(this.#sanitize(selection.target.xpath), 1_000)
-            }),
-            ...(selection.target.tag === undefined ? {} : {
-              tag: boundedText(this.#sanitize(selection.target.tag), 64)
-            }),
-            ...(selection.target.ariaLabel === undefined ? {} : {
-              ariaLabel: boundedText(this.#sanitize(selection.target.ariaLabel), 160)
-            }),
-            ...(selection.target.textSnippet === undefined ? {} : {
-              textSnippet: boundedText(this.#sanitize(selection.target.textSnippet), 240)
-            }),
-            rect: { ...selection.target.rect }
-          },
-          comment: '',
-          capturedAt: new Date().toISOString()
-        },
-        screenshot
-      }
-      while (this.#annotationDrafts.size >= MAX_ANNOTATION_DRAFTS) {
-        const oldest = this.#annotationDrafts.keys().next().value as string | undefined
-        if (oldest === undefined) break
-        this.#annotationDrafts.delete(oldest)
-      }
-      this.#annotationDrafts.set(id, draft)
-      return cloneAnnotationDraft(draft)
+      return { cancelled: false, elements }
     } catch (error) {
       throw new Error(this.#safeError(error))
+    } finally {
+      this.#pickInProgress = false
     }
   }
 
-  deleteAnnotation(draftId: string): void {
-    this.#annotationDrafts.delete(draftId)
-  }
-
-  prepareAnnotationSubmission(input: BrowserAnnotationSubmitInput): BrowserAnnotationSubmission {
-    const draft = this.#annotationDrafts.get(input.draftId)
-    if (draft === undefined) throw new Error('Annotation draft is no longer available')
-    const target = { ...draft.annotation.target }
-    if (!input.includeSelector) {
-      delete target.selector
-      delete target.xpath
-    }
-    if (!input.includeText) {
-      delete target.ariaLabel
-      delete target.textSnippet
-    }
-    return {
-      annotation: {
-        ...draft.annotation,
-        page: {
-          ...draft.annotation.page,
-          url: boundedText(this.#sanitize(input.pageUrl), 4_000)
-        },
-        target,
-        comment: boundedText(input.comment, 8_000)
-      },
-      screenshot: input.includeScreenshot ? { ...draft.screenshot } : null
+  async cancelElementPick(): Promise<void> {
+    if (!this.#pickInProgress) return
+    const contents = this.#contents()
+    if (contents === null || !contents.debugger.isAttached()) return
+    try {
+      await contents.executeJavaScriptInIsolatedWorld(
+        ELEMENT_PICK_WORLD_ID,
+        [{ code: "document.dispatchEvent(new Event('kimi:element-pick-cancel', { bubbles: true }))", url: 'kimi-agent://element-picker' }]
+      )
+    } catch {
+      // 注入上下文可能已随导航/销毁消失；在途的 pickElements() 会自行按取消处理。
     }
   }
 
   async openExternal(): Promise<{ opened: true }> {
     return await this.#serialize(async () => {
+      // 当前活动的页面 URL 已通过 isAllowedBrowserNavigation 校验；workspace 预览
+      // （http://<rootId>.localhost:<port>/...）附加会话票据，外部浏览器打开后由
+      // 预览服换成 HttpOnly cookie 再跳转去参，子资源请求才能通过鉴权。
       if (!isAllowedBrowserNavigation(this.#activeActualUrl)) throw new Error('No safe Browser URL is active')
-      if (this.#previewSanitizer.workspaceForOrigin(new URL(this.#activeActualUrl).origin) !== undefined) {
-        throw new Error('Workspace previews stay inside Kimi Browser')
-      }
-      await shell.openExternal(this.#activeActualUrl)
+      const target = this.#preview.externalUrlFor(this.#activeActualUrl) ?? this.#activeActualUrl
+      await shell.openExternal(target)
       return { opened: true }
     })
   }
@@ -439,7 +323,6 @@ export class KimiBrowserManager extends EventEmitter {
     if (this.#emitTimer !== null) clearTimeout(this.#emitTimer)
     this.#emitTimer = null
     this.#destroyView()
-    this.#annotationDrafts.clear()
     this.#previewSanitizer.clear()
     await this.#preview.close()
   }
@@ -560,6 +443,7 @@ export class KimiBrowserManager extends EventEmitter {
   }
 
   #resetPageState(): void {
+    this.#preview.watchForUrl(null, this.#reloadPreviewFromWatch)
     this.#activeActualUrl = ''
     this.#state.url = ''
     this.#state.title = ''
@@ -571,35 +455,10 @@ export class KimiBrowserManager extends EventEmitter {
     this.#state.error = null
   }
 
-  async #captureAnnotation(selection: RawAnnotationSelection): Promise<BrowserCaptureResult> {
-    const contents = this.#contents()
-    if (contents === null || !contents.debugger.isAttached()) throw new Error('Browser is not ready')
-    const metrics = await contents.debugger.sendCommand('Page.getLayoutMetrics') as {
-      cssContentSize?: { width?: unknown; height?: unknown }
-      contentSize?: { width?: unknown; height?: unknown }
-    }
-    const content = metrics.cssContentSize ?? metrics.contentSize
-    const contentWidth = finiteNumber(content?.width)
-    const contentHeight = finiteNumber(content?.height)
-    if (contentWidth === null || contentHeight === null) throw new Error('Browser page size is unavailable')
-    const source = selection.target.rect
-    const x = Math.max(0, source.x + selection.scroll.x - ANNOTATION_PADDING)
-    const y = Math.max(0, source.y + selection.scroll.y - ANNOTATION_PADDING)
-    const width = Math.min(contentWidth - x, source.width + ANNOTATION_PADDING * 2)
-    const height = Math.min(contentHeight - y, source.height + ANNOTATION_PADDING * 2)
-    const bounded = captureSizeWithinBudget(width, height, selection.page.viewport.dpr, false)
-    const result = await contents.debugger.sendCommand('Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-      captureBeyondViewport: true,
-      clip: { x, y, width: bounded.width, height: bounded.height, scale: 1 }
-    }) as { data?: unknown }
-    if (typeof result.data !== 'string' || result.data.length > MAX_SCREENSHOT_BASE64) {
-      throw new Error('Annotation screenshot exceeds the safe size limit')
-    }
-    const dataUrl = `data:image/png;base64,${result.data}`
-    const size = nativeImage.createFromDataURL(dataUrl).getSize()
-    return { dataUrl, width: size.width, height: size.height, fullPage: false }
+  /** 跟随当前实际 URL 同步预览文件的监听（预览来源才 watch；其余 URL 停止）。 */
+  #syncPreviewWatcher(): void {
+    const url = this.#activeActualUrl
+    this.#preview.watchForUrl(url.length === 0 ? null : url, this.#reloadPreviewFromWatch)
   }
 
   async #enableDiagnostics(contents: WebContents): Promise<void> {
@@ -696,6 +555,7 @@ export class KimiBrowserManager extends EventEmitter {
     this.#activeActualUrl = url
     this.#state.url = this.#displayUrl(url)
     this.#state.error = null
+    this.#syncPreviewWatcher()
     this.#scheduleState()
     try {
       await withTimeout(contents.loadURL(url), 20_000, 'Browser navigation timed out')
@@ -736,6 +596,7 @@ export class KimiBrowserManager extends EventEmitter {
       this.#activeActualUrl = url
       this.#state.url = this.#displayUrl(url)
     }
+    this.#syncPreviewWatcher()
     this.#refreshNavigationState()
     this.#scheduleState()
   }
@@ -747,7 +608,7 @@ export class KimiBrowserManager extends EventEmitter {
   }
 
   #attachIfNeeded(): void {
-    if (this.#overlayOpen || !this.#state.visible || this.#view === null || this.#bounds === null) return
+    if (!this.#state.visible || this.#view === null || this.#bounds === null) return
     const window = this.#getMainWindow()
     if (window === null || window.isDestroyed()) return
     if (this.#attachedWindow !== null && this.#attachedWindow !== window) this.#detach()
@@ -846,90 +707,6 @@ function cloneState(state: BrowserViewState): BrowserViewState {
   }
 }
 
-function cloneAnnotationDraft(draft: BrowserAnnotationDraft): BrowserAnnotationDraft {
-  return {
-    id: draft.id,
-    annotation: {
-      ...draft.annotation,
-      page: {
-        ...draft.annotation.page,
-        viewport: { ...draft.annotation.page.viewport }
-      },
-      ...(draft.annotation.scroll === undefined ? {} : { scroll: { ...draft.annotation.scroll } }),
-      target: {
-        ...draft.annotation.target,
-        rect: { ...draft.annotation.target.rect }
-      }
-    },
-    screenshot: { ...draft.screenshot }
-  }
-}
-
-function validateRawAnnotationSelection(value: unknown, expectedMode: BrowserAnnotationMode): RawAnnotationSelection {
-  const root = asRecord(value)
-  const page = asRecord(root.page)
-  const viewport = asRecord(page.viewport)
-  const scroll = asRecord(root.scroll)
-  const target = asRecord(root.target)
-  const rect = asRecord(target.rect)
-  const kind = target.kind
-  const url = stringValue(page.url)
-  if (
-    (kind !== 'element' && kind !== 'region') ||
-    kind !== expectedMode ||
-    url === null ||
-    !isAllowedBrowserNavigation(url)
-  ) {
-    throw new TypeError('Invalid annotation selection')
-  }
-  return {
-    page: {
-      url,
-      title: typeof page.title === 'string' ? page.title : '',
-      viewport: {
-        width: finiteBounded(viewport.width, 1, 10_000, 'annotation viewport width'),
-        height: finiteBounded(viewport.height, 1, 10_000, 'annotation viewport height'),
-        dpr: finiteBounded(viewport.dpr, 0.1, 8, 'annotation device scale')
-      }
-    },
-    scroll: {
-      x: finiteBounded(scroll.x, 0, 1_000_000, 'annotation scroll x'),
-      y: finiteBounded(scroll.y, 0, 1_000_000, 'annotation scroll y')
-    },
-    target: {
-      kind,
-      ...optionalBoundedString(target.selector, 'selector', 2_000),
-      ...optionalBoundedString(target.xpath, 'xpath', 2_000),
-      ...optionalBoundedString(target.tag, 'tag', 128),
-      ...optionalBoundedString(target.ariaLabel, 'ariaLabel', 500),
-      ...optionalBoundedString(target.textSnippet, 'textSnippet', 1_000),
-      rect: {
-        x: finiteBounded(rect.x, -10_000, 1_000_000, 'annotation rect x'),
-        y: finiteBounded(rect.y, -10_000, 1_000_000, 'annotation rect y'),
-        width: finiteBounded(rect.width, 1, 10_000, 'annotation rect width'),
-        height: finiteBounded(rect.height, 1, 10_000, 'annotation rect height')
-      }
-    }
-  }
-}
-
-function optionalBoundedString(
-  value: unknown,
-  key: 'selector' | 'xpath' | 'tag' | 'ariaLabel' | 'textSnippet',
-  limit: number
-): Partial<Record<typeof key, string>> {
-  if (value === undefined || value === null || value === '') return {}
-  if (typeof value !== 'string' || value.length > limit) throw new TypeError(`Invalid annotation ${key}`)
-  return { [key]: value }
-}
-
-function finiteBounded(value: unknown, min: number, max: number, label: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
-    throw new TypeError(`Invalid ${label}`)
-  }
-  return value
-}
-
 function boundedAppend<T>(items: T[], item: T, limit: number): T[] {
   const next = [...items, item]
   return next.length <= limit ? next : next.slice(next.length - limit)
@@ -970,6 +747,11 @@ function redactSecrets(value: string): string {
   return value
     .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1[redacted]')
     .replace(/\b(password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token)\b\s*[:=]\s*([^\s,;]+)/gi, '$1=[redacted]')
+}
+
+function isPickSessionAborted(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /destroyed|execution context|navigat|crashed|unresponsive|frame was removed/i.test(message)
 }
 
 function isTextMime(value: string | null): boolean {

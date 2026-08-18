@@ -3,19 +3,44 @@ import { describe, expect, it } from 'vitest'
 import {
   ipcErrorMessage,
   toCloneableApprovalResponse,
-  toCloneableBrowserAnnotationInput,
   toCloneablePromptControls,
   toCloneablePromptInput,
   toCloneableQuestionAnswers,
-  toCloneableSideChatPromptInput
+  toCloneableSideChatPromptInput,
+  toCloneableWebElements
 } from '../../src/renderer/src/utils/ipcPayloads.js'
 import type {
-  BrowserAnnotationSubmitInput,
+  BrowserPickedElement,
   KimiPromptControls,
   KimiPromptInput,
   KimiSideChatPromptInput,
   QuestionAnswerInput
 } from '../../src/shared/contracts.js'
+
+const webElementFixture: BrowserPickedElement = {
+  selector: '.hero h1',
+  xpath: '//h1',
+  tag: 'h1',
+  ariaLabel: null,
+  textSnippet: 'Moon Code 预览',
+  rect: { x: 24, y: 48, width: 320, height: 42 },
+  pageUrl: 'http://localhost:4173/',
+  pageTitle: 'Preview',
+  styles: {
+    display: 'block',
+    position: 'static',
+    fontFamily: 'PingFang SC',
+    fontSize: '28px',
+    fontWeight: '600',
+    lineHeight: '1.2',
+    color: 'rgb(17, 24, 39)',
+    background: 'rgba(0, 0, 0, 0)',
+    padding: '0px',
+    margin: '0px',
+    border: 'none',
+    borderRadius: '0px'
+  }
+}
 
 describe('renderer IPC payload DTOs', () => {
   it('deeply removes Vue proxies from prompts while preserving optional fields', () => {
@@ -35,6 +60,7 @@ describe('renderer IPC payload DTOs', () => {
         mediaType: 'text/html',
         size: 128
       }],
+      webElements: [webElementFixture],
       goalObjective: '修复页面',
       deliveryMode: 'steer'
     })
@@ -55,26 +81,20 @@ describe('renderer IPC payload DTOs', () => {
         mediaType: 'text/html',
         size: 128
       }],
+      webElements: [webElementFixture],
       goalObjective: '修复页面',
       deliveryMode: 'steer'
     })
     expect(structuredClone(toCloneablePromptControls(controls))).toEqual({ ...controls })
   })
 
-  it('makes Side Chat, annotations, approvals, and all question answer variants cloneable', () => {
+  it('makes Side Chat, web elements, approvals, and all question answer variants cloneable', () => {
     const controls = reactive<KimiPromptControls>({
       model: 'kimi-for-coding', thinking: 'medium', permissionMode: 'manual',
       planMode: false, swarmMode: true
     })
     const sideChat = reactive<KimiSideChatPromptInput>({ text: '帮我检查', controls })
-    const annotation = reactive<BrowserAnnotationSubmitInput>({
-      draftId: 'draft-1',
-      comment: '调整这个区域',
-      pageUrl: 'http://localhost:4173/',
-      includeSelector: true,
-      includeText: false,
-      includeScreenshot: true
-    })
+    const webElements = reactive<BrowserPickedElement[]>([webElementFixture])
     const approval = reactive({ decision: 'approved' as const, scope: 'session' as const })
     const answers = ref<Record<string, QuestionAnswerInput>>({
       single: { kind: 'single', option_id: 'one' },
@@ -86,14 +106,14 @@ describe('renderer IPC payload DTOs', () => {
 
     const payloads = [
       toCloneableSideChatPromptInput(sideChat),
-      toCloneableBrowserAnnotationInput(annotation),
+      toCloneableWebElements(webElements),
       toCloneableApprovalResponse(approval),
       toCloneableQuestionAnswers(answers.value)
     ]
     for (const payload of payloads) expect(() => structuredClone(payload)).not.toThrow()
 
     expect(payloads[0]).toEqual({ text: '帮我检查', controls: { ...controls } })
-    expect(payloads[1]).toEqual({ ...annotation })
+    expect(payloads[1]).toEqual([webElementFixture])
     expect(payloads[2]).toEqual({ decision: 'approved', scope: 'session' })
     expect(payloads[3]).toEqual({
       single: { kind: 'single', option_id: 'one' },

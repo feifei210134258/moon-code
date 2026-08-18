@@ -103,16 +103,13 @@ export const ipcChannels = {
   browserStop: 'browser:stop',
   browserSetBounds: 'browser:set-bounds',
   browserSetVisible: 'browser:set-visible',
-  browserSetOverlay: 'browser:set-overlay',
   browserSetWorkspace: 'browser:set-workspace',
   browserSetViewport: 'browser:set-viewport',
   browserClearConsole: 'browser:clear-console',
   browserClearNetwork: 'browser:clear-network',
   browserNetworkDetails: 'browser:network-details',
-  browserCapture: 'browser:capture',
-  browserAnnotationPick: 'browser:annotation-pick',
-  browserAnnotationDelete: 'browser:annotation-delete',
-  browserAnnotationSubmit: 'browser:annotation-submit',
+  browserPickElements: 'browser:pick-elements',
+  browserPickElementsCancel: 'browser:pick-elements-cancel',
   browserOpenExternal: 'browser:open-external',
   browserDiscoverLocal: 'browser:discover-local',
   browserStateChanged: 'browser:state-changed',
@@ -510,6 +507,7 @@ export interface KimiPromptInput {
   text: string
   controls: KimiPromptControls
   attachments?: KimiUploadedFile[]
+  webElements?: BrowserPickedElement[]
   goalObjective?: string
   deliveryMode?: 'queue' | 'steer'
 }
@@ -1024,61 +1022,43 @@ export interface BrowserNetworkDetails {
   bodyUnavailableReason: string | null
 }
 
-export interface BrowserCaptureResult {
-  dataUrl: string
-  width: number
-  height: number
-  fullPage: boolean
-}
-
-export type BrowserAnnotationMode = 'element' | 'region'
-
-export interface BrowserAnnotationRect {
+export interface BrowserElementRect {
   x: number
   y: number
   width: number
   height: number
 }
 
-export interface BrowserVisualAnnotation {
-  schemaVersion: 1
-  page: {
-    url: string
-    title: string
-    viewport: { width: number; height: number; dpr: number }
-  }
-  scroll?: { x: number; y: number }
-  target: {
-    kind: BrowserAnnotationMode
-    selector?: string
-    xpath?: string
-    tag?: string
-    ariaLabel?: string
-    textSnippet?: string
-    rect: BrowserAnnotationRect
-  }
-  comment: string
-  capturedAt: string
+export interface BrowserPickedElementStyle {
+  display: string
+  position: string
+  fontFamily: string
+  fontSize: string
+  fontWeight: string
+  lineHeight: string
+  color: string
+  background: string
+  padding: string
+  margin: string
+  border: string
+  borderRadius: string
 }
 
-export interface BrowserAnnotationDraft {
-  id: string
-  annotation: BrowserVisualAnnotation
-  screenshot: BrowserCaptureResult
-}
-
-export interface BrowserAnnotationSubmitInput {
-  draftId: string
-  comment: string
+export interface BrowserPickedElement {
+  selector: string
+  xpath: string
+  tag: string
+  ariaLabel: string | null
+  textSnippet: string
+  rect: BrowserElementRect
   pageUrl: string
-  includeSelector: boolean
-  includeText: boolean
-  includeScreenshot: boolean
+  pageTitle: string
+  styles?: BrowserPickedElementStyle
 }
 
-export interface BrowserAnnotationSubmission {
-  annotation: BrowserVisualAnnotation
-  screenshot: BrowserCaptureResult | null
+export interface BrowserElementPickResult {
+  cancelled: boolean
+  elements: BrowserPickedElement[]
 }
 
 export interface BrowserViewState {
@@ -1260,20 +1240,13 @@ export interface KimiAgentDesktopApi {
   browserStop(): Promise<BrowserViewState>
   setBrowserBounds(bounds: BrowserBounds): Promise<void>
   setBrowserVisible(visible: boolean): Promise<BrowserViewState>
-  setBrowserOverlay(open: boolean): Promise<void>
   setBrowserWorkspace(scope: string | null): Promise<BrowserViewState>
   setBrowserViewport(viewport: BrowserViewport): Promise<BrowserViewState>
   clearBrowserConsole(): Promise<BrowserViewState>
   clearBrowserNetwork(): Promise<BrowserViewState>
   getBrowserNetworkDetails(requestId: string): Promise<BrowserNetworkDetails>
-  captureBrowser(fullPage: boolean): Promise<BrowserCaptureResult>
-  pickBrowserAnnotation(mode: BrowserAnnotationMode): Promise<BrowserAnnotationDraft>
-  deleteBrowserAnnotation(draftId: string): Promise<void>
-  submitBrowserAnnotation(
-    sessionId: string,
-    input: BrowserAnnotationSubmitInput,
-    controls: KimiPromptControls
-  ): Promise<PromptSubmissionResult>
+  pickBrowserElements(): Promise<BrowserElementPickResult>
+  cancelBrowserElementPick(): Promise<void>
   openBrowserExternal(): Promise<{ opened: true }>
   discoverBrowserLocalServers(): Promise<string[]>
   getKimiUsage(): Promise<KimiUsageState>

@@ -15,6 +15,14 @@ describe('browser IPC input validation', () => {
     expect(isAllowedBrowserNavigation('http://token.root.localhost:1234/index.html')).toBe(true)
   })
 
+  it('allows workspace-preview URLs (http .localhost) through the external-browser gate', () => {
+    // openExternal 只保留 isAllowedBrowserNavigation 校验：workspace 预览 URL
+    // （http://<rootId>.localhost:<port>/...）现在允许在系统默认浏览器中打开。
+    expect(isAllowedBrowserNavigation('http://0123456789abcdef.localhost:5173/index.html')).toBe(true)
+    expect(isAllowedBrowserNavigation('http://127.0.0.1:5173/index.html?token=abc')).toBe(true)
+    expect(isAllowedBrowserNavigation('https://example.com/a?access_token=secret')).toBe(true)
+  })
+
   it.each(['file:///etc/passwd', 'javascript:alert(1)', 'data:text/html,bad', 'https://user:pass@example.com'])
   ('rejects unsafe navigation: %s', (url) => {
     expect(() => validateBrowserUrl(url)).toThrow('Invalid browser URL')
