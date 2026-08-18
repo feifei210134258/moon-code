@@ -600,6 +600,15 @@ export function registerIpc(
     }
   )
   ipcMain.handle(
+    ipcChannels.filesListWorkspace,
+    async (event, workspaceId?: unknown, path?: unknown): Promise<WorkspaceFileList> => {
+      assertTrustedSender(event)
+      const safeWorkspaceId = validateWorkspaceId(workspaceId)
+      const safePath = path === undefined ? '.' : validateWorkspacePath(path, { allowRoot: true })
+      return await sessions.listWorkspaceDirectory(safeWorkspaceId, safePath)
+    }
+  )
+  ipcMain.handle(
     ipcChannels.filesRead,
     async (event, sessionId?: unknown, path?: unknown): Promise<WorkspaceFilePreview> => {
       assertTrustedSender(event)

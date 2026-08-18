@@ -50,6 +50,7 @@ export const ipcChannels = {
   attachmentRead: 'attachment:read',
   attachmentDiscard: 'attachment:discard',
   filesList: 'files:list',
+  filesListWorkspace: 'files:list-workspace',
   filesRead: 'files:read',
   filesSearch: 'files:search',
   filesGrep: 'files:grep',
@@ -1207,6 +1208,8 @@ export interface KimiAgentDesktopApi {
   readAttachment(fileId: string, mediaType: string): Promise<KimiAttachmentBlob>
   discardAttachment(fileId: string): Promise<void>
   listFiles(sessionId: string, path?: string): Promise<WorkspaceFileList>
+  /* 草稿态（会话尚未创建）按工作区列举目录；不经过 Kimi Session，由 main 直接读本地文件系统。 */
+  listWorkspaceFiles(workspaceId: string, path?: string): Promise<WorkspaceFileList>
   readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview>
   searchFiles(sessionId: string, query: string): Promise<WorkspaceFileSearchResult>
   grepFiles(sessionId: string, pattern: string): Promise<WorkspaceGrepResult>

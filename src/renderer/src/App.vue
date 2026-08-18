@@ -588,15 +588,19 @@ watch(
 )
 
 watch(
-  [activeSessionId, () => runtimeBridge.runtime.value.status],
-  ([sessionId, runtimeStatus]) => {
+  [activeSessionId, () => runtimeBridge.runtime.value.status, draftWorkspaceId],
+  ([sessionId, runtimeStatus, workspaceId]) => {
     closeAgent()
     branchesOpen.value = false
     if (sessionId.length === 0) {
       runtimeBridge.clearActiveSession()
       /* 草稿态没有真实会话，controls 从 Kimi 设置的新 Session 默认值装载；
          runtime 重启后回到 running 也会走这里补载。 */
-      if (draftActive.value && runtimeStatus === 'running') void runtimeBridge.loadDraftControls()
+      if (draftActive.value && runtimeStatus === 'running') {
+        void runtimeBridge.loadDraftControls()
+        /* 文件树同样不依赖会话：按草稿工作区本地列举装载。 */
+        runtimeBridge.openDraftWorkspaceTree(workspaceId)
+      }
       return
     }
     if (runtimeStatus !== 'running') return

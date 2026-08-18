@@ -1137,3 +1137,66 @@ describe('useRuntimeBridge draft controls', () => {
     wrapper.unmount()
   })
 })
+
+describe('useRuntimeBridge draft workspace tree', () => {
+  it('lists the draft workspace locally before the first message creates a session', async () => {
+    const listWorkspaceFiles = vi.fn(async (_workspaceId: string, path = '.') => ({
+      path,
+      items: path === '.'
+        ? [{
+            path: 'src', name: 'src', kind: 'directory' as const, size: null,
+            modifiedAt: null, mime: null, languageId: null, isBinary: false,
+            gitStatus: null, childCount: null
+          }]
+        : [{
+            path: 'src/main.ts', name: 'main.ts', kind: 'file' as const, size: null,
+            modifiedAt: null, mime: null, languageId: null, isBinary: false,
+            gitStatus: null, childCount: null
+          }],
+      truncated: false
+    }))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      listWorkspaceFiles
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+
+    bridge.openDraftWorkspaceTree('workspace-1')
+    await flushPromises()
+
+    expect(listWorkspaceFiles).toHaveBeenCalledWith('workspace-1', '.')
+    expect(bridge.fileTree.children['.']?.map((entry) => entry.path)).toEqual(['src'])
+
+    await bridge.toggleDirectory('src')
+    expect(listWorkspaceFiles).toHaveBeenCalledWith('workspace-1', 'src')
+    expect(bridge.fileTree.children['src']?.[0]?.path).toBe('src/main.ts')
+
+    /* 退出草稿态后文件树不再按工作区列举 */
+    bridge.clearActiveSession()
+    await bridge.toggleDirectory('src')
+    expect(listWorkspaceFiles).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+})

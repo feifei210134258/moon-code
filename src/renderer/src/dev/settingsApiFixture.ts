@@ -140,6 +140,7 @@ export function installSettingsApiFixture(): void {
       hasMoreMessages: false, resyncCount: 0, unknownEventCount: 0, error: null
     }),
     listFiles: async () => ({ path: '.', items: [], truncated: false }),
+    listWorkspaceFiles: async () => ({ path: '.', items: [], truncated: false }),
     getGitStatus: async () => ({
       available: true,
       branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null

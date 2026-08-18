@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events'
-import { resolve } from 'node:path'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { KimiApiError } from '../../packages/kimi-adapter/src/transport/KimiRestClient.js'
 import type { ConnectOptions, KimiWsClient } from '../../packages/kimi-adapter/src/transport/KimiWsClient.js'
@@ -591,6 +593,41 @@ describe('KimiSessionBridge terminals', () => {
       await vi.waitFor(() => expect(dispose).toHaveBeenCalledOnce())
     } finally {
       dispose.mockRestore()
+    }
+  })
+})
+
+describe('KimiSessionBridge draft workspace listing', () => {
+  it('lists the workspace directory locally with directories first and hidden entries skipped', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'moon-code-ws-'))
+    try {
+      await mkdir(join(root, 'src'))
+      await writeFile(join(root, 'src', 'main.ts'), 'export {}\n')
+      await writeFile(join(root, 'README.md'), '# demo\n')
+      await writeFile(join(root, '.hidden'), '')
+      const runtime = new EventEmitter() as EventEmitter & { createRestClient: () => unknown }
+      Object.assign(runtime, {
+        state: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:54959', error: null },
+        createRestClient: () => ({
+          listWorkspaces: vi.fn(async () => [{ id: 'workspace-1', name: 'demo', root }])
+        })
+      })
+      const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+
+      const listing = await bridge.listWorkspaceDirectory('workspace-1')
+      expect(listing.path).toBe('.')
+      expect(listing.truncated).toBe(false)
+      expect(listing.items.map((entry) => entry.path)).toEqual(['src', 'README.md'])
+      expect(listing.items[0]?.kind).toBe('directory')
+      expect(listing.items[1]?.kind).toBe('file')
+
+      const sub = await bridge.listWorkspaceDirectory('workspace-1', 'src')
+      expect(sub.items.map((entry) => entry.path)).toEqual(['src/main.ts'])
+
+      await expect(bridge.listWorkspaceDirectory('workspace-1', '../outside')).rejects.toThrow('escapes')
+      await expect(bridge.listWorkspaceDirectory('workspace-missing')).rejects.toThrow('unavailable')
+    } finally {
+      await rm(root, { recursive: true, force: true })
     }
   })
 })

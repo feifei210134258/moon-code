@@ -33,6 +33,7 @@ import type {
   SessionNavigationItem,
   SessionViewState,
   WorkspaceFileDiff,
+  WorkspaceFileList,
   WorkspaceFilePreview,
   WorkspaceFileSearchItem,
   WorkspaceFileSearchResult,
@@ -154,6 +155,8 @@ export function useRuntimeBridge() {
   let operationalTimer: number | undefined
   let workspaceRefreshTimer: number | undefined
   let requestedSessionId: string | null = null
+  /* 草稿态（新建任务未发消息）没有真实会话，文件树改按这个工作区本地列举。 */
+  let requestedDraftWorkspaceId: string | null = null
   /* 运行时掉线（如重启）前打开的会话：恢复 running 后由桥接层直接重连。
      App.vue 的 [activeSessionId, status] watcher 在 stopped→running 落入同一
      Vue flush 时会被合并掉，不能依赖它完成重连。 */
@@ -461,6 +464,7 @@ export function useRuntimeBridge() {
     if (window.kimiAgent === undefined || runtime.value.status !== 'running' || sessionId.length === 0) return
     const generation = ++sessionOpenGeneration
     requestedSessionId = sessionId
+    requestedDraftWorkspaceId = null
     activeQueueSessionId.value = sessionId
     resetWorkspaceContext()
     resetSessionSkills()
@@ -865,14 +869,20 @@ export function useRuntimeBridge() {
 
   const loadDirectory = async (path = '.'): Promise<void> => {
     const sessionId = requestedSessionId
-    if (sessionId === null) return
-    await loadDirectoryForSession(sessionId, path, workspaceGeneration)
+    if (sessionId !== null) {
+      await loadDirectoryForSession(sessionId, path, workspaceGeneration)
+      return
+    }
+    const draftWorkspaceId = requestedDraftWorkspaceId
+    if (draftWorkspaceId === null) return
+    await loadDraftDirectory(draftWorkspaceId, path, workspaceGeneration)
   }
 
   /** 展开/收起一个目录；首次展开时按需加载子项。 */
   const toggleDirectory = async (path: string): Promise<void> => {
     const sessionId = requestedSessionId
-    if (window.kimiAgent === undefined || sessionId === null) return
+    const draftWorkspaceId = requestedDraftWorkspaceId
+    if (window.kimiAgent === undefined || (sessionId === null && draftWorkspaceId === null)) return
     if (fileTree.expanded[path] === true) {
       const expanded = { ...fileTree.expanded }
       delete expanded[path]
@@ -881,14 +891,19 @@ export function useRuntimeBridge() {
     }
     fileTree.expanded = { ...fileTree.expanded, [path]: true }
     if (fileTree.children[path] === undefined && fileTree.pending[path] !== true) {
-      await loadDirectoryForSession(sessionId, path, workspaceGeneration)
+      if (sessionId !== null) {
+        await loadDirectoryForSession(sessionId, path, workspaceGeneration)
+      } else {
+        await loadDraftDirectory(draftWorkspaceId!, path, workspaceGeneration)
+      }
     }
   }
 
   /** 展开整条祖先链并定位到目标目录（搜索结果跳转用）。 */
   const revealDirectory = async (path: string): Promise<void> => {
     const sessionId = requestedSessionId
-    if (window.kimiAgent === undefined || sessionId === null) return
+    const draftWorkspaceId = requestedDraftWorkspaceId
+    if (window.kimiAgent === undefined || (sessionId === null && draftWorkspaceId === null)) return
     const segments = path.split('/').filter((part) => part.length > 0 && part !== '.')
     let current = ''
     for (const segment of segments) {
@@ -897,8 +912,13 @@ export function useRuntimeBridge() {
         fileTree.expanded = { ...fileTree.expanded, [current]: true }
       }
       if (fileTree.children[current] === undefined && fileTree.pending[current] !== true) {
-        await loadDirectoryForSession(sessionId, current, workspaceGeneration)
-        if (sessionId !== requestedSessionId) return
+        if (sessionId !== null) {
+          await loadDirectoryForSession(sessionId, current, workspaceGeneration)
+          if (sessionId !== requestedSessionId) return
+        } else {
+          await loadDraftDirectory(draftWorkspaceId!, current, workspaceGeneration)
+          if (draftWorkspaceId !== requestedDraftWorkspaceId || requestedSessionId !== null) return
+        }
       }
     }
     fileTreeReveal.value = path
@@ -1129,14 +1149,15 @@ export function useRuntimeBridge() {
     }
   }
 
-  const loadDirectoryForSession = async (
-    sessionId: string,
+  /* per-path 状态：根目录单列 rootPending/rootError，其余目录走 pending/errors。
+     不用单一 directoryGeneration——不同目录的并发加载互不取消。 */
+  const loadDirectoryEntries = async (
     path: string,
-    workspaceAtStart: number
+    workspaceAtStart: number,
+    fetchListing: () => Promise<WorkspaceFileList>,
+    isCurrent: () => boolean
   ): Promise<void> => {
     if (window.kimiAgent === undefined) return
-    /* per-path 状态：根目录单列 rootPending/rootError，其余目录走 pending/errors。
-       不用单一 directoryGeneration——不同目录的并发加载互不取消。 */
     if (path === fileTree.root) {
       fileTree.rootPending = true
       fileTree.rootError = null
@@ -1147,8 +1168,8 @@ export function useRuntimeBridge() {
       fileTree.errors = errors
     }
     try {
-      const listing = await window.kimiAgent.listFiles(sessionId, path)
-      if (workspaceAtStart !== workspaceGeneration || sessionId !== requestedSessionId) return
+      const listing = await fetchListing()
+      if (workspaceAtStart !== workspaceGeneration || !isCurrent()) return
       if (path === fileTree.root) {
         fileTree.rootPending = false
         fileTree.rootError = null
@@ -1162,7 +1183,7 @@ export function useRuntimeBridge() {
       filePreview.value = null
       filePreviewError.value = null
     } catch (error) {
-      if (workspaceAtStart === workspaceGeneration && sessionId === requestedSessionId) {
+      if (workspaceAtStart === workspaceGeneration && isCurrent()) {
         if (path === fileTree.root) {
           fileTree.rootPending = false
           fileTree.rootError = errorMessage(error)
@@ -1174,6 +1195,41 @@ export function useRuntimeBridge() {
         }
       }
     }
+  }
+
+  const loadDirectoryForSession = async (
+    sessionId: string,
+    path: string,
+    workspaceAtStart: number
+  ): Promise<void> => {
+    await loadDirectoryEntries(
+      path,
+      workspaceAtStart,
+      () => window.kimiAgent!.listFiles(sessionId, path),
+      () => sessionId === requestedSessionId
+    )
+  }
+
+  /* 草稿态的目录加载：会话还没创建，按工作区本地列举；
+      staleness 要求仍处于草稿态且工作区未切换。 */
+  const loadDraftDirectory = async (
+    workspaceId: string,
+    path: string,
+    workspaceAtStart: number
+  ): Promise<void> => {
+    await loadDirectoryEntries(
+      path,
+      workspaceAtStart,
+      () => window.kimiAgent!.listWorkspaceFiles(workspaceId, path),
+      () => requestedSessionId === null && workspaceId === requestedDraftWorkspaceId
+    )
+  }
+
+  /* 草稿态入口：新建任务后、首条消息前，先把工作区根目录装进文件树。 */
+  const openDraftWorkspaceTree = (workspaceId: string): void => {
+    if (window.kimiAgent === undefined || workspaceId.length === 0) return
+    requestedDraftWorkspaceId = workspaceId
+    void loadDraftDirectory(workspaceId, '.', workspaceGeneration)
   }
 
   const resetWorkspaceContext = (): void => {
@@ -1469,6 +1525,7 @@ export function useRuntimeBridge() {
   const clearActiveSession = (): void => {
     detachedSessionId = null
     requestedSessionId = null
+    requestedDraftWorkspaceId = null
     activeQueueSessionId.value = null
     sessionOpenGeneration += 1
     sessionView.value = null
@@ -1618,6 +1675,7 @@ export function useRuntimeBridge() {
     loadDirectory,
     toggleDirectory,
     revealDirectory,
+    openDraftWorkspaceTree,
     openFile,
     closeFilePreview,
     searchMentionFiles,

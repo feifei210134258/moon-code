@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { execFile } from 'node:child_process'
+import { readdir } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import {
@@ -404,6 +405,50 @@ export class KimiSessionBridge extends EventEmitter {
       items: result.items.map(projectFileEntry),
       truncated: result.truncated
     }
+  }
+
+  /* 草稿态会话尚未创建，走不了 runtime 的 session fs:list；工作区 root 本就指向
+     本地目录，这里直接读文件系统。语义对齐 runtime 默认值（depth 1、隐藏文件
+     不展示、目录在前、500 条截断），git 状态等装饰等会话建立后由 runtime 口径覆盖。 */
+  async listWorkspaceDirectory(workspaceId: string, path = '.'): Promise<WorkspaceFileList> {
+    const workspaces = await this.#runtime.createRestClient().listWorkspaces()
+    const root = workspaces.find((workspace) => workspace.id === workspaceId)?.root ?? ''
+    if (root.length === 0) throw new Error('Kimi Workspace path is unavailable')
+    const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
+    const isRoot = normalized.length === 0 || normalized === '.'
+    if (
+      !isRoot &&
+      (normalized.startsWith('/') ||
+        /^[A-Za-z]:\//.test(normalized) ||
+        normalized.split('/').some((segment) => segment === '..'))
+    ) throw new Error('Workspace file path escapes the active Kimi Workspace')
+    const resolvedRoot = resolve(root)
+    const target = isRoot ? resolvedRoot : resolve(resolvedRoot, ...normalized.split('/'))
+    const inside = relative(resolvedRoot, target)
+    if (inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
+      throw new Error('Workspace file path escapes the active Kimi Workspace')
+    }
+    const dirents = await readdir(target, { withFileTypes: true })
+    const visible = dirents.filter((entry) => !entry.name.startsWith('.'))
+    const sorted = visible.sort((left, right) => {
+      const leftDir = left.isDirectory() ? 0 : 1
+      const rightDir = right.isDirectory() ? 0 : 1
+      return leftDir - rightDir || left.name.localeCompare(right.name)
+    })
+    const limit = 500
+    const items = sorted.slice(0, limit).map((entry): WorkspaceFileEntry => ({
+      path: isRoot ? entry.name : `${normalized}/${entry.name}`,
+      name: entry.name,
+      kind: entry.isDirectory() ? 'directory' : entry.isSymbolicLink() ? 'symlink' : 'file',
+      size: null,
+      modifiedAt: null,
+      mime: null,
+      languageId: null,
+      isBinary: false,
+      gitStatus: null,
+      childCount: null
+    }))
+    return { path: isRoot ? '.' : normalized, items, truncated: sorted.length > limit }
   }
 
   async readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview> {
