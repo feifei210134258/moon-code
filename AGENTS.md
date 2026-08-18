@@ -30,4 +30,5 @@
 
 - 开发：`pnpm dev`；测试：`pnpm test`；全量验证：`pnpm check`。
 - macOS 打包：`pnpm package:mac`，配置见 `electron-builder.yml`，产物在 `release/`。只生成 DMG，不生成 ZIP/其他归档。
+- Windows 打包：`pnpm package:win`（NSIS，默认 x64，`node scripts/package-win.mjs arm64` 可打 ARM64）。macOS 上可交叉打包：`scripts/package-win.mjs` 把 win32 Electron dist 缓存到 `node_modules/.cache/electron-dist/` 后用 `-c.electronDist` 覆盖 yml 里的 mac 路径。yml 中 win 目标带 `signAndEditExecutable: false`（免 wine），在 Windows/CI 上出正式包时可移除以恢复 exe 图标与版本元数据。
 - 项目为 MIT License；第三方归属见 `THIRD_PARTY_NOTICES.md`。

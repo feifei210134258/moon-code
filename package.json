@@ -18,6 +18,7 @@
     "package:dir": "pnpm build && electron-builder --mac --dir",
     "package:mac": "pnpm build && electron-builder --mac",
     "package:unsigned:mac": "pnpm build && electron-builder --mac --publish never",
+    "package:win": "pnpm build && node scripts/package-win.mjs",
     "smoke:packaged-pty": "node scripts/smoke-packaged-node-pty.mjs",
     "smoke:packaged-browser": "node scripts/smoke-packaged-browser.mjs",
     "smoke:packaged-pet": "node scripts/smoke-packaged-pet.mjs",

@@ -1,6 +1,5 @@
 appId: com.kimi.agent.desktop
 productName: Moon Code
-icon: resources/icon.icns
 asar: true
 npmRebuild: true
 electronDist: node_modules/electron/dist
@@ -9,11 +8,23 @@ directories:
 files:
   - out/**/*
   - package.json
+  # node-pty 只保留随包发布的 prebuilds（N-API）：若混入本机编译的 build/Release/*.node，
+  # 其加载顺序优先于 prebuilds，交叉打包时会把错误平台的二进制打进包里。
+  # 注意：平台级 files 会整体替换本列表（而非合并），排除规则只能放在全局。
+  - '!node_modules/node-pty/build/**'
 asarUnpack:
   - node_modules/node-pty/**/*
 afterPack: scripts/after-pack.cjs
 mac:
+  icon: resources/icon.icns
   category: public.app-category.developer-tools
   target:
     - dmg
+win:
+  icon: resources/icon.png
+  target:
+    - nsis
+  # 本机（macOS）无 wine，跳过 rcedit：exe 沿用 Electron 默认图标、无版本元数据。
+  # 在 Windows/CI 上打包时可移除该行以获得正式图标与元数据。
+  signAndEditExecutable: false
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
