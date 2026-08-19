@@ -139,6 +139,7 @@ const api: KimiAgentDesktopApi = {
   pickBrowserElements: () => ipcRenderer.invoke(ipcChannels.browserPickElements),
   cancelBrowserElementPick: () => ipcRenderer.invoke(ipcChannels.browserPickElementsCancel),
   openBrowserExternal: () => ipcRenderer.invoke(ipcChannels.browserOpenExternal),
+  openExternalUrl: (url) => ipcRenderer.invoke(ipcChannels.shellOpenExternal, url),
   discoverBrowserLocalServers: () => ipcRenderer.invoke(ipcChannels.browserDiscoverLocal),
   getKimiUsage: () => ipcRenderer.invoke(ipcChannels.usageGet),
   refreshKimiUsage: () => ipcRenderer.invoke(ipcChannels.usageRefresh),

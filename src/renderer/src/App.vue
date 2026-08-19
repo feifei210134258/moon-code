@@ -451,6 +451,15 @@ function openWorkspaceFile(reference: string): void {
   void runtimeBridge.openFile(path)
 }
 
+function openLinkInBrowser(url: string): void {
+  store.setExtension('browser')
+  void browserBridge.navigate(url)
+}
+
+function openLinkInSystemBrowser(url: string): void {
+  void window.kimiAgent?.openExternalUrl(url)
+}
+
 function openWorkspaceFileSystem(reference: string): void {
   const { path } = normalizeWorkspaceFileReference(reference)
   if (path.length > 0) void runtimeBridge.openWorkspaceFileSystem(path)
@@ -827,6 +836,8 @@ onBeforeUnmount(() => {
         @respond-question="respondQuestion"
         @dismiss-question="dismissQuestion"
         @open-file="openWorkspaceFile"
+        @open-link="openLinkInBrowser"
+        @open-link-external="openLinkInSystemBrowser"
         @open-system="openWorkspaceFileSystem"
         @trash-entry="trashWorkspaceEntry"
         @close-terminal="store.toggleTerminal(false)"

@@ -118,6 +118,8 @@ const emit = defineEmits<{
   respondQuestion: [questionId: string, answers: Record<string, QuestionAnswerInput>]
   dismissQuestion: [questionId: string]
   openFile: [path: string]
+  openLink: [url: string]
+  openLinkExternal: [url: string]
   openSystem: [path: string]
   trashEntry: [path: string]
   closeTerminal: []
@@ -486,6 +488,8 @@ watch(
                 :artifact-paths="artifactPaths"
                 @open-file="emit('openFile', $event)"
                 @file-context="openOutputFileContextMenu"
+                @open-link="emit('openLink', $event)"
+                @open-link-external="emit('openLinkExternal', $event)"
               />
               <ActivityBlock v-else-if="block.type === 'activity'" :activity="block.activity" />
               <button

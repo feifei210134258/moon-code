@@ -1057,6 +1057,11 @@ export function registerIpc(
     assertTrustedSender(event)
     return await discoverLocalDevServers()
   })
+  ipcMain.handle(ipcChannels.shellOpenExternal, async (event, url?: unknown): Promise<{ opened: true }> => {
+    assertTrustedSender(event)
+    await shell.openExternal(validateBrowserUrl(url))
+    return { opened: true }
+  })
   ipcMain.handle(ipcChannels.usageGet, (event): KimiUsageState => {
     assertTrustedSender(event)
     return usage.state

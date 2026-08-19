@@ -171,4 +171,35 @@ describe('MarkdownBlock', () => {
     expect(wrapper.findAll('a.markdown-file-link').length).toBeGreaterThanOrEqual(2)
     expect(wrapper.findAll('code.markdown-file-inline')).toHaveLength(1)
   })
+
+  it('emits openLink on click and openLinkExternal on right-click for http(s) links', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: { text: '服务已启动 http://localhost:3000/dashboard ，文档见 [Kimi 文档](https://kimi.com/docs)。' }
+    })
+
+    const links = wrapper.findAll('a')
+    expect(links).toHaveLength(2)
+
+    await links[0]!.trigger('click')
+    expect(wrapper.emitted('openLink')).toEqual([['http://localhost:3000/dashboard']])
+    expect(wrapper.emitted('openFile')).toBeUndefined()
+
+    await links[1]!.trigger('contextmenu')
+    expect(wrapper.emitted('openLinkExternal')).toEqual([['https://kimi.com/docs']])
+  })
+
+  it('does not emit link events for non-http anchors', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: { text: '[相对路径](docs/guide.md) 与 [mailto](mailto:a@b.com)。' }
+    })
+
+    const links = wrapper.findAll('a')
+    expect(links).toHaveLength(2)
+    for (const link of links) {
+      await link.trigger('click')
+      await link.trigger('contextmenu')
+    }
+    expect(wrapper.emitted('openLink')).toBeUndefined()
+    expect(wrapper.emitted('openLinkExternal')).toBeUndefined()
+  })
 })

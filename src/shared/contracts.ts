@@ -60,6 +60,7 @@ export const ipcChannels = {
   filesOpenSystem: 'files:open-system',
   filesReveal: 'files:reveal',
   filesTrash: 'files:trash',
+  shellOpenExternal: 'shell:open-external',
   markdownImageRead: 'markdown:image:read',
   gitStatus: 'git:status',
   gitBranches: 'git:branches',
@@ -1248,6 +1249,7 @@ export interface KimiAgentDesktopApi {
   pickBrowserElements(): Promise<BrowserElementPickResult>
   cancelBrowserElementPick(): Promise<void>
   openBrowserExternal(): Promise<{ opened: true }>
+  openExternalUrl(url: string): Promise<{ opened: true }>
   discoverBrowserLocalServers(): Promise<string[]>
   getKimiUsage(): Promise<KimiUsageState>
   refreshKimiUsage(): Promise<KimiUsageState>

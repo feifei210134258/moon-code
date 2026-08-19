@@ -23,6 +23,8 @@ const props = defineProps<{ text: string; sessionId?: string; artifactPaths?: Re
 const emit = defineEmits<{
   openFile: [path: string]
   fileContext: [path: string, event: MouseEvent]
+  openLink: [url: string]
+  openLinkExternal: [url: string]
 }>()
 const root = ref<HTMLElement | null>(null)
 const TRANSPARENT_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='
@@ -164,16 +166,25 @@ function onClick(event: MouseEvent): void {
     emit('openFile', linkedPath)
     return
   }
-  if (!/^https?:\/\//i.test(href)) event.preventDefault()
+  event.preventDefault()
+  if (/^https?:\/\//i.test(href)) emit('openLink', href)
 }
 
 function onContextMenu(event: MouseEvent): void {
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-workspace-path]')
   const path = target?.dataset.workspacePath
-  if (path === undefined) return
+  if (path !== undefined) {
+    event.preventDefault()
+    event.stopPropagation()
+    emit('fileContext', path, event)
+    return
+  }
+  const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a')
+  const href = anchor?.getAttribute('href') ?? ''
+  if (!/^https?:\/\//i.test(href)) return
   event.preventDefault()
   event.stopPropagation()
-  emit('fileContext', path, event)
+  emit('openLinkExternal', href)
 }
 
 watch(() => [props.text, props.sessionId], renderRichContent)
