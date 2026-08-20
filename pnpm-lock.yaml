@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@moonshot-ai/kimi-code':
-        specifier: 0.36.0
-        version: 0.36.0
+        specifier: 0.37.2
+        version: 0.37.2
       '@phosphor-icons/vue':
         specifier: 2.2.1
         version: 2.2.1(vue@3.5.40(typescript@5.9.3))
@@ -657,8 +657,8 @@ packages:
   '@mermaid-js/parser@1.2.0':
     resolution: {integrity: sha512-oYPyv8A4As1yH5Bx+04iQEQxXuIQDe0GKCNSRgao6z8AM9jixXIfP0vsppRLvGf+nKIOb9/LdpWA4YuJiVvESA==}
 
-  '@moonshot-ai/kimi-code@0.36.0':
-    resolution: {integrity: sha512-Q1ewUZjOdriJPb3fBZAlSI9NYeN6rhBWTkhB78nI5kSFRy8Q7wbZTsvrfJ6Iqh3D+gHtQyogsI/QUAQNEcybGw==}
+  '@moonshot-ai/kimi-code@0.37.2':
+    resolution: {integrity: sha512-TAteYb84mV44MEzCaAlfz5f3TiN2yMHuwj9Kd0ePEIMBUqgjlqV1w7PvMT9TN0t87LYfv7BhIYz+ZCHDOM5aJw==}
     engines: {node: '>=22.19.0'}
     hasBin: true
 
@@ -3193,7 +3193,7 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@moonshot-ai/kimi-code@0.36.0':
+  '@moonshot-ai/kimi-code@0.37.2':
     optionalDependencies:
       '@mariozechner/clipboard': 0.3.9
       node-pty: 1.1.0

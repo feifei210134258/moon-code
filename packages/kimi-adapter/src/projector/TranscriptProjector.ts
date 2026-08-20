@@ -1,14 +1,44 @@
+import { originUserSchema } from '../wire/schemas.js'
 import type {
   InFlightTurn,
   MessageContentPart,
   SessionMessage,
-  SessionSnapshot
+  SessionSnapshot,
+  SkillActivationInfo
 } from '../wire/schemas.js'
 import type { SessionEventFrame } from '../wire/ws.js'
+import type { LastTurnReason } from './SessionProjector.js'
 
 const MAIN_AGENT_ID = 'main'
 const IGNORED_AGENT_ID = '__non_main__'
 const MAX_TOOL_PREVIEW = 4_000
+
+/** 计划入口上的可选项（来自 `/transcript/plan` 的 options 投影）。 */
+export interface SessionPlanOptionView {
+  label: string
+  description?: string
+}
+
+/** 计划审批结果（pending 表示等待审批；来自 `/transcript/plan` 的 review 投影）。 */
+export interface SessionPlanReviewView {
+  state: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  selectedOption?: string
+  feedback?: string
+}
+
+/**
+ * 计划详情（0.37.2+）：由 SessionSyncController 按 tool_call_id 从
+ * `/transcript/plan` 合并到 plan_review 工具 part 的 `plan` 字段上。
+ */
+export interface SessionPlanView {
+  toolCallId: string
+  turnId: string
+  source: 'interaction' | 'display' | 'output'
+  plan: string
+  path?: string
+  options?: SessionPlanOptionView[]
+  review?: SessionPlanReviewView
+}
 
 export type TranscriptPart =
   | { type: 'text'; text: string }
@@ -30,6 +60,8 @@ export type TranscriptPart =
         hunks: number | null
       }
       writtenPath?: string
+      /** 上游 plan review（`/transcript/plan`）投影出的计划详情（0.37.2+）。 */
+      plan?: SessionPlanView
     }
   | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
   | {
@@ -56,6 +88,17 @@ export interface TranscriptMessage {
   agentId?: string
   originKind?: string
   originTaskId?: string
+  /** 该用户消息在本轮激活的 skills（0.37.2+，turn.started 时按 promptId 标注）。 */
+  skillActivations?: SkillActivationInfo[]
+}
+
+export interface RetryStatus {
+  failedAttempt: number
+  nextAttempt: number
+  maxAttempts: number
+  delayMs: number | null
+  errorName: string | null
+  errorMessage: string | null
 }
 
 export interface TranscriptProjection {
@@ -64,6 +107,15 @@ export interface TranscriptProjection {
   active: boolean
   activePromptId: string | null
   unknownEventCount: number
+  /** 当前 turn（turn.started origin.user）激活的 skills（0.37.2+）。 */
+  skillActivations: SkillActivationInfo[]
+  /** 最近一次 turn.ended 的 time 字段（0.37.2+）。 */
+  lastTurnEndedAt: string | null
+  /** 最近一轮的结局；`failed` 用于失败卡片，`cancelled` 用于区分手动取消。 */
+  lastTurnReason: LastTurnReason | null
+  lastTurnError: string | null
+  /** `turn.step.retrying` 的重试进度；非空表示模型请求正在自动重试。 */
+  retry: RetryStatus | null
 }
 
 export interface TranscriptProjectionResult {
@@ -82,6 +134,11 @@ interface ProjectorSessionState {
   pendingRawBySlot: Map<string, string>
   terminalTools: Map<string, ToolTerminalState>
   retryTarget: { messageId: string; turnId: number | null; step: number | null; stepId: string | null } | null
+  lastTurnReason: LastTurnReason | null
+  lastTurnError: string | null
+  retry: RetryStatus | null
+  skillActivations: SkillActivationInfo[]
+  lastTurnEndedAt: string | null
   nonMainMessageIds: Set<string>
   nonMainToolCallIds: Set<string>
   hiddenMessageIds: Set<string>
@@ -101,6 +158,8 @@ interface ToolTerminalState {
 export class TranscriptProjector {
   readonly #sessions = new Map<string, ProjectorSessionState>()
   readonly #targetAgentId: string
+  /** 已打过未知事件诊断的事件类型；同一类型只记录一次，避免刷屏。 */
+  readonly #diagnosedEventTypes = new Set<string>()
 
   constructor(targetAgentId = MAIN_AGENT_ID) {
     this.#targetAgentId = targetAgentId
@@ -142,7 +201,12 @@ export class TranscriptProjector {
       messages,
       active: state.active,
       activePromptId: state.currentPromptId,
-      unknownEventCount: state.unknownEventCount
+      unknownEventCount: state.unknownEventCount,
+      skillActivations: state.skillActivations.map((activation) => ({ ...activation })),
+      lastTurnEndedAt: state.lastTurnEndedAt,
+      lastTurnReason: state.lastTurnReason,
+      lastTurnError: state.lastTurnError,
+      retry: state.retry === null ? null : { ...state.retry }
     }
   }
 
@@ -249,10 +313,24 @@ export class TranscriptProjector {
       }
       case 'turn.started': {
         const turnId = numberValue(payload.turnId)
-        const promptId = state.currentPromptId ?? this.#syntheticId(state, 'prompt')
+        // 0.37.2 起 turn.started 携带权威 promptId；无则回退本地主 prompt 或合成 id。
+        const promptId = stringValue(payload.promptId)
+          ?? state.currentPromptId
+          ?? this.#syntheticId(state, 'prompt')
         state.currentPromptId = promptId
         if (turnId !== null) state.turnPromptIds.set(turnId, promptId)
         state.active = true
+        state.skillActivations = turnSkillActivations(payload.origin)
+        /* 把本轮激活的 skills 按 promptId 标注到对应的用户消息上，让「使用了
+           skill X、Y」的小标签在 turn 结束后仍能落在那条用户消息处。 */
+        if (state.skillActivations.length > 0) {
+          const userMessage = state.messages.find(
+            (message) => message.role === 'user' && message.promptId === promptId
+          )
+          if (userMessage !== undefined) {
+            userMessage.skillActivations = state.skillActivations.map((activation) => ({ ...activation }))
+          }
+        }
         return changed()
       }
       case 'turn.step.started': {
@@ -443,12 +521,16 @@ export class TranscriptProjector {
           }
           resetStreamOffsets(state, message.id)
         }
+        /* 保留最新一次重试的进度与 provider 错误摘要，供 loading 指示器展示；
+           后续 step.started 不主动清除，直到该 step 落定或 turn 结束。 */
+        state.retry = retryStatus(payload) ?? state.retry
         return message === null ? { changed: false, resyncRequired: false } : changed()
       }
       case 'turn.step.completed': {
         const message = currentAssistant(state)
         if (message !== null) message.status = 'completed'
         state.retryTarget = null
+        state.retry = null
         return changed()
       }
       case 'turn.step.interrupted': {
@@ -456,15 +538,27 @@ export class TranscriptProjector {
         if (message !== null) message.status = 'error'
         state.currentAssistantMessageId = null
         state.retryTarget = null
+        state.retry = null
         return changed()
       }
       case 'turn.ended': {
         const message = currentAssistant(state)
         const reason = stringValue(payload.reason)
+        state.lastTurnReason = reason === 'completed'
+          ? 'completed'
+          : reason === 'cancelled'
+            ? 'cancelled'
+            : 'failed'
+        state.lastTurnError = state.lastTurnReason === 'failed'
+          ? failedTurnError(payload, state.retry)
+          : null
+        // 0.37.2 起 turn.ended 携带 time；旧版本缺失时归 null，避免沿用上一轮旧值。
+        state.lastTurnEndedAt = stringValue(payload.time)
         if (message !== null) message.status = reason === 'failed' || reason === 'blocked' ? 'error' : 'completed'
         state.currentAssistantMessageId = null
         state.currentPromptId = null
         state.retryTarget = null
+        state.retry = null
         state.active = false
         return changed()
       }
@@ -474,17 +568,23 @@ export class TranscriptProjector {
         if (promptId !== null && promptId !== state.currentPromptId) {
           return { changed: false, resyncRequired: false }
         }
+        const aborted = frame.type === 'prompt.aborted'
+        const failed = payload.reason === 'failed' || payload.reason === 'blocked'
+        state.lastTurnReason = aborted ? 'cancelled' : failed ? 'failed' : 'completed'
+        state.lastTurnError = state.lastTurnReason === 'failed'
+          ? state.retry?.errorMessage ?? state.lastTurnError
+          : null
         const message = currentAssistant(state)
         if (message !== null) {
-          message.status = frame.type === 'prompt.aborted' ||
-            payload.reason === 'failed' ||
-            payload.reason === 'blocked'
+          message.status = aborted || failed
             ? 'error'
             : 'completed'
         }
         state.currentAssistantMessageId = null
         state.currentPromptId = null
         state.retryTarget = null
+        state.retry = null
+        state.lastTurnEndedAt = null
         state.active = false
         return changed()
       }
@@ -500,6 +600,8 @@ export class TranscriptProjector {
       case 'skill.activated':
       case 'tool.list.updated':
       case 'event.di.unit_changed':
+      case 'event.plugin.changed':
+      case 'event.capability.changed':
       case 'subagent.spawned':
       case 'subagent.started':
       case 'subagent.suspended':
@@ -509,7 +611,7 @@ export class TranscriptProjector {
       case 'agent.disposed':
         return { changed: false, resyncRequired: false }
       default:
-        return this.#unknown(state)
+        return this.#unknown(state, frame.type)
     }
   }
 
@@ -642,8 +744,14 @@ export class TranscriptProjector {
     markDurableContentStreams(state, message)
   }
 
-  #unknown(state: ProjectorSessionState): TranscriptProjectionResult {
+  #unknown(state: ProjectorSessionState, eventType = 'unknown'): TranscriptProjectionResult {
     state.unknownEventCount += 1
+    // 未知新事件按 AGENTS.md 要求记录一次去敏诊断：只透出事件类型，不落 payload /
+    // session_id 等敏感内容，也不当作普通文本消息处理。
+    if (eventType !== 'unknown' && !this.#diagnosedEventTypes.has(eventType)) {
+      this.#diagnosedEventTypes.add(eventType)
+      console.warn(`[TranscriptProjector] unknown session event "${eventType}"; payload sanitized and ignored`)
+    }
     return { changed: false, resyncRequired: false }
   }
 
@@ -672,6 +780,11 @@ function createState(): ProjectorSessionState {
     pendingRawBySlot: new Map(),
     terminalTools: new Map(),
     retryTarget: null,
+    lastTurnReason: null,
+    lastTurnError: null,
+    retry: null,
+    skillActivations: [],
+    lastTurnEndedAt: null,
     nonMainMessageIds: new Set(),
     nonMainToolCallIds: new Set(),
     hiddenMessageIds: new Set(),
@@ -735,6 +848,12 @@ function isSanitizedSlashMessage(message: SessionMessage): boolean {
 function slashCommandText(name: string, args: string | null): string {
   const command = `/${name.replace(/[\r\n]/g, '')}`
   return args === null || args.length === 0 ? command : `${command} ${args}`
+}
+
+/** 提取 turn.started origin.user.skillActivations；非 user 分支或字段漂移时返回空数组。 */
+function turnSkillActivations(origin: unknown): SkillActivationInfo[] {
+  const parsed = originUserSchema.safeParse(origin)
+  return parsed.success ? parsed.data.skillActivations : []
 }
 
 function projectContentPart(part: MessageContentPart): TranscriptPart[] {
@@ -896,6 +1015,26 @@ function asPart(value: unknown): MessageContentPart {
 function currentAssistant(state: ProjectorSessionState): TranscriptMessage | null {
   if (state.currentAssistantMessageId === null) return null
   return state.messages.find((message) => message.id === state.currentAssistantMessageId) ?? null
+}
+
+function retryStatus(payload: Record<string, unknown>): RetryStatus | null {
+  const failedAttempt = numberValue(payload.failedAttempt)
+  const nextAttempt = numberValue(payload.nextAttempt)
+  const maxAttempts = numberValue(payload.maxAttempts)
+  if (failedAttempt === null || nextAttempt === null || maxAttempts === null) return null
+  return {
+    failedAttempt,
+    nextAttempt,
+    maxAttempts,
+    delayMs: numberValue(payload.delayMs),
+    errorName: stringValue(payload.errorName),
+    errorMessage: stringValue(payload.errorMessage)
+  }
+}
+
+function failedTurnError(payload: Record<string, unknown>, retry: RetryStatus | null): string | null {
+  const error = recordValue(payload.error)
+  return stringValue(error?.message) ?? stringValue(error?.name) ?? retry?.errorMessage ?? null
 }
 
 function streamSourceKey(messageId: string, kind: 'text' | 'thinking'): string {

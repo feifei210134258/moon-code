@@ -2,6 +2,7 @@
 
 import { mount } from '@vue/test-utils'
 import { PhFolderSimple } from '@phosphor-icons/vue'
+import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import FolderSimpleOpenIcon from '../../src/renderer/src/components/icons/FolderSimpleOpenIcon.vue'
@@ -225,6 +226,44 @@ describe('ProjectSidebar', () => {
 
     await wrapper.setProps({ lifecyclePending: 'creating' })
     expect(wrapper.get('.new-task-button').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('slides the session row open and archives directly on the red confirm, without a dialog', async () => {
+    const confirm = vi.fn()
+    window.confirm = confirm
+    const wrapper = mountSidebar()
+    const wrap = wrapper.findAll('.session-row-wrap')[0]!
+    // The hover tray exposes a dedicated archive trigger beside the three-dot menu.
+    expect(wrap.find('.session-archive-trigger').exists()).toBe(true)
+    await wrap.get('.session-archive-trigger').trigger('click')
+    expect(wrap.classes()).toContain('is-swipe-open')
+    // The confirm layer is revealed on the right inside the same row.
+    await wrap.get('.session-swipe-confirm').trigger('click')
+    expect(confirm).not.toHaveBeenCalled()
+    expect(wrapper.emitted('archiveSession')).toEqual([['session-a']])
+    wrapper.unmount()
+  })
+
+  it('slides the row back instead of archiving when the pointer leaves the row', async () => {
+    const wrapper = mountSidebar()
+    const wrap = wrapper.findAll('.session-row-wrap')[0]!
+    await wrap.get('.session-archive-trigger').trigger('click')
+    expect(wrap.classes()).toContain('is-swipe-open')
+    await wrap.trigger('mouseleave')
+    expect(wrap.classes()).not.toContain('is-swipe-open')
+    expect(wrapper.emitted('archiveSession')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('reaches the session manager panel from the sidebar actions', async () => {
+    setActivePinia(createPinia())
+    const wrapper = mountSidebar()
+    expect(wrapper.get('.session-manager-button').text()).toContain('会话管理')
+    await wrapper.get('.session-manager-button').trigger('click')
+    await nextTick()
+    expect(document.querySelector('.session-manager-overlay')).not.toBeNull()
+    expect(document.querySelector('.session-manager-card')).not.toBeNull()
     wrapper.unmount()
   })
 })

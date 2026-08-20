@@ -42,6 +42,7 @@ import {
   backgroundTaskListSchema,
   backgroundTaskCancelResultSchema,
   sessionTranscriptSchema,
+  sessionPlanListSchema,
   sideChatStartResultSchema,
   sessionListSchema,
   sessionListV2Schema,
@@ -56,6 +57,7 @@ import {
   uploadedFileSchema,
   uploadedFileDeleteResultSchema,
   sessionArchiveResultSchema,
+  sessionBatchActionResultSchema,
   type KimiServerMeta,
   type AuthSummary,
   type InteractionResolveResult,
@@ -100,6 +102,7 @@ import {
   type SessionSummaryV2,
   type SessionActivityStatus,
   type SessionTranscript,
+  type SessionPlanList,
   type SideChatStartResult,
   type Terminal,
   type TerminalCloseResult,
@@ -108,7 +111,10 @@ import {
   type WorkspaceDeleteResult,
   type UploadedFile,
   type UploadedFileDeleteResult,
-  type SessionArchiveResult
+  type SessionArchiveResult,
+  type PromptSkill,
+  type SessionBatchActionResult,
+  type SessionSummaryV2Lite
 } from '../wire/schemas.js'
 
 export interface KimiEnvelope<T> {
@@ -244,6 +250,16 @@ export class KimiRestClient {
       })
     })
     if (!response.ok) throw await this.#binaryError(response, 'Kimi file download failed')
+    return new Uint8Array(await response.arrayBuffer())
+  }
+
+  /** 0.37.2+：按 file_id 拉取会话媒体二进制（供 Main 转 Blob URL 展示）。 */
+  async getSessionMedia(sessionId: string, fileId: string): Promise<Uint8Array> {
+    const response = await this.#fetch(
+      `${this.#origin}/api/v1/sessions/${encodeURIComponent(sessionId)}/media/${encodeURIComponent(fileId)}`,
+      { headers: this.#identifiedHeaders({ authorization: `Bearer ${this.#token}`, accept: 'application/octet-stream' }) }
+    )
+    if (!response.ok) throw await this.#binaryError(response, 'Kimi session media fetch failed')
     return new Uint8Array(await response.arrayBuffer())
   }
 
@@ -546,12 +562,14 @@ export class KimiRestClient {
     workspaceId?: string | string[]
     activityStatus?: SessionActivityStatus | SessionActivityStatus[]
     updatedAfter?: number
+    updatedBefore?: number
     archived?: 'true' | 'false' | 'all'
     sort?: 'meta.updated_at_desc' | 'meta.updated_at_asc' | 'meta.created_at_desc'
     includeGit?: boolean
     pageSize?: number
+    page?: number
     pageToken?: string
-  } = {}): Promise<{ items: SessionSummaryV2[]; hasMore: boolean; nextPageToken: string | null }> {
+  } = {}): Promise<{ items: SessionSummaryV2[]; hasMore: boolean; total: number; nextPageToken: string | null }> {
     const query = new URLSearchParams()
     const setList = (key: string, value: string | string[] | undefined) => {
       if (value === undefined) return
@@ -560,13 +578,46 @@ export class KimiRestClient {
     setList('workspace.id', options.workspaceId)
     setList('activity.status', options.activityStatus)
     if (options.updatedAfter !== undefined) query.set('meta.updated_after', String(options.updatedAfter))
+    if (options.updatedBefore !== undefined) query.set('meta.updated_before', String(options.updatedBefore))
     if (options.archived !== undefined) query.set('meta.archived', options.archived)
     if (options.sort !== undefined) query.set('sort', options.sort)
     if (options.includeGit === true) query.set('include', 'git')
-    query.set('page_size', String(options.pageSize ?? 100))
+    query.set('page_size', String(clampPageSize(options.pageSize ?? 100)))
+    if (options.page !== undefined) query.set('page', String(options.page))
     if (options.pageToken !== undefined) query.set('page_token', options.pageToken)
     const data = await this.request(`/api/v2/sessions?${query}`, {}, sessionListV2Schema)
-    return { items: data.items, hasMore: data.has_more, nextPageToken: data.next_page_token }
+    // 本方法不请求 fields=id,archived，服务端始终返回完整条目
+    return {
+      items: data.items.filter(isFullV2Item),
+      hasMore: data.has_more,
+      total: data.total,
+      nextPageToken: data.next_page_token
+    }
+  }
+
+  /** 0.37.2+：fields=id,archived 的轻量列表（全量匹配流程），只返回 id/archived 投影。 */
+  async listSessionIdsV2(options: {
+    workspaceId?: string | string[]
+    activityStatus?: SessionActivityStatus | SessionActivityStatus[]
+    archived?: 'true' | 'false' | 'all'
+    updatedBefore?: number
+    pageSize?: number
+    page?: number
+  } = {}): Promise<{ items: SessionSummaryV2Lite[]; total: number }> {
+    const query = new URLSearchParams()
+    const setList = (key: string, value: string | string[] | undefined) => {
+      if (value === undefined) return
+      for (const item of Array.isArray(value) ? value : [value]) query.append(key, item)
+    }
+    setList('workspace.id', options.workspaceId)
+    setList('activity.status', options.activityStatus)
+    if (options.updatedBefore !== undefined) query.set('meta.updated_before', String(options.updatedBefore))
+    if (options.archived !== undefined) query.set('meta.archived', options.archived)
+    query.set('fields', 'id,archived')
+    query.set('page_size', String(clampPageSize(options.pageSize ?? 100)))
+    if (options.page !== undefined) query.set('page', String(options.page))
+    const data = await this.request(`/api/v2/sessions?${query}`, {}, sessionListV2Schema)
+    return { items: data.items.filter(isLiteV2Item), total: data.total }
   }
 
   createSession(input: {
@@ -623,6 +674,24 @@ export class KimiRestClient {
       `/api/v1/sessions/${encodeURIComponent(sessionId)}:restore`,
       { method: 'POST', body: '{}' },
       sessionSummarySchema
+    )
+  }
+
+  /** 0.37.2+：批量归档会话，逐项返回结果。 */
+  archiveSessions(ids: string[]): Promise<SessionBatchActionResult> {
+    return this.request(
+      '/api/v2/sessions:archive',
+      { method: 'POST', body: JSON.stringify({ ids }) },
+      sessionBatchActionResultSchema
+    )
+  }
+
+  /** 0.37.2+：批量恢复会话，逐项返回结果。 */
+  restoreSessions(ids: string[]): Promise<SessionBatchActionResult> {
+    return this.request(
+      '/api/v2/sessions:restore',
+      { method: 'POST', body: JSON.stringify({ ids }) },
+      sessionBatchActionResultSchema
     )
   }
 
@@ -770,6 +839,24 @@ export class KimiRestClient {
     )
   }
 
+  /**
+   * 0.37.2+：拉取 Agent 的 ExitPlanMode 计划清单（agent_id 必填；tool_call_id
+   * 可选，缺省列出该 Agent 所有可恢复计划内容的调用）。用于把计划详情合并到
+   * transcript 的 plan_review tool part 上，避免逐 part 打接口。
+   */
+  getSessionPlanList(
+    sessionId: string,
+    options: { agentId?: string; toolCallId?: string } = {}
+  ): Promise<SessionPlanList> {
+    const query = new URLSearchParams({ agent_id: options.agentId ?? 'main' })
+    if (options.toolCallId !== undefined) query.set('tool_call_id', options.toolCallId)
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/transcript/plan?${query}`,
+      {},
+      sessionPlanListSchema
+    )
+  }
+
   startSideChat(sessionId: string): Promise<SideChatStartResult> {
     return this.request(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}:btw`,
@@ -806,6 +893,8 @@ export class KimiRestClient {
       permissionMode?: 'manual' | 'auto' | 'yolo'
       planMode?: boolean
       swarmMode?: boolean
+      skills?: PromptSkill[]
+      promptId?: string
     }
   ): Promise<PromptSubmitResult> {
     return this.request(
@@ -820,7 +909,9 @@ export class KimiRestClient {
           ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
           ...(input.permissionMode === undefined ? {} : { permission_mode: input.permissionMode }),
           ...(input.planMode === undefined ? {} : { plan_mode: input.planMode }),
-          ...(input.swarmMode === undefined ? {} : { swarm_mode: input.swarmMode })
+          ...(input.swarmMode === undefined ? {} : { swarm_mode: input.swarmMode }),
+          ...(input.skills === undefined || input.skills.length === 0 ? {} : { skills: input.skills }),
+          ...(input.promptId === undefined ? {} : { prompt_id: input.promptId })
         })
       },
       promptSubmitResultSchema
@@ -1120,6 +1211,20 @@ export class KimiRestClient {
 function providerQuery(provider?: string): string {
   if (provider === undefined) return ''
   return `?${new URLSearchParams({ provider })}`
+}
+
+/** 0.37.2+：v2 sessions 的 page_size 上限放宽到 10000，下限 1。 */
+function clampPageSize(value: number): number {
+  if (!Number.isFinite(value)) return 100
+  return Math.min(10_000, Math.max(1, Math.floor(value)))
+}
+
+function isFullV2Item(item: SessionSummaryV2 | SessionSummaryV2Lite): item is SessionSummaryV2 {
+  return 'workspace' in item && 'meta' in item && 'activity' in item
+}
+
+function isLiteV2Item(item: SessionSummaryV2 | SessionSummaryV2Lite): item is SessionSummaryV2Lite {
+  return !('workspace' in item) && 'archived' in item
 }
 
 function parseRetryAfter(value: string | null): number | null {

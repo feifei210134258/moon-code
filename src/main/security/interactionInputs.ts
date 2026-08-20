@@ -1,5 +1,34 @@
 import type { QuestionAnswerInput } from '../../shared/contracts.js'
 
+export interface ApprovalResponse {
+  decision: 'approved' | 'rejected' | 'cancelled'
+  scope?: 'session'
+  feedback?: string
+  selectedLabel?: string
+}
+
+/** 审批回应的 IPC 入参校验：合法 decision/scope，可选 feedback/selectedLabel 限长。 */
+export function validateApprovalResponse(response: unknown): ApprovalResponse {
+  if (!isRecord(response)) throw new TypeError('Invalid Kimi approval response')
+  const decision = response.decision
+  const scope = response.scope
+  const feedback = response.feedback
+  const selectedLabel = response.selectedLabel
+  if (
+    (decision !== 'approved' && decision !== 'rejected' && decision !== 'cancelled') ||
+    (scope !== undefined && scope !== 'session') ||
+    (feedback !== undefined && (typeof feedback !== 'string' || feedback.length > 20_000)) ||
+    (selectedLabel !== undefined &&
+      (typeof selectedLabel !== 'string' || selectedLabel.length < 1 || selectedLabel.length > 256))
+  ) throw new TypeError('Invalid Kimi approval response')
+  return {
+    decision,
+    ...(scope === undefined ? {} : { scope }),
+    ...(feedback === undefined ? {} : { feedback }),
+    ...(selectedLabel === undefined ? {} : { selectedLabel })
+  }
+}
+
 export function validateQuestionAnswers(answers: unknown): Record<string, QuestionAnswerInput> {
   if (!isRecord(answers) || Object.keys(answers).length < 1 || Object.keys(answers).length > 50) {
     throw new TypeError('Invalid Kimi question answers')

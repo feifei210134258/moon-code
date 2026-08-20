@@ -248,4 +248,41 @@ describe('Conversation controls', () => {
     expect(turn.scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
     wrapper.unmount()
   })
+
+  it('shows a 使用了 X、Y pill on user turns that activated skills and nothing otherwise', async () => {
+    const wrapper = mountConversation()
+    await wrapper.setProps({
+      turns: [
+        {
+          id: 'turn-skilled', role: 'user', author: 'You', time: '10:31',
+          blocks: [{ id: 'turn-skilled:text:0', type: 'text' as const, text: '提交并生成 PDF' }],
+          skillNames: ['commit', 'pdf']
+        },
+        {
+          id: 'turn-plain', role: 'user', author: 'You', time: '10:32',
+          blocks: [{ id: 'turn-plain:text:0', type: 'text' as const, text: '普通继续' }]
+        }
+      ]
+    })
+
+    const pill = wrapper.get('#conversation-turn-turn-skilled .turn-skill-pill')
+    expect(pill.attributes('aria-label')).toBe('使用了 commit、pdf')
+    expect(pill.text()).toContain('commit')
+    expect(pill.text()).toContain('pdf')
+    expect(wrapper.find('#conversation-turn-turn-plain .turn-skill-pill').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not show a skill pill on assistant turns', async () => {
+    const wrapper = mountConversation()
+    await wrapper.setProps({
+      turns: [{
+        id: 'turn-assistant', role: 'assistant', author: 'Kimi', time: '10:33',
+        blocks: [{ id: 'turn-assistant:text:0', type: 'text' as const, text: '完成' }],
+        skillNames: ['commit']
+      }]
+    })
+    expect(wrapper.find('.turn-skill-pill').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

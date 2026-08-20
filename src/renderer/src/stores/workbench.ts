@@ -1,8 +1,11 @@
 import { defineStore } from 'pinia'
 import type {
+  PlanReview,
+  SessionRetryStatus,
   SessionTranscriptMessage,
   SessionTranscriptPart,
   SessionViewState,
+  SkillActivationView,
   WorkspaceNavigationItem
 } from '@shared/contracts'
 import type { ChatTurn, ExtensionTab, ProjectItem } from '../types'
@@ -91,6 +94,15 @@ export const useWorkbenchStore = defineStore('workbench', {
     transcriptPhase: 'idle' as SessionViewState['phase'],
     transcriptError: null as string | null,
     transcriptHasMore: false,
+    /* 会话最近一轮的结局与失败/重试摘要：由 hydrateTranscript 从
+       SessionViewState 带进来，供失败卡片与重试指示使用。 */
+    lastTurnReason: null as SessionViewState['lastTurnReason'],
+    lastTurnError: null as string | null,
+    retry: null as SessionRetryStatus | null,
+    /* 最近一次 turn.started 报告的 skills（0.37.2+）；来自 SessionViewState。 */
+    skillActivations: [] as SkillActivationView[],
+    /* Plan 查看面板当前打开的计划条目；无对应打开的面板时为 null。 */
+    planReview: null as PlanReview | null,
     viewedSessionUpdates: loadViewedSessionUpdates(),
     navigationActivity: loadNavigationActivity(),
     projectExpansion: loadProjectExpansion(),
@@ -130,6 +142,20 @@ export const useWorkbenchStore = defineStore('workbench', {
       this.transcriptPhase = 'ready'
       this.transcriptError = null
       this.transcriptHasMore = false
+      this.lastTurnReason = null
+      this.lastTurnError = null
+      this.retry = null
+      this.skillActivations = []
+    },
+    /* 打开 / 关闭 Plan 查看面板：面板只读展示，反馈动作由 App 层路由到输入框。 */
+    openPlanReview(review: PlanReview) {
+      this.planReview = {
+        ...review,
+        ...(review.options === undefined ? {} : { options: review.options.map((option) => ({ ...option })) })
+      }
+    },
+    closePlanReview() {
+      this.planReview = null
     },
     setDraftWorkspace(workspaceId: string) {
       if (!this.draftActive) return
@@ -259,12 +285,21 @@ export const useWorkbenchStore = defineStore('workbench', {
       this.transcriptError = state.error
       this.transcriptHasMore = state.hasMoreMessages
       this.turns = groupTranscriptTurns(state.messages)
+      this.lastTurnReason = state.lastTurnReason
+      this.lastTurnError = state.lastTurnError
+      this.retry = state.retry === null ? null : { ...state.retry }
+      this.skillActivations = (state.skillActivations ?? []).map((activation) => ({ ...activation }))
     },
     markTranscriptLoading(sessionId: string) {
       if (sessionId !== this.activeSessionId) return
       this.transcriptPhase = 'loading'
       this.transcriptError = null
       this.turns = []
+      this.lastTurnReason = null
+      this.lastTurnError = null
+      this.retry = null
+      this.skillActivations = []
+      this.planReview = null
     }
   }
 })
@@ -426,6 +461,9 @@ function groupTranscriptTurns(messages: SessionTranscriptMessage[]): ChatTurn[] 
 }
 
 function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
+  const skillNames = message.skillActivations
+    ?.map((activation) => activation.skillName)
+    .filter((name) => name.length > 0)
   const blocks: ChatTurn['blocks'] = []
   if (message.originKind === 'cron') {
     blocks.push({
@@ -465,6 +503,7 @@ function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
     time: formatMessageTime(message.createdAt),
     blocks,
     ...(message.originKind === undefined ? {} : { originKind: message.originKind }),
+    ...(skillNames !== undefined && skillNames.length > 0 ? { skillNames } : {}),
     ...(message.role === 'user' && message.status === 'pending' ? { queued: true } : {}),
     ...(message.role === 'assistant' && message.status === 'pending' ? { pending: true } : {})
   }
@@ -517,7 +556,8 @@ function projectPart(
         ...(part.outputStream === undefined ? {} : { outputStream: part.outputStream }),
         ...(part.progress === undefined ? {} : { progress: part.progress }),
         ...(part.toolDiff === undefined ? {} : { toolDiff: part.toolDiff }),
-        ...(part.writtenPath === undefined ? {} : { writtenPath: part.writtenPath })
+        ...(part.writtenPath === undefined ? {} : { writtenPath: part.writtenPath }),
+        ...(part.plan === undefined ? {} : { plan: part.plan })
       }
     })
     return

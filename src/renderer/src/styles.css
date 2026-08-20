@@ -987,6 +987,55 @@ select:focus-visible {
   display: grid;
 }
 
+/* 归档滑动确认：整行内容左滑、右侧露出红色「归档」确认区（无弹窗）。
+   session-row-wrap 需要 overflow:hidden，让默认右移 100% 的确认区藏在行内。 */
+.session-row-wrap {
+  overflow: hidden;
+}
+
+.session-swipe-confirm {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  width: 64px;
+  border: 0;
+  border-radius: 0 7px 7px 0;
+  background: #e5484d;
+  color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  transform: translateX(100%);
+  transition: transform 0.18s ease;
+}
+
+.session-row-wrap.is-swipe-open .session-swipe-confirm {
+  transform: translateX(0);
+}
+
+.session-row-content {
+  transition: transform 0.18s ease;
+}
+
+.session-row-wrap.is-swipe-open .session-row-content {
+  transform: translateX(-64px);
+}
+
+/* 托盘第二枚按钮与「三个点」并排横排。 */
+.session-action-area {
+  grid-auto-flow: column;
+  gap: 1px;
+}
+
+.session-row-wrap.is-swipe-open .session-action-area {
+  display: grid;
+}
+
 .tree-more-button {
   display: grid;
   width: 25px;
@@ -1181,6 +1230,241 @@ select:focus-visible {
   margin-top: auto;
   margin-bottom: 10px;
   font-size: var(--type-ui-small-size);
+}
+
+/* 会话管理面板（跨 workspace 会话列表 + 批量归档/恢复）。 */
+.session-manager-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(3px);
+}
+
+.session-manager-card {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 12px;
+  width: min(680px, 100%);
+  max-height: min(76vh, 720px);
+  padding: 18px 20px 16px;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+}
+
+.session-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-manager-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.session-manager-title h2 {
+  margin: 0;
+  font-size: var(--type-headline-size);
+  letter-spacing: -0.02em;
+}
+
+.session-manager-close {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.session-manager-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+
+.session-manager-filters {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) repeat(3, minmax(110px, 1fr)) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.session-manager-filter {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.session-manager-filter > span {
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+}
+
+.session-manager-filter select {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: var(--type-ui-small-size);
+}
+
+.session-manager-refresh {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.session-manager-refresh:hover {
+  color: var(--text);
+}
+
+.session-manager-refresh:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.session-manager-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 20px;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+}
+
+.session-manager-summary b {
+  color: var(--text);
+}
+
+.session-manager-hint {
+  margin-left: auto;
+}
+
+.session-manager-list {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.session-manager-row {
+  display: grid;
+  grid-template-columns: auto 12px minmax(0, 1fr) auto auto auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: var(--type-ui-small-size);
+}
+
+.session-manager-row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.session-manager-row input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+
+.session-manager-status {
+  display: grid;
+  place-items: center;
+}
+
+.session-manager-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.session-manager-status.is-running i {
+  background: var(--accent);
+}
+
+.session-manager-status.is-approval i,
+.session-manager-status.is-question i {
+  background: #e5a000;
+}
+
+.session-manager-status.is-failed i {
+  background: #e5484d;
+}
+
+.session-manager-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-manager-workspace,
+.session-manager-time,
+.session-manager-archived {
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  white-space: nowrap;
+}
+
+.session-manager-archived {
+  color: #e5484d;
+}
+
+.session-manager-empty,
+.session-manager-pending {
+  padding: 22px 0;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  text-align: center;
+}
+
+.session-manager-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.session-manager-error {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: #e5484d;
+  font-size: var(--type-caption-size);
+}
+
+.session-manager-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.primary-button.is-danger-action {
+  background: #e5484d;
+  border-color: #e5484d;
 }
 
 .conversation-pane {
@@ -1986,6 +2270,28 @@ select:focus-visible {
   background: rgba(165, 103, 18, 0.1);
 }
 
+/* 用户消息激活了 skill 时的「使用了 X、Y」小标签（0.37.2+）。 */
+.turn-header > .turn-skill-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(60%, 320px);
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: var(--type-caption-size);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.turn-header > .turn-skill-pill > .turn-skill-names {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 590;
+}
+
 .turn-pending-response {
   min-height: 24px;
   display: flex;
@@ -2016,6 +2322,15 @@ select:focus-visible {
 @keyframes turn-pending-pulse {
   0%, 70%, 100% { opacity: 0.28; transform: translateY(0); }
   35% { opacity: 1; transform: translateY(-1px); }
+}
+
+/* 自动重试期间 provider 错误摘要：另起一行，弱化但仍可读 */
+.turn-pending-retry-error {
+  flex-basis: 100%;
+  color: var(--amber);
+  font-size: var(--type-micro-size);
+  line-height: 1.5;
+  user-select: text;
 }
 
 .turn-text {
@@ -2841,6 +3156,86 @@ select:focus-visible {
   position: relative;
 }
 
+/* 会话最后一个 Turn 失败时的常驻卡片：悬在输入区上方，直到重新运行或轮次
+   结局更新（completed/cancelled）才消失；手动取消不显示。 */
+.turn-failed-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 46px);
+  max-width: 810px;
+  min-height: 48px;
+  margin: 0 auto 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--red-soft);
+  border-radius: 10px;
+  background: rgba(255, 241, 241, 0.72);
+  color: var(--red);
+}
+
+.turn-failed-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--red);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.turn-failed-body {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.turn-failed-body strong {
+  font-size: var(--type-ui-small-size);
+}
+
+.turn-failed-reason {
+  min-width: 0;
+  display: flex;
+  gap: 4px;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  line-height: 1.45;
+}
+
+.turn-failed-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  user-select: text;
+}
+
+.turn-failed-resume {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--red-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--red);
+  font: inherit;
+  font-size: var(--type-caption-size);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.turn-failed-resume:hover:not(:disabled) { border-color: var(--red); background: rgba(255, 241, 241, 0.4); }
+.turn-failed-resume:disabled { opacity: 0.5; cursor: default; }
+
 .draft-project-picker {
   position: relative;
   width: calc(100% - 46px);
@@ -3505,9 +3900,18 @@ select:focus-visible {
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.13);
 }
 
+.composer-input-area.has-selected-skill {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
 .composer-input-area.has-selected-skill textarea {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 100%;
+}
+
+.composer-skill-token.is-active {
+  outline: 1px solid var(--accent-strong);
 }
 
 .composer-wrap textarea {
@@ -4146,6 +4550,14 @@ select:focus-visible {
   font-size: var(--type-ui-small-size);
 }
 
+.command-popover mark.slash-match {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 3px;
+  padding: 0 1px;
+  font-weight: 600;
+}
+
 .command-popover > button small {
   overflow: hidden;
   color: var(--muted);
@@ -4314,14 +4726,32 @@ select:focus-visible {
 }
 
 .agent-row {
+  --agent-depth: 0;
   display: grid;
   gap: 5px;
   padding: 10px 12px;
+  padding-left: calc(12px + var(--agent-depth) * 18px);
   border-bottom: 1px solid var(--border);
 }
 
 .agent-row:last-child {
   border-bottom: 0;
+}
+
+/* 子 Agent 树形缩进：is-nested 行在内容左侧画一条竖向层级引导线 */
+.agent-row.is-nested {
+  position: relative;
+  background: rgba(0, 0, 0, 0.012);
+}
+
+.agent-row.is-nested::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(12px + (var(--agent-depth) - 1) * 18px + 2px);
+  width: 1px;
+  background: var(--border);
 }
 
 .agent-state,
@@ -4788,6 +5218,354 @@ body.is-panel-resizing {
   color: var(--muted);
   font-size: var(--type-micro-size);
   line-height: 1.55;
+}
+
+/* Plan 查看面板（P2-8）：点击工作条里的 plan 条目打开，展示完整计划与审批/反馈历史。 */
+.plan-viewer-backdrop {
+  position: fixed;
+  z-index: 250;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(3px);
+}
+
+.plan-viewer-dialog {
+  width: min(720px, 100%);
+  height: min(640px, 100%);
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+
+.plan-viewer-header {
+  min-height: 54px;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 11px;
+  padding: 0 10px 0 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-viewer-icon {
+  width: 29px;
+  height: 29px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.plan-viewer-heading {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.plan-viewer-heading strong {
+  color: var(--ink);
+  font-size: var(--type-ui-size);
+  font-weight: 650;
+}
+
+.plan-viewer-heading span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--type-micro-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-viewer-status {
+  flex: none;
+  margin-left: auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--amber);
+  background: rgba(165, 103, 18, 0.1);
+  font-size: var(--type-micro-size);
+}
+
+.plan-viewer-status.is-approved {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.plan-viewer-status.is-rejected,
+.plan-viewer-status.is-cancelled {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.plan-viewer-close {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.plan-viewer-close:hover,
+.plan-viewer-close:focus-visible {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.06);
+  outline: none;
+}
+
+.plan-viewer-body {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.plan-viewer-section {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.plan-viewer-section + .plan-viewer-section {
+  border-top: 1px solid var(--border);
+}
+
+.plan-viewer-section > header {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 15px 8px;
+}
+
+.plan-viewer-section h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--type-micro-size);
+  font-weight: 590;
+  letter-spacing: 0.08em;
+}
+
+.plan-viewer-path {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--type-micro-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-viewer-content {
+  min-height: 0;
+  flex: 1;
+  margin: 0;
+  overflow: auto;
+  padding: 0 15px 14px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.plan-viewer-empty {
+  margin: 0;
+  padding: 0 15px 14px;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  line-height: 1.55;
+}
+
+.plan-review-outcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 15px 13px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.plan-review-outcome.is-approved { border-color: rgba(0, 128, 0, 0.25); }
+.plan-review-outcome.is-rejected,
+.plan-review-outcome.is-cancelled { border-color: rgba(200, 30, 30, 0.22); }
+
+.plan-review-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--amber);
+}
+
+.plan-review-outcome.is-approved .plan-review-dot { background: var(--green); }
+.plan-review-outcome.is-rejected .plan-review-dot,
+.plan-review-outcome.is-cancelled .plan-review-dot { background: var(--red); }
+
+.plan-review-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.plan-review-copy strong {
+  color: var(--text);
+  font-size: var(--type-caption-size);
+  font-weight: 620;
+}
+
+.plan-review-copy span {
+  color: var(--muted);
+  font-size: var(--type-micro-size);
+}
+
+.plan-review-copy p {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: var(--type-caption-size);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.plan-review-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 15px 13px;
+}
+
+.plan-review-option-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--type-micro-size);
+}
+
+.plan-review-option {
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text);
+  background: #ffffff;
+  cursor: default;
+  font-size: var(--type-micro-size);
+}
+
+.plan-viewer-footer {
+  flex: none;
+  display: grid;
+  gap: 8px;
+  padding: 11px 15px 13px;
+  border-top: 1px solid var(--border);
+  background: #ffffff;
+}
+
+.plan-viewer-feedback {
+  width: 100%;
+  min-height: 32px;
+  max-height: 150px;
+  display: block;
+  resize: none;
+  overflow: hidden;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--text);
+  background: #ffffff;
+  font-family: inherit;
+  font-size: var(--type-caption-size);
+  line-height: 1.5;
+}
+
+.plan-viewer-feedback:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.plan-viewer-feedback::placeholder {
+  color: var(--muted);
+}
+
+.plan-viewer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.plan-viewer-button {
+  min-height: 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--type-caption-size);
+  font-weight: 570;
+}
+
+.plan-viewer-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.plan-viewer-button.is-primary {
+  color: #ffffff;
+  background: var(--accent);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+.plan-viewer-button.is-quiet {
+  color: var(--muted);
+  background: transparent;
+}
+
+.plan-viewer-button.is-quiet:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+/* 工作条里带 plan 数据的工具条目：提供「查看计划」入口（P2-8）。 */
+.activity-plan-open {
+  display: block;
+  margin: 0 10px 9px auto;
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  color: var(--accent);
+  background: #ffffff;
+  cursor: pointer;
+  font-size: var(--type-micro-size);
+  font-weight: 590;
+}
+
+.activity-plan-open:hover {
+  background: var(--accent-soft);
 }
 
 .background-task-row {

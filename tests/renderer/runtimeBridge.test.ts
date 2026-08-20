@@ -35,7 +35,11 @@ function sessionState(sessionId: string): SessionViewState {
     hasMoreMessages: false,
     resyncCount: 0,
     unknownEventCount: 0,
-    error: null
+    error: null,
+    lastTurnReason: null,
+    lastTurnError: null,
+    retry: null,
+    skillActivations: []
   }
 }
 

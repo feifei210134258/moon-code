@@ -18,6 +18,10 @@ import type {
   KimiAgentTranscript,
   KimiPromptControls,
   KimiPromptInput,
+  KimiSessionManagerBatchResult,
+  KimiSessionManagerItem,
+  KimiSessionManagerListInput,
+  KimiSessionManagerPage,
   KimiSideChatPromptInput,
   KimiSessionRuntimeStatus,
   KimiSessionOperationalState,
@@ -64,6 +68,9 @@ export function useRuntimeBridge() {
   const sessionPageError = ref<string | null>(null)
   const sessionPageHasMore = ref(false)
   const sessionPageBeforeId = ref<string | null>(null)
+  /* 会话管理面板：列表加载与批量归档/恢复的进行中状态。 */
+  const sessionManagerPending = ref(false)
+  const sessionManagerError = ref<string | null>(null)
   const lifecyclePending = ref<string | null>(null)
   const lifecycleError = ref<string | null>(null)
   const sessionView = ref<SessionViewState | null>(null)
@@ -340,6 +347,60 @@ export function useRuntimeBridge() {
       return []
     } finally {
       childrenPendingSessionId.value = null
+    }
+  }
+
+  /** 会话管理面板：跨 workspace 列出会话（调用 main 的 kimi v2 sessions 投影）。 */
+  const listSessionManagerPage = async (
+    input: KimiSessionManagerListInput
+  ): Promise<KimiSessionManagerPage | null> => {
+    const api = window.kimiAgent
+    if (api === undefined || runtime.value.status !== 'running' || sessionManagerPending.value) return null
+    sessionManagerPending.value = true
+    sessionManagerError.value = null
+    try {
+      return await api.listSessionManagerPage(input)
+    } catch (error) {
+      sessionManagerError.value = errorMessage(error)
+      return null
+    } finally {
+      sessionManagerPending.value = false
+    }
+  }
+
+  /** 会话管理面板：批量归档（kimi v2 archive，协议里即「完成/归档」终点操作）。 */
+  const archiveSessionManager = async (ids: string[]): Promise<KimiSessionManagerBatchResult | null> => {
+    const api = window.kimiAgent
+    if (api === undefined || runtime.value.status !== 'running' || sessionManagerPending.value) return null
+    sessionManagerPending.value = true
+    sessionManagerError.value = null
+    try {
+      const result = await api.archiveSessions(ids)
+      if (result.succeeded > 0) await refreshWorkspaceTree()
+      return result
+    } catch (error) {
+      sessionManagerError.value = errorMessage(error)
+      return null
+    } finally {
+      sessionManagerPending.value = false
+    }
+  }
+
+  /** 会话管理面板：批量恢复（kimi v2 restore）。 */
+  const restoreSessionManager = async (ids: string[]): Promise<KimiSessionManagerBatchResult | null> => {
+    const api = window.kimiAgent
+    if (api === undefined || runtime.value.status !== 'running' || sessionManagerPending.value) return null
+    sessionManagerPending.value = true
+    sessionManagerError.value = null
+    try {
+      const result = await api.restoreSessions(ids)
+      if (result.succeeded > 0) await refreshWorkspaceTree()
+      return result
+    } catch (error) {
+      sessionManagerError.value = errorMessage(error)
+      return null
+    } finally {
+      sessionManagerPending.value = false
     }
   }
 
@@ -806,7 +867,12 @@ export function useRuntimeBridge() {
   const respondApproval = async (
     sessionId: string,
     approvalId: string,
-    response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }
+    response: {
+      decision: 'approved' | 'rejected' | 'cancelled'
+      scope?: 'session'
+      feedback?: string
+      selectedLabel?: string
+    }
   ): Promise<void> => {
     if (window.kimiAgent === undefined || interactionPendingKey.value !== null) return
     const generation = ++interactionGeneration
@@ -1575,6 +1641,8 @@ export function useRuntimeBridge() {
     sessionPagePending,
     sessionPageError,
     sessionPageHasMore,
+    sessionManagerPending,
+    sessionManagerError,
     lifecyclePending,
     lifecycleError,
     sessionView,
@@ -1638,6 +1706,9 @@ export function useRuntimeBridge() {
     refreshWorkspaceTree,
     loadMoreSessions,
     loadSessionChildren,
+    listSessionManagerPage,
+    archiveSessionManager,
+    restoreSessionManager,
     addWorkspace,
     renameWorkspace,
     deleteWorkspace,

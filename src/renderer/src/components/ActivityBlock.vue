@@ -10,6 +10,9 @@ import { computed, ref, watch } from 'vue'
 import type { ChatActivity } from '../types'
 
 const props = defineProps<{ activity: ChatActivity }>()
+const emit = defineEmits<{
+  'open-plan': [plan: import('@shared/contracts').PlanReview]
+}>()
 const expanded = ref(props.activity.status === 'error')
 const hasDetails = computed(() =>
   (props.activity.detail?.length ?? 0) > 0 ||
@@ -94,5 +97,13 @@ function toggle(): void {
         </div>
       </section>
     </div>
+
+    <button
+      v-if="activity.plan"
+      class="activity-plan-open"
+      type="button"
+      aria-label="查看计划"
+      @click="emit('open-plan', activity.plan!)"
+    >查看计划</button>
   </div>
 </template>

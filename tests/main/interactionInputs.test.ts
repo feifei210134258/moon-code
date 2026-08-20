@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { validateQuestionAnswers } from '../../src/main/security/interactionInputs.js'
+import {
+  validateApprovalResponse,
+  validateQuestionAnswers
+} from '../../src/main/security/interactionInputs.js'
 
 describe('question interaction IPC validation', () => {
   it('accepts every Kimi question answer variant', () => {
@@ -19,5 +22,36 @@ describe('question interaction IPC validation', () => {
     expect(() => validateQuestionAnswers({ item: { kind: 'single', option_id: '' } })).toThrow()
     expect(() => validateQuestionAnswers({ item: { kind: 'skipped', injected: true } })).toThrow()
     expect(() => validateQuestionAnswers({ ['x'.repeat(257)]: { kind: 'skipped' } })).toThrow()
+  })
+})
+
+describe('approval interaction IPC validation', () => {
+  it('accepts a plain decision plus optional scope, feedback and selected label', () => {
+    expect(validateApprovalResponse({ decision: 'approved' })).toEqual({ decision: 'approved' })
+    expect(validateApprovalResponse({
+      decision: 'rejected',
+      scope: 'session',
+      feedback: '第三点补充测试命令',
+      selectedLabel: '批准计划'
+    })).toEqual({
+      decision: 'rejected',
+      scope: 'session',
+      feedback: '第三点补充测试命令',
+      selectedLabel: '批准计划'
+    })
+    expect(validateApprovalResponse({ decision: 'cancelled', feedback: '' })).toEqual({
+      decision: 'cancelled', feedback: ''
+    })
+  })
+
+  it('rejects malformed or over-permissive approval input', () => {
+    expect(() => validateApprovalResponse({})).toThrow('Invalid Kimi approval response')
+    expect(() => validateApprovalResponse(null)).toThrow()
+    expect(() => validateApprovalResponse({ decision: 'maybe' })).toThrow()
+    expect(() => validateApprovalResponse({ decision: 'approved', scope: 'global' })).toThrow()
+    expect(() => validateApprovalResponse({ decision: 'approved', feedback: 42 })).toThrow()
+    expect(() => validateApprovalResponse({ decision: 'approved', feedback: 'x'.repeat(20_001) })).toThrow()
+    expect(() => validateApprovalResponse({ decision: 'approved', selectedLabel: '' })).toThrow()
+    expect(() => validateApprovalResponse({ decision: 'approved', selectedLabel: 'x'.repeat(257) })).toThrow()
   })
 })

@@ -6,7 +6,7 @@
 
 ## 背景
 
-Kimi Prompt 官方契约允许 `text`、`image`、`video` 和 `file` content。文件先通过全局 `POST /api/v1/files` 上传；历史媒体通过带 Bearer 的 `GET /api/v1/files/{file_id}` 读取。Renderer 不应获得 Kimi token，也不能把任意本机路径交给 Main 读取。
+Kimi Prompt 官方契约允许 `text`、`image`、`video` 和 `file` content。文件先通过全局 `POST /api/v1/files` 上传；历史媒体自 Kimi Code `0.37.2` 起通过带 Bearer 的 `GET /api/v1/sessions/{session_id}/media/{file_id}` 读取（早期版本为 `GET /api/v1/files/{file_id}`，保留为无会话上下文时的回退）。Renderer 不应获得 Kimi token，也不能把任意本机路径交给 Main 读取。
 
 同时，Assistant 文本需要支持 GFM、代码高亮、KaTeX 和 Mermaid。模型输出属于不受信任内容，不能直接作为 HTML 或可执行图表注入 Renderer。
 

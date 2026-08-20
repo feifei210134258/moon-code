@@ -12,21 +12,21 @@ afterEach(() => {
 })
 
 describe('Kimi media blocks', () => {
-  it('loads a file-backed image through typed Kimi IPC', async () => {
+  it('loads a prompt-attachment image through the session media IPC', async () => {
     const createObjectURL = vi.fn(() => 'blob:kimi-image')
     Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-    const readAttachment = vi.fn(async () => ({
+    const readSessionMedia = vi.fn(async () => ({
       fileId: 'image-1', mediaType: 'application/octet-stream', bytes: new Uint8Array([1, 2, 3])
     }))
-    window.kimiAgent = { readAttachment } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = { readSessionMedia } as unknown as KimiAgentDesktopApi
     const wrapper = mount(MediaBlock, {
-      props: { mediaType: 'image', fileId: 'image-1', sourceMediaType: null, base64Data: null },
+      props: { mediaType: 'image', sessionId: 'session-1', fileId: 'image-1', sourceMediaType: null, base64Data: null },
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
 
-    expect(readAttachment).toHaveBeenCalledWith('image-1', 'application/octet-stream')
+    expect(readSessionMedia).toHaveBeenCalledWith('session-1', 'image-1', 'application/octet-stream')
     expect(wrapper.get('.media-image-trigger img').attributes('src')).toBe('blob:kimi-image')
     await wrapper.get('.media-image-trigger').trigger('click')
     const viewport = wrapper.get('.media-preview-viewport')
@@ -49,6 +49,48 @@ describe('Kimi media blocks', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.media-preview-dialog').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('falls back to the legacy file download when no sessionId is provided', async () => {
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:kimi-image-legacy') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    const readSessionMedia = vi.fn()
+    const readAttachment = vi.fn(async () => ({
+      fileId: 'image-1', mediaType: 'application/octet-stream', bytes: new Uint8Array([4, 5])
+    }))
+    window.kimiAgent = { readSessionMedia, readAttachment } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(MediaBlock, {
+      props: { mediaType: 'image', sessionId: null, fileId: 'image-1', sourceMediaType: null, base64Data: null }
+    })
+    await flushPromises()
+
+    expect(readAttachment).toHaveBeenCalledWith('image-1', 'application/octet-stream')
+    expect(readSessionMedia).not.toHaveBeenCalled()
+    expect(wrapper.get('.media-image-trigger img').attributes('src')).toBe('blob:kimi-image-legacy')
+    wrapper.unmount()
+  })
+
+  it('renders base64 tool-output media without touching the IPC', async () => {
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:unused') })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+    const readSessionMedia = vi.fn()
+    const readAttachment = vi.fn()
+    window.kimiAgent = { readSessionMedia, readAttachment } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(MediaBlock, {
+      props: {
+        mediaType: 'image',
+        sessionId: 'session-1',
+        fileId: null,
+        sourceMediaType: 'image/png',
+        base64Data: 'iVBORw0KGgo='
+      }
+    })
+    await flushPromises()
+
+    expect(wrapper.get('.media-image-trigger img').attributes('src')).toBe('data:image/png;base64,iVBORw0KGgo=')
+    expect(readSessionMedia).not.toHaveBeenCalled()
+    expect(readAttachment).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 

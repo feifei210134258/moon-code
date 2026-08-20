@@ -619,6 +619,39 @@ describe('SessionSyncController', () => {
     controller.close()
   })
 
+  it('projects turn skill activations into the session view (0.37.2)', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+    expect(controller.getState('session-1')?.skillActivations).toEqual([])
+
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'turn.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:04:00.000Z',
+      payload: {
+        turnId: 2,
+        promptId: 'prompt-1',
+        origin: {
+          kind: 'user',
+          skillActivations: [
+            { activationId: 'act-1', skillName: 'commit', skillArgs: '-m "msg"' },
+            { activationId: 'act-2', skillName: 'pdf' }
+          ]
+        }
+      }
+    } satisfies SessionEventFrame)
+
+    await vi.waitFor(() => expect(controller.getState('session-1')?.skillActivations).toEqual([
+      expect.objectContaining({ activationId: 'act-1', skillName: 'commit', skillArgs: '-m "msg"' }),
+      expect.objectContaining({ activationId: 'act-2', skillName: 'pdf' })
+    ]))
+    controller.close()
+  })
+
   it('seeds pending approvals and questions from the authoritative snapshot', async () => {
     const snapshot = makeSnapshot(10)
     snapshot.pending_approvals = [{
@@ -1064,6 +1097,165 @@ describe('SessionSyncController', () => {
 
     expect(listener).not.toHaveBeenCalled()
     expect(controller.activeSessionId).toBe('session-2')
+    controller.close()
+  })
+
+  it('merges transcript plan reviews onto matching plan_review tool parts (0.37.2)', async () => {
+    const snapshot = makeSnapshot(10)
+    snapshot.messages = {
+      items: [{
+        id: 'message-plan-1',
+        session_id: 'session-1',
+        role: 'assistant',
+        content: [{ type: 'tool_use', tool_call_id: 'plan-tool-1', tool_name: 'ExitPlanMode', input: {} }],
+        created_at: '2026-07-23T00:02:00.000Z'
+      }, {
+        id: 'message-plain-1',
+        session_id: 'session-1',
+        role: 'assistant',
+        content: [{ type: 'tool_use', tool_call_id: 'read-file-1', tool_name: 'read_file', input: {} }],
+        created_at: '2026-07-23T00:03:00.000Z'
+      }],
+      has_more: false
+    }
+    const controller = new SessionSyncController({
+      rest: {
+        getSessionSnapshot: vi.fn().mockResolvedValue(snapshot),
+        getSessionPlanList: vi.fn().mockResolvedValue({
+          agent_id: 'main',
+          plans: [{
+            tool_call_id: 'plan-tool-1',
+            turn_id: 'turn-7',
+            source: 'interaction',
+            plan: '1. 先读 README\n2. 改 App.vue',
+            path: 'docs/plan.md',
+            options: [{ label: '批准计划', description: '直接开始执行' }],
+            review: { state: 'approved', selected_option: '批准计划', feedback: '第三点补充测试命令' }
+          }]
+        })
+      },
+      socket: new FakeSocket()
+    })
+
+    const state = await controller.openSession('session-1')
+    const planMessage = state.messages.find((message) => message.id === 'message-plan-1')
+    const planPart = planMessage?.content.find((part) => part.type === 'tool')
+    expect(planPart?.type === 'tool' ? planPart.plan : undefined).toEqual({
+      toolCallId: 'plan-tool-1',
+      turnId: 'turn-7',
+      source: 'interaction',
+      plan: '1. 先读 README\n2. 改 App.vue',
+      path: 'docs/plan.md',
+      options: [{ label: '批准计划', description: '直接开始执行' }],
+      review: { state: 'approved', selectedOption: '批准计划', feedback: '第三点补充测试命令' }
+    })
+    /* 无匹配计划的普通工具 part 不附带 plan 字段 */
+    const plainPart = state.messages.find((message) => message.id === 'message-plain-1')?.content[0]
+    expect(plainPart?.type === 'tool' ? plainPart.plan : undefined).toBeUndefined()
+    /* 计划合并不改变消息条目，也不影响普通工具主流程 */
+    expect(state.messages.some((message) => message.id === 'message-plan-1')).toBe(true)
+    expect(state.messages.some((message) => message.id === 'message-plain-1')).toBe(true)
+    controller.close()
+  })
+
+  it('silently degrades when the plan review list fetch fails (no plan field, transcript intact)', async () => {
+    const snapshot = makeSnapshot(10)
+    snapshot.messages = {
+      items: [{
+        id: 'message-plan-fail',
+        session_id: 'session-1',
+        role: 'assistant',
+        content: [{ type: 'tool_use', tool_call_id: 'plan-tool-1', tool_name: 'ExitPlanMode', input: {} }],
+        created_at: '2026-07-23T00:02:00.000Z'
+      }],
+      has_more: false
+    }
+    const controller = new SessionSyncController({
+      rest: {
+        getSessionSnapshot: vi.fn().mockResolvedValue(snapshot),
+        getSessionPlanList: vi.fn().mockRejectedValue(new Error('plan list unavailable'))
+      },
+      socket: new FakeSocket()
+    })
+
+    const state = await controller.openSession('session-1')
+    expect(state.phase).toBe('ready')
+    expect(state.messages.some((message) => message.id === 'message-plan-fail')).toBe(true)
+    const part = state.messages.find((message) => message.id === 'message-plan-fail')?.content[0]
+    expect(part?.type === 'tool' ? part.plan : undefined).toBeUndefined()
+    controller.close()
+  })
+
+  it('refreshes and re-merges plan reviews after a snapshot resync (0.37.2)', async () => {
+    const snapshot = makeSnapshot(10)
+    snapshot.messages = {
+      items: [{
+        id: 'message-plan-2',
+        session_id: 'session-1',
+        role: 'assistant',
+        content: [{ type: 'tool_use', tool_call_id: 'plan-tool-2', tool_name: 'ExitPlanMode', input: {} }],
+        created_at: '2026-07-23T00:02:00.000Z'
+      }],
+      has_more: false
+    }
+    const planList = {
+      agent_id: 'main',
+      plans: [{ tool_call_id: 'plan-tool-2', turn_id: 'turn-8', source: 'display', plan: '计划文本' }]
+    }
+    const controller = new SessionSyncController({
+      rest: {
+        getSessionSnapshot: vi.fn().mockResolvedValue(snapshot),
+        getSessionPlanList: vi.fn().mockResolvedValue(planList)
+      },
+      socket: new FakeSocket()
+    })
+    await controller.openSession('session-1')
+    const before = controller.getState('session-1')?.messages[0]?.content[0]
+    expect(before?.type === 'tool' && before.plan?.plan).toBe('计划文本')
+
+    await controller.refreshSession('session-1')
+    const after = controller.getState('session-1')?.messages[0]?.content[0]
+    expect(after?.type === 'tool' && after.plan?.plan).toBe('计划文本')
+    controller.close()
+  })
+
+  it('fetches and merges plans when a plan_review tool frame appears live (0.37.2)', async () => {
+    const socket = new FakeSocket()
+    const getPlanList = vi.fn().mockResolvedValue({
+      agent_id: 'main',
+      plans: [{ tool_call_id: 'plan-live-1', turn_id: 'turn-9', source: 'display', plan: '实时计划' }]
+    })
+    const controller = new SessionSyncController({
+      rest: {
+        getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)),
+        getSessionPlanList: getPlanList
+      },
+      socket
+    })
+    await controller.openSession('session-1')
+
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'turn.step.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:04:00.000Z', payload: { turnId: 2, step: 0, stepId: 'step-0' }
+    } satisfies SessionEventFrame)
+    socket.cursors['session-1'] = { seq: 12, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'tool.call.started', seq: 12, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:04:01.000Z',
+      payload: {
+        toolCallId: 'plan-live-1',
+        name: 'ExitPlanMode',
+        display: { kind: 'plan_review', plan: '实时计划', path: 'docs/plan.md' }
+      }
+    } satisfies SessionEventFrame)
+
+    await vi.waitFor(() => {
+      const state = controller.getState('session-1')
+      const tool = state?.messages.flatMap((message) => message.content)
+        .find((part) => part.type === 'tool' && part.toolCallId === 'plan-live-1')
+      expect(tool?.type === 'tool' && tool.plan?.plan).toBe('实时计划')
+    })
     controller.close()
   })
 })

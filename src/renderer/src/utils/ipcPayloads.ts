@@ -10,6 +10,8 @@ import type {
 export type ApprovalResponse = {
   decision: 'approved' | 'rejected' | 'cancelled'
   scope?: 'session'
+  feedback?: string
+  selectedLabel?: string
 }
 
 export function toCloneablePromptControls(controls: KimiPromptControls): KimiPromptControls {
@@ -44,6 +46,13 @@ export function toCloneablePromptInput(input: KimiPromptInput): KimiPromptInput 
   }
   if (input.goalObjective !== undefined) cloneable.goalObjective = input.goalObjective
   if (input.deliveryMode !== undefined) cloneable.deliveryMode = input.deliveryMode
+  if (input.skills !== undefined) {
+    cloneable.skills = input.skills.map((skill) =>
+      skill.args === undefined || skill.args.length === 0
+        ? { name: skill.name }
+        : { name: skill.name, args: skill.args }
+    )
+  }
   return cloneable
 }
 
@@ -78,6 +87,8 @@ export function toCloneableWebElements(elements: BrowserPickedElement[]): Browse
 export function toCloneableApprovalResponse(response: ApprovalResponse): ApprovalResponse {
   const cloneable: ApprovalResponse = { decision: response.decision }
   if (response.scope !== undefined) cloneable.scope = response.scope
+  if (response.feedback !== undefined) cloneable.feedback = response.feedback
+  if (response.selectedLabel !== undefined) cloneable.selectedLabel = response.selectedLabel
   return cloneable
 }
 

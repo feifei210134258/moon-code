@@ -245,7 +245,13 @@ export class KimiSessionBridge extends EventEmitter {
         })
       }
     }
-    const result = await this.#submitContent(sessionId, content, undefined, input.controls)
+    const result = await this.#submitContent(
+      sessionId,
+      content,
+      undefined,
+      input.controls,
+      input.skills
+    )
     if (input.deliveryMode === 'steer' && result.status === 'queued') {
       await this.steerPrompts(sessionId, [result.promptId])
     }
@@ -308,7 +314,8 @@ export class KimiSessionBridge extends EventEmitter {
     sessionId: string,
     content: MessageContentPart[],
     metadata: Record<string, unknown> | undefined,
-    controls: KimiPromptControls
+    controls: KimiPromptControls,
+    skills?: KimiPromptInput['skills']
   ): Promise<PromptSubmissionResult> {
     const controller = this.#getController()
     if (controller.activeSessionId !== sessionId) throw new Error('Kimi session is not active')
@@ -319,7 +326,8 @@ export class KimiSessionBridge extends EventEmitter {
       thinking: controls.thinking,
       permissionMode: controls.permissionMode,
       planMode: controls.planMode,
-      swarmMode: controls.swarmMode
+      swarmMode: controls.swarmMode,
+      ...(skills === undefined || skills.length === 0 ? {} : { skills })
     })
     controller.acceptSubmittedPrompt(sessionId, result)
     return {
@@ -355,7 +363,12 @@ export class KimiSessionBridge extends EventEmitter {
   async respondApproval(
     sessionId: string,
     approvalId: string,
-    response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }
+    response: {
+      decision: 'approved' | 'rejected' | 'cancelled'
+      scope?: 'session'
+      feedback?: string
+      selectedLabel?: string
+    }
   ): Promise<InteractionResolveResult> {
     const result = await this.#runtime.createRestClient().respondApproval(sessionId, approvalId, response)
     this.#controller?.resolveApproval(sessionId, approvalId)

@@ -28,6 +28,34 @@ describe('prompt inputs', () => {
     expect(() => validatePromptInput({ text: '继续', controls, deliveryMode: 'interrupt' })).toThrow()
   })
 
+  it('passes submitted skills through and allows skill-only prompts', () => {
+    expect(validatePromptInput({
+      text: '', controls, skills: [{ name: 'commit', args: '-m "x"' }, { name: 'pdf' }]
+    })).toEqual({
+      text: '', controls, skills: [{ name: 'commit', args: '-m "x"' }, { name: 'pdf' }]
+    })
+    expect(validatePromptInput({
+      text: '', controls, skills: [{ name: 'commit', args: '   ' }]
+    })).toEqual({
+      text: '', controls, skills: [{ name: 'commit' }]
+    })
+  })
+
+  it('rejects malformed submitted skills', () => {
+    expect(() => validatePromptInput({
+      text: '继续', controls, skills: [{ name: '' }]
+    })).toThrow()
+    expect(() => validatePromptInput({
+      text: '继续', controls, skills: [42]
+    })).toThrow()
+    expect(() => validatePromptInput({
+      text: '继续', controls, skills: { name: 'commit' }
+    })).toThrow()
+    expect(() => validatePromptInput({
+      text: '继续', controls, skills: []
+    })).toThrow()
+  })
+
   it('accepts attachment-only prompts while validating uploaded file descriptors', () => {
     const attachment = {
       fileId: 'file-1', name: 'design.png', mediaType: 'image/png', size: 2048

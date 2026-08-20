@@ -70,4 +70,59 @@ describe('AgentRoster', () => {
     await rows[1]!.get('.agent-track-button').trigger('click')
     expect(wrapper.emitted('open')?.[1]?.[0]).toEqual(expect.objectContaining({ id: 'agent-2' }))
   })
+
+  it('groups subagents whose parentAgentId matches another subagent under it, indenting each level', async () => {
+    const base = {
+      role: 'subagent' as const, description: 'task', status: 'working' as const,
+      subagentType: 'explore', runInBackground: false, model: null, thinkingEffort: null,
+      createdAt: null, startedAt: null, completedAt: null,
+      suspendedReason: null, outputPreview: null, usage: null
+    }
+    const wrapper = mount(AgentRoster, {
+      props: {
+        agents: [
+          { ...base, id: 'agent-1', name: 'root-1', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0 },
+          { ...base, id: 'agent-2', name: 'child-1', parentAgentId: 'agent-1', parentToolCallId: 'tool-2', swarmIndex: 0 },
+          { ...base, id: 'agent-3', name: 'grandchild', parentAgentId: 'agent-2', parentToolCallId: 'tool-3', swarmIndex: 0 },
+          { ...base, id: 'agent-4', name: 'orphan', parentAgentId: null, parentToolCallId: null, swarmIndex: 1 }
+        ]
+      }
+    })
+    await wrapper.get('.agent-roster-summary').trigger('click')
+
+    // 前序遍历：父节点先于子节点，嵌套层级通过 data-depth 表达
+    const rows = wrapper.findAll('.agent-row').map((row) => ({
+      id: row.find('strong').text(),
+      depth: row.attributes('data-depth'),
+      nested: row.classes().includes('is-nested')
+    }))
+    expect(rows).toEqual([
+      { id: 'root-1', depth: '0', nested: false },
+      { id: 'child-1', depth: '1', nested: true },
+      { id: 'grandchild', depth: '2', nested: true },
+      { id: 'orphan', depth: '0', nested: false }
+    ])
+  })
+
+  it('falls back to the main-agent level when parentAgentId does not resolve to a roster node', async () => {
+    const base = {
+      role: 'subagent' as const, description: 'task', status: 'completed' as const,
+      subagentType: 'verify', runInBackground: false, model: null, thinkingEffort: null,
+      createdAt: null, startedAt: null, completedAt: null,
+      suspendedReason: null, outputPreview: null, usage: null
+    }
+    const wrapper = mount(AgentRoster, {
+      props: {
+        agents: [
+          { ...base, id: 'agent-1', name: 'self-ref', parentAgentId: 'agent-1', parentToolCallId: 'tool-1', swarmIndex: null },
+          { ...base, id: 'agent-2', name: 'missing-parent', parentAgentId: 'no-such-agent', parentToolCallId: 'tool-2', swarmIndex: null }
+        ]
+      }
+    })
+    await wrapper.get('.agent-roster-summary').trigger('click')
+    const rows = wrapper.findAll('.agent-row')
+    expect(rows).toHaveLength(2)
+    // 自指向 / 未知父 ID 都回退到顶层，不进入嵌套
+    rows.forEach((row) => expect(row.attributes('data-depth')).toBe('0'))
+  })
 })

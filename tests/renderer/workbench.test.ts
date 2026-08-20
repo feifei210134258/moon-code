@@ -42,7 +42,11 @@ function sessionState(): SessionViewState {
     hasMoreMessages: false,
     resyncCount: 0,
     unknownEventCount: 0,
-    error: null
+    error: null,
+    lastTurnReason: null,
+    lastTurnError: null,
+    retry: null,
+    skillActivations: []
   }
 }
 
@@ -204,6 +208,91 @@ describe('workbench transcript hydration', () => {
     ])
     /* 聚合回合保留首条消息的时间与 id */
     expect(store.turns[0]?.id).toBe('assistant-1')
+  })
+
+  it('hydrates the failed turn reason and retry progress for the failure card', () => {
+    const store = useWorkbenchStore()
+    store.activeSessionId = 'session-1'
+    const state = sessionState()
+    state.lastTurnReason = 'failed'
+    state.lastTurnError = '401 (unauthorized)'
+    state.retry = {
+      failedAttempt: 2, nextAttempt: 3, maxAttempts: 5, delayMs: 4000,
+      errorName: 'ProviderOverloaded', errorMessage: 'the model is overloaded'
+    }
+
+    store.hydrateTranscript(state)
+
+    expect(store.lastTurnReason).toBe('failed')
+    expect(store.lastTurnError).toBe('401 (unauthorized)')
+    expect(store.retry).toEqual({ ...state.retry })
+  })
+
+  it('resets the failure card and retry state when reloading the transcript', () => {
+    const store = useWorkbenchStore()
+    store.activeSessionId = 'session-1'
+    const state = sessionState()
+    state.lastTurnReason = 'failed'
+    state.lastTurnError = 'boom'
+    state.retry = { failedAttempt: 1, nextAttempt: 2, maxAttempts: 3, delayMs: 1, errorName: null, errorMessage: 'x' }
+    store.hydrateTranscript(state)
+    expect(store.lastTurnReason).toBe('failed')
+
+    store.markTranscriptLoading('session-1')
+
+    expect(store.lastTurnReason).toBeNull()
+    expect(store.lastTurnError).toBeNull()
+    expect(store.retry).toBeNull()
+  })
+
+  it('hydrates top-level turn skill activations and per-message skill names for the pill', () => {
+    const store = useWorkbenchStore()
+    store.activeSessionId = 'session-1'
+    const state = sessionState()
+    state.messages = [{
+      id: 'user-skill',
+      sessionId: 'session-1',
+      role: 'user',
+      content: [{ type: 'text', text: '提交并生成 PDF' }],
+      createdAt: '2026-07-23T01:03:00.000Z',
+      promptId: 'prompt-skill',
+      status: 'completed',
+      skillActivations: [
+        { activationId: 'act-1', skillName: 'commit', skillArgs: '-m "x"' },
+        { activationId: 'act-2', skillName: 'pdf' }
+      ]
+    }]
+    state.skillActivations = state.messages[0]!.skillActivations!
+
+    store.hydrateTranscript(state)
+
+    expect(store.skillActivations).toEqual([
+      expect.objectContaining({ activationId: 'act-1', skillName: 'commit' }),
+      expect.objectContaining({ activationId: 'act-2', skillName: 'pdf' })
+    ])
+    expect(store.turns).toEqual([
+      expect.objectContaining({ id: 'user-skill', role: 'user', skillNames: ['commit', 'pdf'] })
+    ])
+  })
+
+  it('leaves skillNames off user turns without skill activations', () => {
+    const store = useWorkbenchStore()
+    store.activeSessionId = 'session-1'
+    const state = sessionState()
+    state.messages = [{
+      id: 'user-plain',
+      sessionId: 'session-1',
+      role: 'user',
+      content: [{ type: 'text', text: '普通继续' }],
+      createdAt: '2026-07-23T01:04:00.000Z',
+      promptId: 'prompt-plain',
+      status: 'completed'
+    }]
+    store.hydrateTranscript(state)
+
+    expect(store.turns[0]).toEqual(expect.objectContaining({ id: 'user-plain' }))
+    expect(store.turns[0]?.skillNames).toBeUndefined()
+    expect(store.skillActivations).toEqual([])
   })
 
   it('only expands or collapses a workspace without replacing the selected session', () => {
