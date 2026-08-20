@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { TranscriptProjector } from '../../packages/kimi-adapter/src/projector/TranscriptProjector.js'
 import type { SessionSnapshot } from '../../packages/kimi-adapter/src/wire/schemas.js'
 import type { SessionEventFrame } from '../../packages/kimi-adapter/src/wire/ws.js'
@@ -1004,5 +1004,217 @@ describe('TranscriptProjector', () => {
     }))
 
     expect(projector.getProjection('session-1').unknownEventCount).toBe(0)
+  })
+})
+
+describe('TranscriptProjector turn health projection', () => {
+  it('exposes the wire retry progress from turn.step.retrying and clears it when the step lands', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+    projector.project(frame('turn.step.started', { turnId: 2, step: 1, stepId: 'step-1' }))
+    projector.project(frame('turn.step.retrying', {
+      turnId: 2,
+      step: 1,
+      stepId: 'step-1',
+      failedAttempt: 2,
+      nextAttempt: 3,
+      maxAttempts: 5,
+      delayMs: 4000,
+      errorName: 'ProviderOverloaded',
+      errorMessage: 'the model is overloaded, please retry later',
+      statusCode: 503
+    }))
+
+    expect(projector.getProjection('session-1').retry).toEqual({
+      failedAttempt: 2,
+      nextAttempt: 3,
+      maxAttempts: 5,
+      delayMs: 4000,
+      errorName: 'ProviderOverloaded',
+      errorMessage: 'the model is overloaded, please retry later'
+    })
+
+    projector.project(frame('turn.step.completed', { turnId: 2, step: 1, stepId: 'step-1' }))
+    expect(projector.getProjection('session-1').retry).toBeNull()
+  })
+
+  it('records a failed turn ending (with error summary) as lastTurnReason and clears the retry state', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+    projector.project(frame('turn.step.started', { turnId: 2, step: 1, stepId: 'step-1' }))
+    projector.project(frame('turn.step.retrying', {
+      turnId: 2, step: 1, stepId: 'step-1',
+      failedAttempt: 1, nextAttempt: 2, maxAttempts: 3, delayMs: 2000,
+      errorName: 'ProviderOverloaded', errorMessage: 'provider overloaded'
+    }))
+    projector.project(frame('turn.step.completed', { turnId: 2, step: 1, stepId: 'step-1' }))
+    projector.project(frame('turn.ended', {
+      turnId: 2,
+      reason: 'failed',
+      error: { code: 'provider.api_error', message: 'upstream 503', retryable: false, name: 'ApiError' }
+    }))
+
+    const projection = projector.getProjection('session-1')
+    expect(projection.lastTurnReason).toBe('failed')
+    expect(projection.lastTurnError).toBe('upstream 503')
+    expect(projection.retry).toBeNull()
+  })
+
+  it('maps a manual cancellation to lastTurnReason cancelled (never failed)', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+    projector.project(frame('turn.step.started', { turnId: 2, step: 1, stepId: 'step-1' }))
+    projector.project(frame('turn.ended', { turnId: 2, reason: 'cancelled', interruptReason: 'user_cancelled' }))
+
+    const projection = projector.getProjection('session-1')
+    expect(projection.lastTurnReason).toBe('cancelled')
+    expect(projection.lastTurnError).toBeNull()
+  })
+
+  it('exposes turn origin skill activations and the authoritative prompt id (0.37.2)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('prompt.submitted', {
+      promptId: 'prompt-skill',
+      userMessageId: 'user-skill',
+      content: [{ type: 'text', text: 'Run skill' }]
+    }))
+    projector.project(frame('turn.started', {
+      turnId: 5,
+      promptId: 'prompt-skill-2',
+      origin: {
+        kind: 'user',
+        skillActivations: [
+          {
+            activationId: 'act-1', skillName: 'commit', skillArgs: '-m "msg"',
+            skillType: 'builtin', skillPath: '/s', skillSource: 'builtin'
+          },
+          { activationId: 'act-2', skillName: 'pdf' }
+        ]
+      }
+    }))
+
+    const projection = projector.getProjection('session-1')
+    expect(projection.activePromptId).toBe('prompt-skill-2')
+    expect(projection.skillActivations).toEqual([
+      expect.objectContaining({
+        activationId: 'act-1', skillName: 'commit', skillArgs: '-m "msg"', skillSource: 'builtin'
+      }),
+      expect.objectContaining({ activationId: 'act-2', skillName: 'pdf' })
+    ])
+  })
+
+  it('ignores skillActivations from non-user turn origins (0.37.2)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('turn.started', {
+      turnId: 6,
+      origin: { kind: 'skill_activation', activationId: 'act-9', skillName: 'pdf', trigger: 'user-slash' }
+    }))
+
+    expect(projector.getProjection('session-1').skillActivations).toEqual([])
+  })
+
+  it('stamps turn skill activations onto the user message with the matching prompt id (0.37.2)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('prompt.submitted', {
+      promptId: 'prompt-skill',
+      userMessageId: 'user-skill',
+      content: [{ type: 'text', text: 'Run skill' }]
+    }))
+    projector.project(frame('turn.started', {
+      turnId: 5,
+      promptId: 'prompt-skill',
+      origin: {
+        kind: 'user',
+        skillActivations: [
+          { activationId: 'act-1', skillName: 'commit', skillArgs: '-m "msg"' },
+          { activationId: 'act-2', skillName: 'pdf' }
+        ]
+      }
+    }))
+
+    const userMessage = projector.getProjection('session-1').messages.find((message) => message.id === 'user-skill')
+    expect(userMessage?.skillActivations).toEqual([
+      expect.objectContaining({ activationId: 'act-1', skillName: 'commit', skillArgs: '-m "msg"' }),
+      expect.objectContaining({ activationId: 'act-2', skillName: 'pdf' })
+    ])
+    /* 投影级字段同样携带本轮 activations */
+    expect(projector.getProjection('session-1').skillActivations).toHaveLength(2)
+  })
+
+  it('leaves the user message untouched when turn activations carry an unmatched prompt id', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('prompt.submitted', {
+      promptId: 'prompt-a',
+      userMessageId: 'user-a',
+      content: [{ type: 'text', text: 'Plain' }]
+    }))
+    projector.project(frame('turn.started', {
+      turnId: 4,
+      promptId: 'prompt-b',
+      origin: { kind: 'user', skillActivations: [{ activationId: 'act-1', skillName: 'commit' }] }
+    }))
+
+    const projection = projector.getProjection('session-1')
+    expect(projection.messages.find((message) => message.id === 'user-a')?.skillActivations).toBeUndefined()
+    expect(projection.skillActivations).toHaveLength(1)
+  })
+
+  it('surfaces the turn.ended time from the server (0.37.2)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('turn.started', { turnId: 7 }))
+    projector.project(frame('turn.ended', {
+      turnId: 7, reason: 'completed', time: '2026-07-23T00:05:00.000Z'
+    }))
+
+    expect(projector.getProjection('session-1').lastTurnEndedAt).toBe('2026-07-23T00:05:00.000Z')
+  })
+
+  it('drops a stale turn-ended time when an old server omits it', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('turn.started', { turnId: 1 }))
+    projector.project(frame('turn.ended', {
+      turnId: 1, reason: 'completed', time: '2026-07-23T00:05:00.000Z'
+    }))
+    projector.project(frame('turn.started', { turnId: 2 }))
+    projector.project(frame('turn.ended', { turnId: 2, reason: 'completed' }))
+
+    expect(projector.getProjection('session-1').lastTurnEndedAt).toBeNull()
+  })
+
+  it('counts unknown events once per type and logs a sanitized diagnostic', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      projector.project(frame('future.event.foo', { secret: 'x' }))
+      projector.project(frame('future.event.foo', { secret: 'y' }))
+      projector.project(frame('future.event.bar', { secret: 'z' }))
+
+      const projection = projector.getProjection('session-1')
+      expect(projection.unknownEventCount).toBe(3)
+      // 未知事件不投影为普通文本
+      expect(projection.messages).toEqual([])
+      // 每种未知类型只记录一次，且不泄露 payload
+      expect(warn).toHaveBeenCalledTimes(2)
+      expect(warn.mock.calls[0]?.[0]).toContain('future.event.foo')
+      expect(warn.mock.calls[0]?.[0]).not.toContain('secret')
+      expect(warn.mock.calls[0]?.[0]).not.toContain('x')
+      expect(warn.mock.calls[1]?.[0]).toContain('future.event.bar')
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

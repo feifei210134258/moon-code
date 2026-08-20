@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { PhArrowCounterClockwise, PhArrowSquareOut, PhSpinnerGap, PhTrash } from '@phosphor-icons/vue'
+import { PhArrowClockwise, PhArrowCounterClockwise, PhArrowSquareOut, PhCube, PhSpinnerGap, PhTrash } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ChatTurn, ProjectItem } from '../types'
 import { rendererLocale } from '../i18n/rendererLocale'
+import { useTurnHealth } from '../composables/useTurnHealth'
 import type {
   ApprovalRequestView,
   BrowserPickedElement,
@@ -11,6 +12,7 @@ import type {
   KimiPromptQueueState,
   KimiSideChatView,
   KimiPromptControls,
+  KimiPromptSkill,
   KimiSessionGoal,
   KimiSessionWarning,
   KimiSkill,
@@ -18,6 +20,7 @@ import type {
   QuestionAnswerInput,
   QuestionRequestView,
   SessionAgentView,
+  SessionRetryStatus,
   SessionTranscriptMarker,
   WorkspaceFileSearchItem
 } from '@shared/contracts'
@@ -87,6 +90,9 @@ const props = withDefaults(defineProps<{
   agentTranscript?: KimiAgentTranscript | null
   agentTranscriptPending?: boolean
   agentTranscriptError?: string | null
+  lastTurnReason?: 'completed' | 'cancelled' | 'failed' | null
+  lastTurnError?: string | null
+  retry?: SessionRetryStatus | null
   mentionSearch?: (query: string) => Promise<WorkspaceFileSearchItem[]>
 }>(), {
   draftActive: false,
@@ -99,7 +105,10 @@ const props = withDefaults(defineProps<{
   agentTranscript: null,
   agentTranscriptPending: false,
   agentTranscriptError: null,
-  recallableTurnId: null
+  recallableTurnId: null,
+  lastTurnReason: null,
+  lastTurnError: null,
+  retry: null
 })
 
 const emit = defineEmits<{
@@ -109,12 +118,13 @@ const emit = defineEmits<{
     controls: KimiPromptControls,
     goalMode: boolean,
     deliveryMode: 'queue' | 'steer',
-    webElements: BrowserPickedElement[]
+    webElements: BrowserPickedElement[],
+    skills: KimiPromptSkill[]
   ]
   abort: []
   selectDraftWorkspace: [workspaceId: string]
   openDraftWorkspaceFolder: []
-  respondApproval: [approvalId: string, response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }]
+  respondApproval: [approvalId: string, response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session'; feedback?: string; selectedLabel?: string }]
   respondQuestion: [questionId: string, answers: Record<string, QuestionAnswerInput>]
   dismissQuestion: [questionId: string]
   openFile: [path: string]
@@ -123,7 +133,6 @@ const emit = defineEmits<{
   openSystem: [path: string]
   trashEntry: [path: string]
   closeTerminal: []
-  activateSkill: [skillName: string, args?: string]
   updatePromptControls: [controls: KimiPromptControls]
   controlGoal: [control: 'pause' | 'resume' | 'cancel']
   steerPrompt: [promptId: string]
@@ -136,8 +145,31 @@ const emit = defineEmits<{
   closeSideChat: [agentId: string]
   openAgent: [agent: SessionAgentView]
   closeAgent: []
+  openPlan: [plan: import('@shared/contracts').PlanReview]
   undo: []
+  retryFailedTurn: [text: string]
 }>()
+
+/* 失败 Turn 常驻卡片与自动重试 loading 指示：全部判定逻辑在 composable 里，
+   组件只负责把 store 已 hydrate 的字段喂进去并渲染结果。 */
+const {
+  failedTurn,
+  failedReason,
+  canResume,
+  resumeText,
+  retryActive,
+  retryLabel,
+  retryError
+} = useTurnHealth({
+  turns: props.turns,
+  phase: props.phase,
+  lastTurnReason: props.lastTurnReason,
+  lastTurnError: props.lastTurnError,
+  retry: props.retry,
+  /* 主 turn 正在执行/等待操作时隐藏失败卡片。 */
+  sessionBusy: props.promptRunning,
+  draftActive: props.draftActive
+})
 
 const transcriptScroll = ref<HTMLElement | null>(null)
 const interactionDock = ref<HTMLElement | null>(null)
@@ -469,6 +501,16 @@ watch(
             <strong>{{ turn.author }}</strong>
             <span>{{ turn.time }}</span>
             <span v-if="turn.queued" class="queued-chip">{{ isSteeredTurn(turn) ? '已引导' : '已排队' }}</span>
+            <span
+              v-if="turn.role === 'user' && (turn.skillNames?.length ?? 0) > 0"
+              class="turn-skill-pill"
+              :aria-label="'使用了 ' + turn.skillNames!.join('、')"
+              :title="'使用了 ' + turn.skillNames!.join('、')"
+            >
+              <PhCube :size="11" />
+              <span>使用了</span>
+              <span class="turn-skill-names">{{ turn.skillNames!.join('、') }}</span>
+            </span>
           </header>
           <div class="turn-content">
             <div
@@ -478,7 +520,9 @@ watch(
               aria-live="polite"
             >
               <span class="turn-pending-dots" aria-hidden="true"><i /><i /><i /></span>
-              <span>Kimi 已接收任务，正在生成回复…</span>
+              <span v-if="retryActive">{{ retryLabel }}</span>
+              <span v-else>Kimi 已接收任务，正在生成回复…</span>
+              <span v-if="retryActive && retryError" class="turn-pending-retry-error">{{ retryError }}</span>
             </div>
             <template v-for="block in turn.blocks" :key="block.id">
               <MarkdownBlock
@@ -491,7 +535,11 @@ watch(
                 @open-link="emit('openLink', $event)"
                 @open-link-external="emit('openLinkExternal', $event)"
               />
-              <ActivityBlock v-else-if="block.type === 'activity'" :activity="block.activity" />
+              <ActivityBlock
+                v-else-if="block.type === 'activity'"
+                :activity="block.activity"
+                @open-plan="emit('openPlan', $event)"
+              />
               <button
                 v-else-if="block.type === 'file'"
                 class="linked-file"
@@ -509,6 +557,7 @@ watch(
               <MediaBlock
                 v-else
                 :media-type="block.mediaType"
+                :session-id="sessionId"
                 :file-id="block.fileId"
                 :source-media-type="block.sourceMediaType"
                 :base64-data="block.base64Data"
@@ -596,6 +645,25 @@ watch(
       @close="emit('closeTerminal')"
     />
 
+    <div v-if="failedTurn" class="turn-failed-card" role="alert">
+      <span class="turn-failed-icon" aria-hidden="true">!</span>
+      <div class="turn-failed-body">
+        <strong>任务执行失败</strong>
+        <span v-if="failedReason" class="turn-failed-reason">失败原因：<span class="turn-failed-detail">{{ failedReason }}</span></span>
+      </div>
+      <button
+        class="turn-failed-resume"
+        type="button"
+        :disabled="!canResume || promptPending || promptControls === null"
+        :aria-label="canResume ? '重新运行最近一次任务' : '最近一次消息无法重新发送'"
+        @click="emit('retryFailedTurn', resumeText)"
+      >
+        <PhSpinnerGap v-if="promptPending" class="spin" :size="14" />
+        <PhArrowClockwise v-else :size="14" />
+        {{ promptPending ? '正在重新运行…' : '重新运行' }}
+      </button>
+    </div>
+
     <div class="composer-stack">
       <PromptQueueDock
         v-if="(promptQueue?.queued.length ?? 0) > 0 || localPromptQueue.length > 0"
@@ -659,9 +727,8 @@ watch(
         :goal-mode="goalMode"
         :mention-search="mentionSearch"
         :disabled-reason="controlsPending ? '正在读取 Kimi 会话控制…' : '连接 Kimi 并选择一个会话后即可输入'"
-        @submit="(text, attachments, controls, goalMode, deliveryMode, webElements) => emit('submit', text, attachments, controls, goalMode, deliveryMode, webElements)"
+        @submit="(text, attachments, controls, goalMode, deliveryMode, webElements, skills) => emit('submit', text, attachments, controls, goalMode, deliveryMode, webElements, skills)"
         @abort="emit('abort')"
-        @activate-skill="(skillName, args) => emit('activateSkill', skillName, args)"
         @update-controls="emit('updatePromptControls', $event)"
         @update-goal-mode="emit('updateGoalMode', $event)"
       />

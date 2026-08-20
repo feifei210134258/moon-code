@@ -43,7 +43,7 @@ export class AgentProjector {
     roster.set(MAIN_AGENT_ID, main)
     for (const task of snapshot.subagents ?? []) {
       if (task.kind !== 'subagent' || task.run_in_background === true) continue
-      roster.set(task.id, mapSnapshotSubagent(task))
+      roster.set(task.agent_id ?? task.id, mapSnapshotSubagent(task))
     }
     this.#sessions.set(sessionId, roster)
     return this.getRoster(sessionId)
@@ -219,7 +219,9 @@ function mainAgent(status: AgentRosterItem['status']): AgentRosterItem {
 
 function mapSnapshotSubagent(task: SnapshotSubagent): AgentRosterItem {
   return {
-    id: task.id,
+    // 0.37.2+ 快照 task 携带 agent_id；有则用 agent_id 作为 roster 键，保证与
+    // 实时事件（subagentId）同键，缺失时回退 task.id。
+    id: task.agent_id ?? task.id,
     role: 'subagent',
     name: task.subagent_type ?? 'Subagent',
     description: previewText(task.description) ?? '',

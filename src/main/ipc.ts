@@ -55,9 +55,13 @@ import {
   type WorkspaceAddResult,
   type WorkspaceMarkdownImage,
   type SessionCreateResult,
-  type SessionExportResult
+  type SessionExportResult,
+  type KimiSessionManagerBatchResult,
+  type KimiSessionManagerItem,
+  type KimiSessionManagerListInput,
+  type KimiSessionManagerPage
 } from '../shared/contracts.js'
-import type { SessionSummary, SessionSummaryV2 } from '../../packages/kimi-adapter/src/wire/schemas.js'
+import type { SessionBatchActionResult, SessionSummary, SessionSummaryV2 } from '../../packages/kimi-adapter/src/wire/schemas.js'
 import { KimiApiError } from '../../packages/kimi-adapter/src/transport/KimiRestClient.js'
 import { discoverRuntimes } from './runtime/discovery.js'
 import type { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
@@ -74,7 +78,7 @@ import {
   validateOptionalSessionId,
   validateOptionalSkillArgs
 } from './security/capabilityInputs.js'
-import { validateQuestionAnswers } from './security/interactionInputs.js'
+import { validateApprovalResponse, validateQuestionAnswers } from './security/interactionInputs.js'
 import {
   assertTerminalId,
   validateTerminalInput,
@@ -292,6 +296,28 @@ export function registerIpc(
     })
     return page.items.map(projectSessionNavigation)
   })
+  /* 会话管理面板：跨 workspace 列会话（kimi v2 sessions），按 workspace/状态/查询参数过滤。 */
+  ipcMain.handle(
+    ipcChannels.sessionManagerList,
+    async (event, input?: unknown): Promise<KimiSessionManagerPage> => {
+      assertTrustedSender(event)
+      return await listSessionManagerPage(runtime, validateSessionManagerFilter(input))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.sessionManagerArchive,
+    async (event, ids?: unknown): Promise<KimiSessionManagerBatchResult> => {
+      assertTrustedSender(event)
+      return mapSessionBatchResult(await runtime.createRestClient().archiveSessions(validateSessionIdList(ids)))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.sessionManagerRestore,
+    async (event, ids?: unknown): Promise<KimiSessionManagerBatchResult> => {
+      assertTrustedSender(event)
+      return mapSessionBatchResult(await runtime.createRestClient().restoreSessions(validateSessionIdList(ids)))
+    }
+  )
   ipcMain.handle(
     ipcChannels.sessionChildrenList,
     async (event, sessionId?: unknown): Promise<WorkspaceNavigationItem['sessions']> => {
@@ -472,17 +498,7 @@ export function registerIpc(
       assertTrustedSender(event)
       assertSessionId(sessionId)
       assertShortId(approvalId, 'approval')
-      if (!isRecord(response)) throw new TypeError('Invalid Kimi approval response')
-      const decision = response.decision
-      const scope = response.scope
-      if (
-        (decision !== 'approved' && decision !== 'rejected' && decision !== 'cancelled') ||
-        (scope !== undefined && scope !== 'session')
-      ) throw new TypeError('Invalid Kimi approval response')
-      return await sessions.respondApproval(sessionId, approvalId, {
-        decision,
-        ...(scope === undefined ? {} : { scope })
-      })
+      return await sessions.respondApproval(sessionId, approvalId, validateApprovalResponse(response))
     }
   )
   ipcMain.handle(
@@ -574,6 +590,20 @@ export function registerIpc(
         fileId,
         mediaType: safeMediaType,
         bytes: await runtime.createRestClient().downloadFile(fileId)
+      }
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.attachmentReadSessionMedia,
+    async (event, sessionId?: unknown, fileId?: unknown, mediaType?: unknown): Promise<KimiAttachmentBlob> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      assertShortId(fileId, 'file')
+      const safeMediaType = validateMediaType(mediaType)
+      return {
+        fileId,
+        mediaType: safeMediaType,
+        bytes: await runtime.createRestClient().getSessionMedia(sessionId, fileId)
       }
     }
   )
@@ -1183,6 +1213,111 @@ function projectSessionNavigationV2(session: SessionSummaryV2): WorkspaceNavigat
     lastPrompt: session.meta.last_prompt,
     parentSessionId: null,
     archivedAt: isoTime(session.meta.archived_at)
+  }
+}
+
+/* 会话管理面板的过滤器白名单；未知/越界值一律忽略，取服务端默认。 */
+const SESSION_MANAGER_STATUSES = ['running', 'approval', 'question', 'failed', 'idle'] as const
+const SESSION_MANAGER_SORTS = ['meta.updated_at_desc', 'meta.updated_at_asc', 'meta.created_at_desc'] as const
+const SESSION_MANAGER_ARCHIVED = ['true', 'false', 'all'] as const
+
+function validateSessionManagerFilter(value: unknown): KimiSessionManagerListInput {
+  const filter = isRecord(value) ? value : {}
+  const result: KimiSessionManagerListInput = {}
+  if (typeof filter.workspaceId === 'string') {
+    assertWorkspaceId(filter.workspaceId)
+    result.workspaceId = filter.workspaceId
+  }
+  if (
+    typeof filter.status === 'string'
+    && (SESSION_MANAGER_STATUSES as readonly string[]).includes(filter.status)
+  ) {
+    result.status = filter.status as NonNullable<KimiSessionManagerListInput['status']>
+  }
+  if (
+    typeof filter.archived === 'string'
+    && (SESSION_MANAGER_ARCHIVED as readonly string[]).includes(filter.archived)
+  ) {
+    result.archived = filter.archived as NonNullable<KimiSessionManagerListInput['archived']>
+  }
+  if (typeof filter.updatedAfter === 'number' && Number.isFinite(filter.updatedAfter)) {
+    result.updatedAfter = filter.updatedAfter
+  }
+  if (
+    typeof filter.sort === 'string'
+    && (SESSION_MANAGER_SORTS as readonly string[]).includes(filter.sort)
+  ) {
+    result.sort = filter.sort as NonNullable<KimiSessionManagerListInput['sort']>
+  }
+  return result
+}
+
+function validateSessionIdList(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 100) {
+    throw new TypeError('Invalid Kimi session id list')
+  }
+  for (const id of value) assertSessionId(id)
+  return value
+}
+
+function assertWorkspaceId(workspaceId: unknown): asserts workspaceId is string {
+  assertShortId(workspaceId, 'workspace')
+}
+
+function projectSessionManagerItem(
+  session: SessionSummaryV2,
+  workspaceName: Map<string, string>
+): KimiSessionManagerItem {
+  return {
+    id: session.id,
+    workspaceId: session.workspace.id,
+    workspaceName: workspaceName.get(session.workspace.id) ?? session.workspace.cwd ?? session.workspace.id,
+    title: session.meta.title ?? session.meta.last_prompt ?? '未命名任务',
+    lastPrompt: session.meta.last_prompt,
+    status: session.activity.status,
+    createdAt: session.meta.created_at,
+    updatedAt: session.meta.updated_at,
+    archived: session.meta.archived,
+    archivedAt: session.meta.archived_at
+  }
+}
+
+function mapSessionBatchResult(result: SessionBatchActionResult): KimiSessionManagerBatchResult {
+  return {
+    results: result.results.map((item) => ({
+      id: item.id,
+      ok: item.ok,
+      error: item.error === undefined ? null : item.error.message
+    })),
+    succeeded: result.succeeded,
+    failed: result.failed
+  }
+}
+
+async function listSessionManagerPage(
+  runtime: KimiRuntimeManager,
+  input: KimiSessionManagerListInput
+): Promise<KimiSessionManagerPage> {
+  const client = runtime.createRestClient()
+  const [workspaces, page] = await Promise.all([
+    client.listWorkspaces(),
+    client.listSessionPageV2({
+      ...(input.workspaceId !== undefined ? { workspaceId: input.workspaceId } : {}),
+      ...(input.status !== undefined ? { activityStatus: input.status } : {}),
+      archived: input.archived ?? 'all',
+      ...(input.updatedAfter !== undefined ? { updatedAfter: input.updatedAfter } : {}),
+      ...(input.sort !== undefined ? { sort: input.sort } : {}),
+      pageSize: 100
+    })
+  ])
+  const workspaceName = new Map(workspaces.map((workspace) => [
+    workspace.id,
+    workspace.name.trim() || basename(workspace.root) || workspace.root || '未命名项目'
+  ]))
+  return {
+    items: page.items.map((session) => projectSessionManagerItem(session, workspaceName)),
+    total: page.total,
+    hasMore: page.hasMore
   }
 }
 

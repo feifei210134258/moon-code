@@ -19,10 +19,18 @@ import type {
   BrowserPickedElement,
   KimiModelCatalogItem,
   KimiPromptControls,
+  KimiPromptSkill,
   KimiSkill,
   KimiUploadedFile,
   WorkspaceFileSearchItem
 } from '@shared/contracts'
+import {
+  highlightText,
+  rankSlashCandidates,
+  type HighlightSegment,
+  type SlashMatch,
+  type SlashMatchRange
+} from '../utils/slashFuzzy'
 
 const props = defineProps<{
   disabled?: boolean
@@ -46,16 +54,24 @@ const emit = defineEmits<{
     controls: KimiPromptControls,
     goalMode: boolean,
     deliveryMode: 'queue' | 'steer',
-    webElements: BrowserPickedElement[]
+    webElements: BrowserPickedElement[],
+    skills: KimiPromptSkill[]
   ]
   abort: []
-  activateSkill: [skillName: string, args?: string]
   updateControls: [controls: KimiPromptControls]
   updateGoalMode: [enabled: boolean]
 }>()
 
+interface SkillSelection {
+  skill: KimiSkill
+  /** 非末尾 skill 已提交的参数；末尾 skill 的参数由 value 直接承载。 */
+  args: string
+}
+
 const value = ref('')
-const selectedSkill = ref<KimiSkill | null>(null)
+/* 0.37.2 起一条 prompt 可一次激活多个 skill：菜单里点选会按顺序追加 token，
+   当前输入框永远编辑最后一个 token 的参数；前面 token 的参数在追加/提交时快照。 */
+const selectedSkills = ref<SkillSelection[]>([])
 const attachments = ref<KimiUploadedFile[]>([])
 const webElements = ref<BrowserPickedElement[]>([])
 const webElementsOpen = ref(false)
@@ -110,25 +126,31 @@ const selectedThinkingLabel = computed(() => {
   return effort === null ? null : thinkingLabel(effort)
 })
 const slashQuery = computed(() => {
-  if (selectedSkill.value !== null) return null
-  const match = /^\/([^\s]*)$/.exec(value.value)
-  return match?.[1]?.toLocaleLowerCase() ?? null
+  /* 没选任何 skill 时：只有整条输入以 /cmd 开头才打开菜单（保持旧的「/ 命令」语义，
+     普通带 / 的路径如 src/foo 不会触发）。 */
+  if (selectedSkills.value.length === 0) {
+    const match = /^\/([^\s]*)$/.exec(value.value.trim())
+    return match === null ? null : match[1]!.toLocaleLowerCase()
+  }
+  /* 已选 skill 后：尾部（空格后）出现 / 即追加下一个 token；只有空查询（“/ ”）
+     或前缀能匹配到技能时才弹出，避免把参数里的绝对路径误判成技能。 */
+  const match = /(?:^|\s)\/([^\s]*)$/.exec(value.value)
+  if (match === null) return null
+  const query = match[1]!.toLocaleLowerCase()
+  if (query === '') return ''
+  return props.skills.some((skill) => skill.name.toLocaleLowerCase().startsWith(query)) ? query : null
 })
-const filteredSkills = computed(() => {
+const visibleSkills = computed<Array<{ candidate: KimiSkill; match: SlashMatch | null }>>(() => {
   const query = slashQuery.value
-  if (query === null || query.length === 0) return props.skills
-  return props.skills.filter((skill) => {
-    const name = skill.name.toLocaleLowerCase()
-    const description = skill.description.toLocaleLowerCase()
-    return name.includes(query) || description.includes(query)
-  })
+  const ranked = query === null || query.length === 0 ? null : rankSlashCandidates(props.skills, query)
+  return ranked === null ? props.skills.map((candidate) => ({ candidate, match: null })) : ranked
 })
 const activeListboxId = computed(() => (
   mentionOpen.value ? 'composer-mention-listbox' : commandOpen.value ? 'composer-command-listbox' : undefined
 ))
 const activeOptionId = computed(() => {
   if (mentionOpen.value && mentionItems.value.length > 0) return `composer-mention-option-${mentionActiveIndex.value}`
-  if (commandOpen.value && filteredSkills.value.length > 0) return `composer-command-option-${commandActiveIndex.value}`
+  if (commandOpen.value && visibleSkills.value.length > 0) return `composer-command-option-${commandActiveIndex.value}`
   return undefined
 })
 const permissionDescription = computed(() => ({
@@ -138,7 +160,7 @@ const permissionDescription = computed(() => ({
 }[props.controls?.permissionMode ?? 'manual']))
 
 function submit(): void {
-  const hasText = selectedSkill.value !== null || value.value.trim().length > 0
+  const hasText = selectedSkills.value.length > 0 || value.value.trim().length > 0
   if (
     props.disabled === true ||
     props.pending === true ||
@@ -147,32 +169,26 @@ function submit(): void {
     (!hasText && attachments.value.length === 0 && webElements.value.length === 0) ||
     (props.goalMode === true && !hasText)
   ) return
-  const selected = selectedSkill.value
-  const selectedArgs = value.value.trim()
-  const composedValue = selected === null
-    ? value.value
-    : `/${selected.name}${selectedArgs.length === 0 ? '' : ` ${selectedArgs}`}`
-  const text = composedValue.trim()
-  const command = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text)
-  const skill = command === null || attachments.value.length > 0
-    ? undefined
-    : selected ?? props.skills.find((item) => item.name === command[1])
-  if (skill !== undefined) {
-    const args = selected === null ? command?.[2]?.trim() : selectedArgs
-    emit('activateSkill', skill.name, args === undefined || args.length === 0 ? undefined : args)
-  } else {
-    emit(
-      'submit',
-      composedValue,
-      [...attachments.value],
-      props.controls,
-      props.goalMode === true,
-      props.running === true ? deliveryMode.value : 'queue',
-      [...webElements.value]
-    )
-  }
+  const activeArgs = value.value.trim()
+  const skills: KimiPromptSkill[] = selectedSkills.value.map((entry, index) => {
+    const args = index === selectedSkills.value.length - 1 ? activeArgs : entry.args.trim()
+    return args.length === 0 ? { name: entry.skill.name } : { name: entry.skill.name, args }
+  })
+  const text = skills.length === 0
+    ? value.value.trim()
+    : skills.map((skill) => `/${skill.name}${skill.args === undefined ? '' : ` ${skill.args}`}`).join(' ')
+  emit(
+    'submit',
+    text,
+    [...attachments.value],
+    props.controls,
+    props.goalMode === true,
+    props.running === true ? deliveryMode.value : 'queue',
+    [...webElements.value],
+    skills
+  )
   value.value = ''
-  selectedSkill.value = null
+  selectedSkills.value = []
   attachments.value = []
   webElements.value = []
   webElementsOpen.value = false
@@ -298,19 +314,34 @@ function onComposerInput(): void {
 }
 
 function chooseSkill(skill: KimiSkill): void {
-  const replacingSelection = selectedSkill.value !== null
-  selectedSkill.value = skill
-  if (!replacingSelection) value.value = ''
+  /* 追加前先把当前输入（去掉尾部用于打开菜单的 /query）快照到上一个 token。 */
+  const last = selectedSkills.value.at(-1)
+  if (last !== undefined && value.value.trim().length > 0) {
+    last.args = value.value.replace(/(?:^|\s)\/\S*$/, '').trim()
+  }
+  if (!selectedSkills.value.some((entry) => entry.skill.name === skill.name)) {
+    selectedSkills.value = [...selectedSkills.value, { skill, args: '' }]
+    value.value = ''
+  }
   commandOpen.value = false
   closeMention()
   void nextTick(() => input.value?.focus())
 }
 
+function removeSkill(index: number): void {
+  const selections = selectedSkills.value
+  if (index < 0 || index >= selections.length) return
+  const removedLast = index === selections.length - 1
+  selectedSkills.value = selections.filter((_, itemIndex) => itemIndex !== index)
+  if (removedLast) value.value = selectedSkills.value.at(-1)?.args ?? ''
+  void nextTick(() => input.value?.focus())
+}
+
 async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<void> {
-  const command = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trim())
-  const skill = command === null ? undefined : props.skills.find((item) => item.name === command[1])
-  selectedSkill.value = skill ?? null
-  value.value = skill === undefined ? text : command?.[2] ?? ''
+  /* 草稿恢复支持多条 `/skill args` 段：最后一个段紧跟在 value 里，其余按快照填 args。 */
+  const parsed = parseSlashSkills(text, props.skills)
+  selectedSkills.value = parsed.selections
+  value.value = parsed.selections.at(-1)?.args ?? (parsed.selections.length === 0 ? text : '')
   attachments.value = [...files]
   commandOpen.value = false
   optionsOpen.value = false
@@ -319,6 +350,26 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   closeMention()
   await nextTick()
   input.value?.focus()
+}
+
+function parseSlashSkills(text: string, catalog: KimiSkill[]): {
+  selections: SkillSelection[]
+} {
+  const selections: SkillSelection[] = []
+  let cursor = 0
+  while (cursor < text.length) {
+    const head = /^\s*\/([^\s]+)(?:\s|$)/.exec(text.slice(cursor))
+    if (head === null) break
+    const skill = catalog.find((item) => item.name === head[1])
+    if (skill === undefined) break
+    cursor += head[0].length
+    const next = /\s+\/([^\s]+)(?:\s|$)/.exec(text.slice(cursor))
+    const argsEnd = next === null ? text.length : cursor + next.index
+    const args = text.slice(cursor, argsEnd).trim()
+    selections.push({ skill, args })
+    cursor = argsEnd
+  }
+  return { selections }
 }
 
 async function pickAttachments(): Promise<void> {
@@ -566,6 +617,10 @@ function skillSourceLabel(source: KimiSkill['source']): string {
   }[source]
 }
 
+function highlightedSegments(text: string, ranges: SlashMatchRange[] | null | undefined): HighlightSegment[] {
+  return highlightText(text, ranges ?? [])
+}
+
 function skillDisplayName(name: string): string {
   return name.split(':').map((segment) => segment
     .split(/[-_]+/)
@@ -575,9 +630,8 @@ function skillDisplayName(name: string): string {
   ).join(' · ')
 }
 
-function clearSelectedSkill(): void {
-  selectedSkill.value = null
-  void nextTick(() => input.value?.focus())
+function removeLastSkill(): void {
+  removeSkill(selectedSkills.value.length - 1)
 }
 
 function positionPopover(kind: PopoverKind): void {
@@ -655,12 +709,12 @@ defineExpose({ loadDraft, insertFileMention, addAttachments, addWebElements })
 function onKeydown(event: KeyboardEvent): void {
   if (
     event.key === 'Backspace' &&
-    selectedSkill.value !== null &&
+    selectedSkills.value.length > 0 &&
     input.value?.selectionStart === 0 &&
     input.value.selectionEnd === 0
   ) {
     event.preventDefault()
-    clearSelectedSkill()
+    removeLastSkill()
     return
   }
   if (mentionOpen.value) {
@@ -687,7 +741,7 @@ function onKeydown(event: KeyboardEvent): void {
     }
   }
   if (commandOpen.value) {
-    const count = filteredSkills.value.length
+    const count = visibleSkills.value.length
     if (event.key === 'Escape') {
       event.preventDefault()
       commandOpen.value = false
@@ -708,11 +762,11 @@ function onKeydown(event: KeyboardEvent): void {
       return
     }
     if (event.key === 'Enter' || event.key === 'Tab') {
-      const skill = filteredSkills.value[commandActiveIndex.value]
+      const entry = visibleSkills.value[commandActiveIndex.value]
       if (event.key === 'Enter') event.preventDefault()
-      if (skill !== undefined && !props.skillsPending) {
+      if (entry !== undefined && !props.skillsPending) {
         event.preventDefault()
-        chooseSkill(skill)
+        chooseSkill(entry.candidate)
         return
       }
       if (event.key === 'Enter') return
@@ -803,25 +857,29 @@ watch(() => props.running, (running) => {
       </div>
     </div>
     <div v-if="attachmentError" class="composer-attachment-error" role="alert">{{ attachmentError }}</div>
-    <div class="composer-input-area" :class="{ 'has-selected-skill': selectedSkill !== null }">
-      <button
-        v-if="selectedSkill !== null"
-        type="button"
-        class="composer-skill-token"
-        :aria-label="`移除已选技能 ${skillDisplayName(selectedSkill.name)}`"
-        :title="`已选择 /${selectedSkill.name}；点击移除`"
-        @click="clearSelectedSkill"
-      >
-        <PhCube :size="18" />
-        <span>{{ skillDisplayName(selectedSkill.name) }}</span>
-      </button>
+    <div class="composer-input-area" :class="{ 'has-selected-skill': selectedSkills.length > 0 }">
+      <template v-if="selectedSkills.length > 0">
+        <button
+          v-for="(entry, index) in selectedSkills"
+          :key="entry.skill.name"
+          type="button"
+          class="composer-skill-token"
+          :class="{ 'is-active': index === selectedSkills.length - 1 }"
+          :aria-label="`移除已选技能 ${skillDisplayName(entry.skill.name)}`"
+          :title="`已选择 /${entry.skill.name}；点击移除`"
+          @click="removeSkill(index)"
+        >
+          <PhCube :size="18" />
+          <span>{{ skillDisplayName(entry.skill.name) }}</span>
+        </button>
+      </template>
       <textarea
         ref="input"
         v-model="value"
         rows="1"
-        :placeholder="disabled ? disabledReason : selectedSkill !== null ? '输入技能参数（可选）…' : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
+        :placeholder="disabled ? disabledReason : selectedSkills.length > 0 ? '输入技能参数（可选）…' : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
         :disabled="disabled"
-        :aria-label="selectedSkill === null ? '输入任务' : `${skillDisplayName(selectedSkill.name)} 技能参数`"
+        :aria-label="selectedSkills.length === 0 ? '输入任务' : `${skillDisplayName(selectedSkills.at(-1)!.skill.name)} 技能参数`"
         aria-autocomplete="list"
         :aria-expanded="commandOpen || mentionOpen"
         :aria-controls="activeListboxId"
@@ -927,7 +985,7 @@ watch(() => props.running, (running) => {
           class="send-button"
           type="button"
           :aria-label="running ? (deliveryMode === 'steer' ? '发送引导' : '加入队列') : '发送任务'"
-          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (selectedSkill === null && value.trim().length === 0 && attachments.length === 0 && webElements.length === 0) || (goalMode && selectedSkill === null && value.trim().length === 0)"
+          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (selectedSkills.length === 0 && value.trim().length === 0 && attachments.length === 0 && webElements.length === 0) || (goalMode && selectedSkills.length === 0 && value.trim().length === 0)"
           @click="submit"
         >
           <PhPaperPlaneTilt :size="19" weight="fill" />
@@ -1052,11 +1110,11 @@ watch(() => props.running, (running) => {
       <header><strong>技能</strong><span>选择后可继续输入参数</span></header>
       <div v-if="skillsPending" class="command-empty">正在读取 Kimi 技能…</div>
       <div v-else-if="skills.length === 0" class="command-empty">当前会话没有可用技能</div>
-      <div v-else-if="filteredSkills.length === 0" class="command-empty">没有匹配的技能</div>
+      <div v-else-if="visibleSkills.length === 0" class="command-empty">没有匹配的技能</div>
       <template v-else>
         <button
-          v-for="(skill, index) in filteredSkills"
-          :key="skill.name"
+          v-for="(entry, index) in visibleSkills"
+          :key="entry.candidate.name"
           :id="`composer-command-option-${index}`"
           type="button"
           role="option"
@@ -1064,10 +1122,14 @@ watch(() => props.running, (running) => {
           :aria-selected="index === commandActiveIndex"
           tabindex="-1"
           @mouseenter="commandActiveIndex = index"
-          @click="chooseSkill(skill)"
+          @click="chooseSkill(entry.candidate)"
         >
-          <span><strong>/{{ skill.name }}</strong><small>{{ skill.description || '无描述' }}</small></span>
-          <em>{{ skillSourceLabel(skill.source) }}</em>
+          <span>
+            <strong>/<template v-for="(segment, segmentIndex) in highlightedSegments(entry.candidate.name, entry.match?.nameRanges)" :key="segmentIndex"><mark v-if="segment.highlighted" class="slash-match">{{ segment.text }}</mark><template v-else>{{ segment.text }}</template></template></strong>
+            <small v-if="entry.candidate.description.length > 0"><template v-for="(segment, segmentIndex) in highlightedSegments(entry.candidate.description, entry.match?.descriptionRanges)" :key="segmentIndex"><mark v-if="segment.highlighted" class="slash-match">{{ segment.text }}</mark><template v-else>{{ segment.text }}</template></template></small>
+            <small v-else>无描述</small>
+          </span>
+          <em>{{ skillSourceLabel(entry.candidate.source) }}</em>
         </button>
       </template>
     </div>

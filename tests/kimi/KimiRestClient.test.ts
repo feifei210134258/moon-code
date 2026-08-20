@@ -196,6 +196,7 @@ describe('KimiRestClient', () => {
             },
             activity: { status: 'idle' }
           }],
+          total: 3,
           has_more: true,
           next_page_token: 'cursor-1'
         }
@@ -208,11 +209,14 @@ describe('KimiRestClient', () => {
       activityStatus: ['running', 'failed'],
       archived: 'all',
       sort: 'meta.updated_at_desc',
-      pageSize: 50,
+      pageSize: 10001,
+      page: 2,
+      updatedBefore: 1_787_000_500_000,
       pageToken: 'cursor-0'
     })).resolves.toEqual({
       items: [expect.objectContaining({ id: 'session-1', meta: expect.objectContaining({ archived: true }) })],
       hasMore: true,
+      total: 3,
       nextPageToken: 'cursor-1'
     })
     const url = new URL(fetchImpl.mock.calls[0]?.[0] as string)
@@ -221,8 +225,38 @@ describe('KimiRestClient', () => {
     expect(url.searchParams.getAll('activity.status')).toEqual(['running', 'failed'])
     expect(url.searchParams.get('meta.archived')).toBe('all')
     expect(url.searchParams.get('sort')).toBe('meta.updated_at_desc')
-    expect(url.searchParams.get('page_size')).toBe('50')
+    // 0.37.2+：新查询参数与 page_size 上限 10000
+    expect(url.searchParams.get('meta.updated_before')).toBe('1787000500000')
+    expect(url.searchParams.get('page')).toBe('2')
+    expect(url.searchParams.get('page_size')).toBe('10000')
     expect(url.searchParams.get('page_token')).toBe('cursor-0')
+  })
+
+  it('queries the lightweight v2 session id/archived projection with fields', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: {
+          items: [{ id: 'session-1', archived: true }, { id: 'session-2', archived: false }],
+          total: 2,
+          has_more: false,
+          next_page_token: null
+        }
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.listSessionIdsV2({ archived: 'false', pageSize: 10000 })).resolves.toEqual({
+      items: [{ id: 'session-1', archived: true }, { id: 'session-2', archived: false }],
+      total: 2
+    })
+    const url = new URL(fetchImpl.mock.calls[0]?.[0] as string)
+    expect(url.pathname).toBe('/api/v2/sessions')
+    expect(url.searchParams.get('fields')).toBe('id,archived')
+    expect(url.searchParams.get('meta.archived')).toBe('false')
+    expect(url.searchParams.get('page_size')).toBe('10000')
+    expect(url.searchParams.has('page_token')).toBe(false)
   })
 
   it('submits text prompts with bearer auth and validates the authoritative response', async () => {
@@ -260,6 +294,41 @@ describe('KimiRestClient', () => {
           permission_mode: 'manual',
           plan_mode: true,
           swarm_mode: false
+        })
+      })
+    )
+  })
+
+  it('passes skills and prompt_id through the prompt submission body (0.37.2)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: {
+          prompt_id: 'prompt-1',
+          user_message_id: 'message-1',
+          status: 'running',
+          content: [{ type: 'text', text: 'Continue' }],
+          created_at: '2026-07-23T00:00:00.000Z'
+        }
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await client.submitPrompt('session-1', {
+      content: [{ type: 'text', text: 'Continue' }],
+      promptId: 'prompt-123',
+      skills: [{ name: 'commit', args: '-m "fix bug"' }, { name: 'pdf' }]
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/prompts',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          content: [{ type: 'text', text: 'Continue' }],
+          skills: [{ name: 'commit', args: '-m "fix bug"' }, { name: 'pdf' }],
+          prompt_id: 'prompt-123'
         })
       })
     )
@@ -433,6 +502,33 @@ describe('KimiRestClient', () => {
     expect(new Headers(fetchImpl.mock.calls[8]?.[1]?.headers).get('authorization')).toBe('Bearer secret')
   })
 
+  it('archives and restores sessions in a batch with per-item results (0.37.2)', async () => {
+    const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
+      status: 200, headers: { 'content-type': 'application/json' }
+    })
+    const mixed = {
+      results: [
+        { id: 'session-1', ok: true },
+        { id: 'session-2', ok: false, error: { code: 40401, message: 'not found' } }
+      ],
+      succeeded: 1,
+      failed: 1
+    }
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(envelope(mixed))
+      .mockResolvedValueOnce(envelope(mixed))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.archiveSessions(['session-1', 'session-2'])).resolves.toEqual(mixed)
+    await expect(client.restoreSessions(['session-1', 'session-2'])).resolves.toEqual(mixed)
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe('http://127.0.0.1:1234/api/v2/sessions:archive')
+    expect(fetchImpl.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ ids: ['session-1', 'session-2'] })
+    }))
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe('http://127.0.0.1:1234/api/v2/sessions:restore')
+  })
+
   it('treats PROMPT_NOT_FOUND as an idempotent abort result', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({
@@ -483,6 +579,93 @@ describe('KimiRestClient', () => {
         method: 'POST',
         body: JSON.stringify({ decision: 'approved', scope: 'session' })
       })
+    )
+  })
+
+  it('passes approval feedback and selected label through to the pinned wire shape (0.37.2)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: { resolved: true, resolved_at: 1_753_228_800_000 }
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await client.respondApproval('session-1', 'approval-1', {
+      decision: 'rejected',
+      feedback: '第三点补充测试命令',
+      selectedLabel: '批准计划'
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/approvals/approval-1',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          decision: 'rejected',
+          feedback: '第三点补充测试命令',
+          selected_label: '批准计划'
+        })
+      })
+    )
+  })
+
+  it('lists transcript plans through the pinned plan review route (0.37.2)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: {
+          agent_id: 'main',
+          plans: [{
+            tool_call_id: 'plan-tool-1',
+            turn_id: 'turn-7',
+            source: 'interaction',
+            plan: '1. 先读 README\n2. 改 App.vue',
+            path: 'docs/plan.md',
+            options: [{ label: '批准计划', description: '直接开始执行' }],
+            review: { state: 'rejected', selected_option: '批准计划', feedback: '第三点补充测试命令' }
+          }]
+        }
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.getSessionPlanList('session-1', { agentId: 'main' })).resolves.toEqual({
+      agent_id: 'main',
+      plans: [expect.objectContaining({
+        tool_call_id: 'plan-tool-1',
+        turn_id: 'turn-7',
+        source: 'interaction',
+        plan: '1. 先读 README\n2. 改 App.vue',
+        path: 'docs/plan.md',
+        options: [{ label: '批准计划', description: '直接开始执行' }],
+        review: expect.objectContaining({
+          state: 'rejected', selected_option: '批准计划', feedback: '第三点补充测试命令'
+        })
+      })]
+    })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/transcript/plan?agent_id=main',
+      expect.any(Object)
+    )
+  })
+
+  it('narrows the plan review read to a single tool call with tool_call_id (0.37.2)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ code: 0, msg: 'ok', data: { agent_id: 'main', plans: [] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await client.getSessionPlanList('session-1', { agentId: 'main', toolCallId: 'plan-tool-9' })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/sessions/session-1/transcript/plan?agent_id=main&tool_call_id=plan-tool-9',
+      expect.any(Object)
     )
   })
 
@@ -1041,6 +1224,25 @@ describe('KimiRestClient', () => {
       'http://127.0.0.1:1234/api/v1/files/file%2F1',
       expect.objectContaining({ headers: expect.any(Headers) })
     )
+  })
+
+  it('fetches session media as binary for the Main process to serve (0.37.2)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(new Uint8Array([9, 8, 7, 6]), {
+        status: 200, headers: { 'content-type': 'application/octet-stream' }
+      })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.getSessionMedia('session/1', 'file/2')).resolves.toEqual(new Uint8Array([9, 8, 7, 6]))
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/sessions/session%2F1/media/file%2F2',
+      expect.objectContaining({ headers: expect.any(Headers) })
+    )
+    const init = fetchImpl.mock.calls[0]?.[1]
+    const headers = new Headers(init?.headers)
+    expect(headers.get('authorization')).toBe('Bearer secret')
+    expect(headers.get('accept')).toBe('application/octet-stream')
   })
 
   it('reads child sessions and official Session warnings', async () => {

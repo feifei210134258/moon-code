@@ -53,4 +53,16 @@ describe('SessionProjector', () => {
     expect(state.unknownEventCount).toBe(1)
     expect(state.sessions.size).toBe(0)
   })
+
+  it('treats the 0.37.2 plugin/capability events as known non-session events', () => {
+    const state = createSessionProjectionState()
+    projectSessionEvent(state, frame({ type: 'event.plugin.changed' }))
+    projectSessionEvent(state, frame({
+      type: 'event.capability.changed',
+      capability_id: 'terminal',
+      install: { running: true, step: 'installing', percent: 0.5 }
+    }))
+    expect(state.unknownEventCount).toBe(0)
+    expect(state.sessions.size).toBe(0)
+  })
 })

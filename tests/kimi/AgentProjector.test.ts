@@ -138,4 +138,26 @@ describe('AgentProjector', () => {
       expect.objectContaining({ id: 'agent-1', status: 'failed', outputPreview: 'Main turn cancelled' })
     ])
   })
+
+  it('keys the roster by snapshot agent_id when present and exposes task fields (0.37.2)', () => {
+    const projector = new AgentProjector()
+    const initial = snapshot()
+    initial.subagents?.push({
+      id: 'task-9', session_id: 'session-1', kind: 'subagent', description: 'Review changes',
+      status: 'completed', created_at: '2026-07-23T00:00:00.000Z', agent_id: 'agent-9',
+      subagent_type: 'verify', parent_tool_call_id: 'tool-9'
+    })
+    const roster = projector.seedSnapshot('session-1', initial)
+    expect(roster).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'agent-9', subagentType: 'verify', parentToolCallId: 'tool-9' })
+    ]))
+
+    // 实时生命周期事件按 agent 同键命中
+    expect(projector.project(frame('subagent.completed', {
+      subagentId: 'agent-9', resultSummary: 'verified'
+    }, 16))).toBe(true)
+    expect(projector.getRoster('session-1').find((agent) => agent.id === 'agent-9')).toEqual(
+      expect.objectContaining({ status: 'completed', outputPreview: 'verified' })
+    )
+  })
 })

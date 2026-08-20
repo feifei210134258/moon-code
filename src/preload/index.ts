@@ -30,6 +30,9 @@ const api: KimiAgentDesktopApi = {
   renameSession: (sessionId, title) => ipcRenderer.invoke(ipcChannels.sessionRename, sessionId, title),
   archiveSession: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionArchive, sessionId),
   restoreSession: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionRestore, sessionId),
+  listSessionManagerPage: (input) => ipcRenderer.invoke(ipcChannels.sessionManagerList, input),
+  archiveSessions: (ids) => ipcRenderer.invoke(ipcChannels.sessionManagerArchive, ids),
+  restoreSessions: (ids) => ipcRenderer.invoke(ipcChannels.sessionManagerRestore, ids),
   forkSession: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionFork, sessionId),
   exportSession: (sessionId) => ipcRenderer.invoke(ipcChannels.sessionExport, sessionId),
   listArchivedSessions: () => ipcRenderer.invoke(ipcChannels.sessionsArchivedList),
@@ -68,6 +71,8 @@ const api: KimiAgentDesktopApi = {
   attachWorkspaceFile: (sessionId, path) =>
     ipcRenderer.invoke(ipcChannels.attachmentsAddWorkspaceFile, sessionId, path),
   readAttachment: (fileId, mediaType) => ipcRenderer.invoke(ipcChannels.attachmentRead, fileId, mediaType),
+  readSessionMedia: (sessionId, fileId, mediaType) =>
+    ipcRenderer.invoke(ipcChannels.attachmentReadSessionMedia, sessionId, fileId, mediaType),
   discardAttachment: (fileId) => ipcRenderer.invoke(ipcChannels.attachmentDiscard, fileId),
   listFiles: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesList, sessionId, path),
   listWorkspaceFiles: (workspaceId, path) =>

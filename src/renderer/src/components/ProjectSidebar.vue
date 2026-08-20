@@ -12,6 +12,7 @@ import {
   PhNotePencil,
   PhPencilSimple,
   PhPlus,
+  PhSlidersHorizontal,
   PhSpinnerGap,
   PhTrash,
   PhX
@@ -19,6 +20,7 @@ import {
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ProjectItem, SessionItem } from '../types'
 import FolderSimpleOpenIcon from './icons/FolderSimpleOpenIcon.vue'
+import SessionManagerPanel from './SessionManagerPanel.vue'
 
 const props = defineProps<{
   projects: ProjectItem[]
@@ -56,6 +58,10 @@ const menuPosition = ref({ top: '0px', left: '0px' })
 const editingKey = ref<string | null>(null)
 const editingValue = ref('')
 const editInput = ref<HTMLInputElement | null>(null)
+/* 会话行左滑归档：打开的会话行 id；整行内容左移、右侧露出红色确认区，
+   点确认才执行归档（无弹窗），点击他处或移出则滑回。 */
+const swipeSessionId = ref<string | null>(null)
+const sessionManagerOpen = ref(false)
 
 const filteredProjects = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase()
@@ -162,15 +168,36 @@ function confirmArchiveSession(session: SessionItem): void {
   }
 }
 
+/* 归档滑动确认：点归档图标把整行左滑露出红色确认区，点红色区域才归档。
+   与菜单里的归档（带 confirm 弹窗）不同，这条路径不弹窗。 */
+function toggleSwipe(session: SessionItem): void {
+  closeMenu()
+  if (swipeSessionId.value === session.id) swipeSessionId.value = null
+  else swipeSessionId.value = session.id
+}
+
+function closeSwipeOnLeave(sessionId: string): void {
+  if (swipeSessionId.value === sessionId) swipeSessionId.value = null
+}
+
+function confirmSwipeArchive(session: SessionItem): void {
+  swipeSessionId.value = null
+  emit('archiveSession', session.id)
+}
+
 function closeMenuOnOutsideClick(event: MouseEvent): void {
-  if (!(event.target as HTMLElement).closest('.tree-action-area, .tree-menu-overlay')) closeMenu()
+  const target = event.target as HTMLElement
+  if (!target.closest('.tree-action-area, .tree-menu-overlay')) closeMenu()
+  if (!target.closest('.session-row-wrap')) swipeSessionId.value = null
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || (menuKey.value === null && editingKey.value === null)) return
+  if (event.key !== 'Escape' || (menuKey.value === null && editingKey.value === null && !sessionManagerOpen.value)) return
   event.preventDefault()
   closeMenu()
   editingKey.value = null
+  swipeSessionId.value = null
+  sessionManagerOpen.value = false
 }
 
 onMounted(() => {
@@ -189,6 +216,10 @@ onBeforeUnmount(() => {
       <button class="new-task-button" type="button" :disabled="lifecyclePending !== null" @click="createSession">
         <PhNotePencil :size="17" />
         <span>新建任务</span>
+      </button>
+      <button class="new-task-button session-manager-button" type="button" @click="sessionManagerOpen = true">
+        <PhSlidersHorizontal :size="17" />
+        <span>会话管理</span>
       </button>
     </div>
 
@@ -224,38 +255,59 @@ onBeforeUnmount(() => {
           <input ref="editInput" v-model="editingValue" maxlength="120" aria-label="项目名称" @keydown.esc="editingKey = null" @blur="commitEdit" />
         </form>
         <div v-if="(project.expanded || searchQuery) && project.sessions.length > 0" class="session-list">
-            <div v-for="session in project.sessions" :key="session.id" class="session-row-wrap" :class="{ 'is-menu-open': menuKey === `session:${session.id}` }">
+            <div
+              v-for="session in project.sessions"
+              :key="session.id"
+              class="session-row-wrap"
+              :class="{ 'is-menu-open': menuKey === `session:${session.id}`, 'is-swipe-open': swipeSessionId === session.id }"
+              @mouseleave="closeSwipeOnLeave(session.id)"
+            >
             <form v-if="editingKey === `session:${session.id}`" class="tree-inline-edit" @submit.prevent="commitEdit">
               <input ref="editInput" v-model="editingValue" maxlength="200" aria-label="任务名称" @keydown.esc="editingKey = null" @blur="commitEdit" />
             </form>
             <template v-else>
               <button
-                class="session-row"
-                :class="{ 'is-active': activeSessionId === session.id, 'is-child': session.parentSessionId !== undefined }"
+                class="session-swipe-confirm"
                 type="button"
-                @click="$emit('selectSession', session.id)"
-                @contextmenu.prevent.stop="toggleMenu(`session:${session.id}`, $event, true)"
+                :tabindex="swipeSessionId === session.id ? 0 : -1"
+                :aria-label="`归档 ${session.title}`"
+                @click.stop="confirmSwipeArchive(session)"
               >
-                <span class="session-title">
-                  <span
-                    v-if="session.tone !== undefined && session.tone !== 'neutral'"
-                    class="session-status"
-                    :class="`is-${session.tone ?? 'neutral'}`"
-                    :title="sessionStatusLabel(session)"
-                    :aria-label="sessionStatusLabel(session)"
-                  >
-                    <PhSpinnerGap v-if="session.tone === 'running'" class="spin" :size="13" />
-                    <i v-else aria-hidden="true" />
-                  </span>
-                  <PhGitFork v-if="session.parentSessionId" :size="12" />
-                  <span class="session-title-text">{{ session.title }}</span>
-                </span>
-                <span v-if="session.relativeTime" class="session-time">{{ session.relativeTime }}</span>
+                <PhArchive :size="16" />
+                <span>归档</span>
               </button>
-              <div class="tree-action-area session-action-area">
-                <button class="tree-more-button" type="button" :aria-label="`${session.title} 任务操作`" @click.stop="toggleMenu(`session:${session.id}`, $event)">
-                  <PhDotsThree :size="16" weight="bold" />
+              <div class="session-row-content" :class="{ 'is-swipe-open': swipeSessionId === session.id }">
+                <button
+                  class="session-row"
+                  :class="{ 'is-active': activeSessionId === session.id, 'is-child': session.parentSessionId !== undefined }"
+                  type="button"
+                  @click="$emit('selectSession', session.id)"
+                  @contextmenu.prevent.stop="toggleMenu(`session:${session.id}`, $event, true)"
+                >
+                  <span class="session-title">
+                    <span
+                      v-if="session.tone !== undefined && session.tone !== 'neutral'"
+                      class="session-status"
+                      :class="`is-${session.tone ?? 'neutral'}`"
+                      :title="sessionStatusLabel(session)"
+                      :aria-label="sessionStatusLabel(session)"
+                    >
+                      <PhSpinnerGap v-if="session.tone === 'running'" class="spin" :size="13" />
+                      <i v-else aria-hidden="true" />
+                    </span>
+                    <PhGitFork v-if="session.parentSessionId" :size="12" />
+                    <span class="session-title-text">{{ session.title }}</span>
+                  </span>
+                  <span v-if="session.relativeTime" class="session-time">{{ session.relativeTime }}</span>
                 </button>
+                <div class="tree-action-area session-action-area">
+                  <button class="tree-more-button" type="button" :aria-label="`${session.title} 任务操作`" @click.stop="toggleMenu(`session:${session.id}`, $event)">
+                    <PhDotsThree :size="16" weight="bold" />
+                  </button>
+                  <button class="tree-more-button session-archive-trigger" type="button" :aria-label="`归档 ${session.title}`" title="归档" @click.stop="toggleSwipe(session)">
+                    <PhArchive :size="16" />
+                  </button>
+                </div>
               </div>
             </template>
           </div>
@@ -293,5 +345,9 @@ onBeforeUnmount(() => {
       <button type="button" @click="emit('exportSession', menuSession.id); closeMenu()"><PhDownloadSimple :size="14" />导出 ZIP</button>
       <button class="is-danger" type="button" @click="confirmArchiveSession(menuSession)"><PhArchive :size="14" />归档</button>
     </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <SessionManagerPanel v-if="sessionManagerOpen" @close="sessionManagerOpen = false" />
   </Teleport>
 </template>

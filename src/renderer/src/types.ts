@@ -57,6 +57,8 @@ export interface ChatActivity {
     hunks: number | null
   }
   writtenPath?: string
+  /** plan review 条目（来自 tool part 的 plan 投影；用于打开 Plan 查看面板）。 */
+  plan?: import('@shared/contracts').PlanReview
 }
 
 export type ChatBlock =
@@ -83,4 +85,6 @@ export interface ChatTurn {
   originKind?: string
   queued?: boolean
   pending?: boolean
+  /** 该条用户消息激活的 skill 显示名（0.37.2+，按 transcription 标注）。 */
+  skillNames?: string[]
 }

@@ -22,6 +22,10 @@ export const ipcChannels = {
   sessionFork: 'session:fork',
   sessionExport: 'session:export',
   sessionsArchivedList: 'sessions:archived:list',
+  /* 会话管理面板：跨 workspace 列表 + 批量归档/恢复（kimi v2 sessions + 批量接口）。 */
+  sessionManagerList: 'sessions:manager:list',
+  sessionManagerArchive: 'sessions:manager:archive-batch',
+  sessionManagerRestore: 'sessions:manager:restore-batch',
   sessionChildrenList: 'session:children:list',
   sessionWarningsList: 'session:warnings:list',
   sessionRuntimeGet: 'session:runtime:get',
@@ -48,6 +52,7 @@ export const ipcChannels = {
   attachmentsPaste: 'attachments:paste',
   attachmentsAddWorkspaceFile: 'attachments:add-workspace-file',
   attachmentRead: 'attachment:read',
+  attachmentReadSessionMedia: 'attachment:read-session-media',
   attachmentDiscard: 'attachment:discard',
   filesList: 'files:list',
   filesListWorkspace: 'files:list-workspace',
@@ -208,6 +213,43 @@ export interface WorkspaceNavigationSnapshot {
   nextBeforeId: string | null
 }
 
+/* 会话管理面板 · 会话条目。来自 kimi `GET /api/v2/sessions` 的完整条目投影，
+   跨 workspace 汇总；`archived`/`archived_at` 即协议里的归档语义（协议无
+   pinned/emoji 字段，也无独立「标记为 done」概念，归档即终点操作）。 */
+export interface KimiSessionManagerItem {
+  id: string
+  workspaceId: string
+  workspaceName: string
+  title: string
+  lastPrompt: string | null
+  status: 'running' | 'approval' | 'question' | 'failed' | 'idle'
+  createdAt: number | null
+  updatedAt: number | null
+  archived: boolean
+  archivedAt: number | null
+}
+
+export interface KimiSessionManagerListInput {
+  workspaceId?: string
+  status?: 'running' | 'approval' | 'question' | 'failed' | 'idle'
+  archived?: 'true' | 'false' | 'all'
+  /** 仅返回此时间戳（ms）之后更新过的会话，用于「最近更新」过滤。 */
+  updatedAfter?: number
+  sort?: 'meta.updated_at_desc' | 'meta.updated_at_asc' | 'meta.created_at_desc'
+}
+
+export interface KimiSessionManagerPage {
+  items: KimiSessionManagerItem[]
+  total: number
+  hasMore: boolean
+}
+
+export interface KimiSessionManagerBatchResult {
+  results: { id: string; ok: boolean; error: string | null }[]
+  succeeded: number
+  failed: number
+}
+
 export interface KimiSessionWarning {
   code: string
   message: string
@@ -248,6 +290,8 @@ export type SessionTranscriptPart =
         hunks: number | null
       }
       writtenPath?: string
+      /** 上游 plan review（plan_review display / `/transcript/plan`）投影出的计划详情（0.37.2+）。 */
+      plan?: PlanReview
     }
   | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
   | {
@@ -271,6 +315,8 @@ export interface SessionTranscriptMessage {
   status: 'pending' | 'completed' | 'error'
   originKind?: string
   originTaskId?: string
+  /** 该用户消息在本轮激活的 skills（来自 turn.started origin.user；0.37.2+）。 */
+  skillActivations?: SkillActivationView[]
 }
 
 export interface SessionTranscriptMarker {
@@ -305,6 +351,15 @@ export interface KimiAgentTranscript {
   usage: SessionAgentUsage | null
 }
 
+export interface SessionRetryStatus {
+  failedAttempt: number
+  nextAttempt: number
+  maxAttempts: number
+  delayMs: number | null
+  errorName: string | null
+  errorMessage: string | null
+}
+
 export interface SessionViewState {
   sessionId: string
   title: string
@@ -327,6 +382,14 @@ export interface SessionViewState {
   resyncCount: number
   unknownEventCount: number
   error: string | null
+  /** 会话最近一轮的结局；`failed` 驱动常驻失败卡片，`cancelled` 表示手动取消。 */
+  lastTurnReason: 'completed' | 'cancelled' | 'failed' | null
+  /** 最近一次失败的错误摘要（来自 `turn.ended.error` 或重试事件）。 */
+  lastTurnError: string | null
+  /** 模型请求自动重试进度；非空表示正在重试（loading 指示器用）。 */
+  retry: SessionRetryStatus | null
+  /** 当前（最近一次 turn.started 报告的）turn 激活的 skills；0.37.2+。 */
+  skillActivations: SkillActivationView[]
 }
 
 export interface SessionUsageSummary {
@@ -421,6 +484,36 @@ export interface ApprovalRequestView {
   expiresAt: string
 }
 
+/* Plan 查看面板（P2-8）数据契约：形状对齐上游 `GET /transcript/plan` 返回的
+   单条 plans item（plan_review display 同样携带 plan/path/options）。 */
+export type PlanReviewState = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export type PlanReviewSource = 'interaction' | 'display' | 'output'
+
+export interface PlanReviewOption {
+  label: string
+  description?: string
+}
+
+export interface PlanReviewOutcome {
+  state: PlanReviewState
+  selectedOption?: string
+  feedback?: string
+}
+
+export interface PlanReview {
+  toolCallId: string
+  turnId: string
+  source: PlanReviewSource
+  /** 完整计划文本。 */
+  plan: string
+  /** 计划写入的文件路径（可选）。 */
+  path?: string
+  options?: PlanReviewOption[]
+  /** 审批结果与反馈（pending 表示等待审批）。 */
+  review?: PlanReviewOutcome
+}
+
 export interface QuestionOptionView {
   id: string
   label: string
@@ -504,6 +597,11 @@ export interface KimiAttachmentBlob {
   bytes: Uint8Array
 }
 
+export interface KimiPromptSkill {
+  name: string
+  args?: string
+}
+
 export interface KimiPromptInput {
   text: string
   controls: KimiPromptControls
@@ -511,6 +609,8 @@ export interface KimiPromptInput {
   webElements?: BrowserPickedElement[]
   goalObjective?: string
   deliveryMode?: 'queue' | 'steer'
+  /** 随 prompt 一次激活的 skills（0.37.2+）；不再只靠文本里的 / 命令。 */
+  skills?: KimiPromptSkill[]
 }
 
 export interface KimiSideChatPromptInput {
@@ -960,6 +1060,18 @@ export interface KimiSkillActivationResult {
   skillName: string
 }
 
+/** turn.started origin.user.skillActivations 的投影（0.37.2+）。
+ *  可选字段允许显式 undefined（`exactOptionalPropertyTypes` 下与 adapter 的
+ *  zod-optional 投影兼容）。 */
+export interface SkillActivationView {
+  activationId: string
+  skillName: string
+  skillArgs?: string | undefined
+  skillType?: string | undefined
+  skillPath?: string | undefined
+  skillSource?: KimiSkillSource | undefined
+}
+
 export interface KimiTool {
   name: string
   description: string
@@ -1146,6 +1258,9 @@ export interface KimiAgentDesktopApi {
   renameSession(sessionId: string, title: string): Promise<void>
   archiveSession(sessionId: string): Promise<void>
   restoreSession(sessionId: string): Promise<SessionCreateResult>
+  listSessionManagerPage(input: KimiSessionManagerListInput): Promise<KimiSessionManagerPage>
+  archiveSessions(ids: string[]): Promise<KimiSessionManagerBatchResult>
+  restoreSessions(ids: string[]): Promise<KimiSessionManagerBatchResult>
   forkSession(sessionId: string): Promise<SessionCreateResult>
   exportSession(sessionId: string): Promise<SessionExportResult>
   listArchivedSessions(): Promise<SessionNavigationItem[]>
@@ -1175,7 +1290,14 @@ export interface KimiAgentDesktopApi {
   respondApproval(
     sessionId: string,
     approvalId: string,
-    response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }
+    response: {
+      decision: 'approved' | 'rejected' | 'cancelled'
+      scope?: 'session'
+      /** 随审批一起提交的反馈/修订指示（透传给 Kimi wire `feedback`）。 */
+      feedback?: string
+      /** 选中的计划选项 label（透传给 Kimi wire `selected_label`）。 */
+      selectedLabel?: string
+    }
   ): Promise<InteractionResolveResult>
   respondQuestion(
     sessionId: string,
@@ -1187,6 +1309,8 @@ export interface KimiAgentDesktopApi {
   pasteAttachment(input: KimiAttachmentPasteInput): Promise<KimiUploadedFile>
   attachWorkspaceFile(sessionId: string, path: string): Promise<KimiUploadedFile>
   readAttachment(fileId: string, mediaType: string): Promise<KimiAttachmentBlob>
+  /** Prompt 附件媒体走 session media 端点（0.37.2+），需带 sessionId。 */
+  readSessionMedia(sessionId: string, fileId: string, mediaType: string): Promise<KimiAttachmentBlob>
   discardAttachment(fileId: string): Promise<void>
   listFiles(sessionId: string, path?: string): Promise<WorkspaceFileList>
   /* 草稿态（会话尚未创建）按工作区列举目录；不经过 Kimi Session，由 main 直接读本地文件系统。 */

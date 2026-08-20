@@ -8,6 +8,7 @@ import ExtensionsPanel from './components/ExtensionsPanel.vue'
 import FilePreviewDialog from './components/FilePreviewDialog.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import RuntimeConnectDialog from './components/RuntimeConnectDialog.vue'
+import PlanViewerPanel from './components/PlanViewerPanel.vue'
 import { useRuntimeBridge } from './composables/useRuntimeBridge'
 import { useBrowserBridge } from './composables/useBrowserBridge'
 import { useUsageBridge } from './composables/useUsageBridge'
@@ -21,9 +22,11 @@ import type {
   KimiAgentTranscript,
   KimiSessionOperationalState,
   KimiPromptControls,
+  KimiPromptSkill,
   KimiSideChatView,
   KimiUploadedFile,
   PetOpenSessionIntent,
+  PlanReview,
   QuestionAnswerInput,
   SessionAgentView,
   SessionUsageSummary,
@@ -205,7 +208,8 @@ async function submitPrompt(
   controls: KimiPromptControls,
   goalMode: boolean,
   deliveryMode: 'queue' | 'steer',
-  webElements: BrowserPickedElement[]
+  webElements: BrowserPickedElement[],
+  skills: KimiPromptSkill[] = []
 ): Promise<void> {
   let sessionId = activeSessionId.value
   if (sessionId.length === 0) {
@@ -227,11 +231,21 @@ async function submitPrompt(
     text,
     ...(attachments.length === 0 ? {} : { attachments }),
     ...(webElements.length === 0 ? {} : { webElements }),
+    ...(skills.length === 0 ? {} : { skills }),
     controls,
     ...(goalMode ? { goalObjective: text.trim() } : {}),
     deliveryMode
   })
   if (accepted) store.markConversationActivity(sessionId)
+}
+
+/* 失败卡片的一键恢复：重新发送最近一条用户 prompt（相同文本，使用当前会话
+   控制设置）。这与 store 尚无的 resume/continue 语义等价的恢复方式。 */
+function resumeFailedTurn(text: string): void {
+  const sessionId = activeSessionId.value
+  const controls = runtimeBridge.promptControls.value
+  if (sessionId.length === 0 || controls === null || text.length === 0) return
+  void runtimeBridge.submitPrompt(sessionId, { text, controls })
 }
 
 /* 页内点选元素：会话循环里每点一个元素立即加入输入框 chip，随下一条消息一起提交。 */
@@ -327,14 +341,14 @@ async function loadSessionChildren(sessionId: string): Promise<void> {
   store.mergeSessionChildren(sessionId, children)
 }
 
-function activateSkill(skillName: string, args?: string): void {
-  if (activeSessionId.value.length === 0) return
-  void runtimeBridge.activateSkill(activeSessionId.value, skillName, args)
-}
-
 function respondApproval(
   approvalId: string,
-  response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session' }
+  response: {
+    decision: 'approved' | 'rejected' | 'cancelled'
+    scope?: 'session'
+    feedback?: string
+    selectedLabel?: string
+  }
 ): void {
   if (activeSessionId.value.length === 0) return
   void runtimeBridge.respondApproval(activeSessionId.value, approvalId, response)
@@ -386,6 +400,32 @@ function openAgent(agent: SessionAgentView): void {
 function closeAgent(): void {
   selectedAgentId.value = null
   runtimeBridge.clearAgentTranscript()
+}
+
+function openPlanReview(review: PlanReview): void {
+  store.openPlanReview(review)
+}
+
+/* 计划反馈优先走真实 respondApproval feedback 通道：按 plan 的 tool_call_id 关联
+   当前待审批交互（快照/事件维护的 pendingApprovals）。反馈语义为「驳回并修订」，
+   即以 rejected + feedback 让模型按意见重出计划；找不到匹配的待审批项（如 auto
+   模式无审批）时降级为灌入 Composer 草稿，不伪造任何审批关联。 */
+function sendPlanFeedback(text: string): void {
+  const plan = store.planReview
+  store.closePlanReview()
+  if (plan === null || activeSessionId.value.length === 0) return
+  const approval = activeSessionView.value?.pendingApprovals.find(
+    (item) => item.toolCallId === plan.toolCallId
+  )
+  if (approval !== undefined) {
+    void runtimeBridge.respondApproval(activeSessionId.value, approval.approvalId, {
+      decision: 'rejected',
+      feedback: text
+    })
+    return
+  }
+  /* 无关联的待审批项：保留草稿兜底（Plan 模式下即普通消息修订指示）。 */
+  void conversationPane.value?.loadPromptDraft(text)
 }
 
 function controlGoal(control: 'pause' | 'resume' | 'cancel'): void {
@@ -827,6 +867,9 @@ onBeforeUnmount(() => {
         :agent-transcript="visibleAgentTranscript"
         :agent-transcript-pending="runtimeBridge.agentTranscriptPending.value"
         :agent-transcript-error="runtimeBridge.agentTranscriptError.value"
+        :last-turn-reason="store.lastTurnReason"
+        :last-turn-error="store.lastTurnError"
+        :retry="store.retry"
         :mention-search="searchMentionFiles"
         @submit="submitPrompt"
         @abort="runtimeBridge.abortActivePrompt"
@@ -841,7 +884,6 @@ onBeforeUnmount(() => {
         @open-system="openWorkspaceFileSystem"
         @trash-entry="trashWorkspaceEntry"
         @close-terminal="store.toggleTerminal(false)"
-        @activate-skill="activateSkill"
         @update-prompt-controls="runtimeBridge.setPromptControls"
         @control-goal="controlGoal"
         @steer-prompt="steerPrompt"
@@ -854,7 +896,9 @@ onBeforeUnmount(() => {
         @close-side-chat="closeSideChat"
         @open-agent="openAgent"
         @close-agent="closeAgent"
+        @open-plan="openPlanReview"
         @undo="undoSession"
+        @retry-failed-turn="resumeFailedTurn"
       />
 
       <template v-if="rightPanelOpen">
@@ -948,6 +992,12 @@ onBeforeUnmount(() => {
       :error="runtimeBridge.runtime.value.status === 'error' ? runtimeBridge.runtime.value.error : null"
       :missing="runtimeBridge.discovery.value?.system.executable === null"
       @retry="runtimeBridge.toggle"
+    />
+    <PlanViewerPanel
+      v-if="store.planReview"
+      :plan="store.planReview"
+      @close="store.closePlanReview"
+      @send-feedback="sendPlanFeedback"
     />
   </div>
 </template>

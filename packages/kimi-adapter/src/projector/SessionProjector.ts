@@ -93,6 +93,10 @@ export function projectSessionEvent(state: SessionProjectionState, frame: Sessio
       })
       return
     }
+    // 0.37.2+ 新增的全局事件：已知但与会话视图无关，不计入未知事件
+    case 'event.plugin.changed':
+    case 'event.capability.changed':
+      return
     default:
       state.unknownEventCount += 1
   }

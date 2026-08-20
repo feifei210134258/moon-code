@@ -114,7 +114,7 @@ describe('ComposerBar web elements', () => {
 
     await wrapper.get('textarea').setValue('看看页面结构')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['看看页面结构', [], controls, false, 'queue', picked]])
+    expect(wrapper.emitted('submit')).toEqual([['看看页面结构', [], controls, false, 'queue', picked, []]])
     expect(wrapper.find('.composer-web-elements-chip').exists()).toBe(false)
   })
 
@@ -124,6 +124,6 @@ describe('ComposerBar web elements', () => {
     await wrapper.vm.$nextTick()
 
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.emitted('submit')).toEqual([['', [], controls, false, 'queue', [element()]]])
+    expect(wrapper.emitted('submit')).toEqual([['', [], controls, false, 'queue', [element()], []]])
   })
 })

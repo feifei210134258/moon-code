@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps<{
   mediaType: 'image' | 'video'
+  sessionId: string | null
   fileId: string | null
   sourceMediaType: string | null
   base64Data: string | null
@@ -57,7 +58,11 @@ async function load(): Promise<void> {
     return
   }
   try {
-    const result = await window.kimiAgent.readAttachment(props.fileId, 'application/octet-stream')
+    // 用户发送的图片/视频（prompt 附件）从会话历史持久化，走 0.37.2+ 的 session media 端点；
+    // 无 sessionId 时回退旧的文件下载端点。
+    const result = props.sessionId !== null
+      ? await window.kimiAgent.readSessionMedia(props.sessionId, props.fileId, 'application/octet-stream')
+      : await window.kimiAgent.readAttachment(props.fileId, 'application/octet-stream')
     const bytes = new Uint8Array(result.bytes)
     objectUrl = URL.createObjectURL(new Blob([bytes], {
       type: props.sourceMediaType ?? defaultMediaType()

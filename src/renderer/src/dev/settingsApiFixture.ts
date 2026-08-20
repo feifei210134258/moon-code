@@ -139,7 +139,8 @@ export function installSettingsApiFixture(): void {
           usage: { inputTokens: 1200, outputTokens: 230, cacheReadTokens: 480, cacheCreationTokens: 0, contextTokens: 4200 }
         }
       ],
-      hasMoreMessages: false, resyncCount: 0, unknownEventCount: 0, error: null
+      hasMoreMessages: false, resyncCount: 0, unknownEventCount: 0, error: null,
+      lastTurnReason: null, lastTurnError: null, retry: null
     }),
     getSessionWarnings: async () => [],
     getSessionRuntimeStatus: async () => ({

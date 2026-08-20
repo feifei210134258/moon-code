@@ -1,5 +1,12 @@
 import { EventEmitter } from 'node:events'
-import type { TranscriptMessage, TranscriptProjection } from '../projector/TranscriptProjector.js'
+import type {
+  TranscriptMessage,
+  TranscriptPart,
+  TranscriptProjection,
+  SessionPlanView
+} from '../projector/TranscriptProjector.js'
+import type { RetryStatus } from '../projector/TranscriptProjector.js'
+import type { LastTurnReason } from '../projector/SessionProjector.js'
 import { TranscriptProjector } from '../projector/TranscriptProjector.js'
 import { AgentProjector, type AgentRosterItem } from '../projector/AgentProjector.js'
 import type { KimiRestClient } from '../transport/KimiRestClient.js'
@@ -13,7 +20,9 @@ import {
   type QuestionRequest,
   type SessionSnapshot,
   type SessionTodo,
-  type SessionTranscript
+  type SessionTranscript,
+  type SessionPlanItem,
+  type SkillActivationInfo
 } from '../wire/schemas.js'
 
 export type SessionSyncPhase = 'idle' | 'loading' | 'ready' | 'resyncing' | 'reconnecting' | 'error'
@@ -76,6 +85,11 @@ export interface SessionSyncView {
   resyncCount: number
   unknownEventCount: number
   error: string | null
+  lastTurnReason: LastTurnReason | null
+  lastTurnError: string | null
+  retry: RetryStatus | null
+  /** 当前 turn（turn.started origin.user）激活的 skills（0.37.2+）。 */
+  skillActivations: SkillActivationInfo[]
 }
 
 export interface SessionTranscriptMarkerView {
@@ -137,6 +151,7 @@ export interface GlobalSyncEvent {
 interface SyncRestClient {
   getSessionSnapshot: KimiRestClient['getSessionSnapshot']
   getSessionTranscript?: KimiRestClient['getSessionTranscript']
+  getSessionPlanList?: KimiRestClient['getSessionPlanList']
 }
 
 interface SyncSocket {
@@ -175,6 +190,10 @@ export class SessionSyncController extends EventEmitter {
   readonly #agentProjector = new AgentProjector()
   readonly #states = new Map<string, SessionSyncView>()
   readonly #pendingProjections = new Set<string>()
+  /** 每个 session 的退出计划清单（tool_call_id → 计划详情），来自 `/transcript/plan`（0.37.2+）。 */
+  readonly #plansBySession = new Map<string, Map<string, SessionPlanView>>()
+  /** 合并中的计划刷新（plan_review part 出现时按 session 合并，避免逐 part 打接口）。 */
+  readonly #refreshingPlans = new Map<string, Promise<void>>()
   readonly #reconnectBaseMs: number
   #sideChatProjector: { sessionId: string; agentId: string; projector: TranscriptProjector } | null = null
   #activeSessionId: string | null = null
@@ -260,11 +279,13 @@ export class SessionSyncController extends EventEmitter {
     this.#emitState(loading)
 
     try {
-      const [snapshot, transcript] = await Promise.all([
+      const [snapshot, transcript, plans] = await Promise.all([
         this.#rest.getSessionSnapshot(sessionId),
-        this.#loadTranscriptSupplement(sessionId)
+        this.#loadTranscriptSupplement(sessionId),
+        this.#loadPlans(sessionId)
       ])
       if (generation !== this.#generation || this.#activeSessionId !== sessionId) return cloneView(loading)
+      if (plans !== null) this.#plansBySession.set(sessionId, plans)
 
       const projection = this.#projector.seedSnapshot(sessionId, snapshot)
       this.#optimisticSkills.delete(sessionId)
@@ -283,7 +304,7 @@ export class SessionSyncController extends EventEmitter {
         activePromptStatus: snapshot.in_flight_turn === null ? null : 'running',
         phase: 'ready',
         cursor,
-        messages: projection.messages,
+        messages: this.#mergePlans(projection.messages, sessionId),
         markers: transcript?.markers ?? [],
         todos: transcript?.todos ?? [],
         sideChat: cloneSideChat(loading.sideChat),
@@ -294,7 +315,11 @@ export class SessionSyncController extends EventEmitter {
         hasMoreMessages: snapshot.messages.has_more,
         resyncCount: loading.resyncCount,
         unknownEventCount: projection.unknownEventCount,
-        error: null
+        error: null,
+        lastTurnReason: snapshot.session.last_turn_reason ?? null,
+        lastTurnError: null,
+        retry: null,
+        skillActivations: projection.skillActivations.map((activation) => ({ ...activation }))
       }
       this.#states.set(sessionId, ready)
 
@@ -336,6 +361,8 @@ export class SessionSyncController extends EventEmitter {
     this.#connected = false
     this.#optimisticSkills.clear()
     this.#sideChatProjector = null
+    this.#plansBySession.clear()
+    this.#refreshingPlans.clear()
   }
 
   acceptSubmittedPrompt(sessionId: string, prompt: PromptSubmitResult): SessionSyncView | null {
@@ -481,6 +508,9 @@ export class SessionSyncController extends EventEmitter {
     if (sessionId === undefined || sessionId !== this.#activeSessionId || this.#resyncing.has(sessionId)) return
     const state = this.#states.get(sessionId)
     if (state === undefined) return
+    // 0.37.2+：plan_review 工具帧出现时按 session 合并一次计划清单，让新的
+    // ExitPlanMode 调用尽早带上计划详情；缺省实现静默（无 plan 字段）。
+    if (isPlanReviewFrame(frame)) this.#refreshPlans(sessionId)
     const sideChat = this.#applySideChatEvent(state, frame)
     if (sideChat.matched) {
       const cursor = this.#socket.cursors[sessionId]
@@ -531,6 +561,11 @@ export class SessionSyncController extends EventEmitter {
         state.activePromptStatus = 'running'
         changed = true
       }
+    }
+    const lastTurnReason = lastTurnReasonValue(frame.payload.last_turn_reason)
+    if (lastTurnReason !== null) {
+      changed ||= state.lastTurnReason !== lastTurnReason
+      state.lastTurnReason = lastTurnReason
     }
     return changed
   }
@@ -647,11 +682,13 @@ export class SessionSyncController extends EventEmitter {
     state.error = null
     this.#emitState(state)
     try {
-      const [snapshot, transcript] = await Promise.all([
+      const [snapshot, transcript, plans] = await Promise.all([
         this.#rest.getSessionSnapshot(sessionId),
-        this.#loadTranscriptSupplement(sessionId)
+        this.#loadTranscriptSupplement(sessionId),
+        this.#loadPlans(sessionId)
       ])
       if (this.#closed || sessionId !== this.#activeSessionId) return
+      if (plans !== null) this.#plansBySession.set(sessionId, plans)
       const projection = this.#projector.seedSnapshot(sessionId, snapshot)
       this.#optimisticSkills.delete(sessionId)
       const agents = this.#agentProjector.seedSnapshot(sessionId, snapshot)
@@ -666,7 +703,7 @@ export class SessionSyncController extends EventEmitter {
         ?? authoritativePromptId(projection.activePromptId)
       state.activePromptStatus = snapshot.in_flight_turn === null ? null : 'running'
       state.cursor = cursor
-      state.messages = projection.messages
+      state.messages = this.#mergePlans(projection.messages, sessionId)
       state.markers = transcript?.markers ?? state.markers
       state.todos = transcript?.todos ?? state.todos
       state.pendingApprovals = snapshot.pending_approvals.map(mapApproval)
@@ -675,6 +712,9 @@ export class SessionSyncController extends EventEmitter {
       state.usage = mapSnapshotUsage(snapshot.session.usage)
       state.hasMoreMessages = snapshot.messages.has_more
       state.unknownEventCount = projection.unknownEventCount
+      state.lastTurnReason = snapshot.session.last_turn_reason ?? null
+      state.lastTurnError = null
+      state.retry = null
       state.phase = 'ready'
       this.#emitState(state)
       if (this.#connected) {
@@ -744,6 +784,67 @@ export class SessionSyncController extends EventEmitter {
     }
   }
 
+  // 返回 null 表示计划清单不可用/解析失败，调用方保留既有 plans 缓存
+  // （openSession 冷启动时即为空），不阻塞 transcript 主流程。
+  async #loadPlans(sessionId: string): Promise<Map<string, SessionPlanView> | null> {
+    if (this.#rest.getSessionPlanList === undefined) return null
+    try {
+      const result = await this.#rest.getSessionPlanList(sessionId, { agentId: 'main' })
+      const plans = new Map<string, SessionPlanView>()
+      for (const item of result.plans) plans.set(item.tool_call_id, mapSessionPlan(item))
+      return plans
+    } catch (error) {
+      console.warn(
+        `[SessionSyncController] plan review enrichment for session ${sessionId} failed:`,
+        error
+      )
+      return null
+    }
+  }
+
+  /** 把已缓存的计划详情按 tool_call_id 合并进 transcript 的 plan_review tool part。 */
+  #mergePlans(messages: TranscriptMessage[], sessionId: string): TranscriptMessage[] {
+    const plans = this.#plansBySession.get(sessionId)
+    if (plans === undefined || plans.size === 0) return messages
+    let merged = false
+    const next = messages.map((message) => {
+      if (!message.content.some((part) => part.type === 'tool' && plans.has(part.toolCallId))) return message
+      merged = true
+      return {
+        ...message,
+        content: message.content.map((part) => {
+          if (part.type !== 'tool') return part
+          const plan = plans.get(part.toolCallId)
+          if (plan === undefined) return part
+          // 只补齐缺失的 plan；display 里已有的内联计划不被覆盖。
+          return (part as Extract<TranscriptPart, { type: 'tool' }>).plan === undefined
+            ? { ...part, plan }
+            : part
+        })
+      }
+    })
+    return merged ? next : messages
+  }
+
+  /** plan_review part 出现后按 session 合并刷新计划清单（同步去重，避免并发打接口）。 */
+  #refreshPlans(sessionId: string): void {
+    if (this.#closed || this.#refreshingPlans.has(sessionId)) return
+    const operation = this.#loadPlans(sessionId)
+      .then((plans) => {
+        // 拉取失败或会话已切换时不重放；失败保留既有合并结果即可。
+        if (plans === null || this.#closed || sessionId !== this.#activeSessionId) return
+        this.#plansBySession.set(sessionId, plans)
+        /* 用最新缓存重放一遍投影合并：不到处 copy 合并逻辑，也不重复 fetch。 */
+        const state = this.#states.get(sessionId)
+        if (state !== undefined) {
+          this.#applyProjection(state, this.#projector.getProjection(sessionId))
+          this.#emitState(state)
+        }
+      })
+      .finally(() => this.#refreshingPlans.delete(sessionId))
+    this.#refreshingPlans.set(sessionId, operation)
+  }
+
   #scheduleReconnect(): void {
     const sessionId = this.#activeSessionId
     if (this.#closed || sessionId === null || this.#reconnectTimer !== null) return
@@ -783,13 +884,26 @@ export class SessionSyncController extends EventEmitter {
   }
 
   #applyProjection(state: SessionSyncView, projection: TranscriptProjection): void {
-    state.messages = projection.messages
+    state.messages = this.#mergePlans(projection.messages, state.sessionId)
     state.mainTurnActive = projection.active
     state.activePromptId = authoritativePromptId(projection.activePromptId)
     state.activePromptStatus = projection.activePromptId === null
       ? null
       : state.activePromptStatus ?? 'running'
     state.unknownEventCount = projection.unknownEventCount
+    /* 投影单独维护的重试状态总是全场覆盖；terminal 字段在投影收敛时写入，
+       避免开播瞬间用空的初始值覆盖快照里的上一轮结局。失败摘要随轮次结局
+       联动：非 failed 结局（completed/cancelled）会清掉旧摘要。 */
+    state.retry = projection.retry === null ? null : { ...projection.retry }
+    state.skillActivations = projection.skillActivations.map((activation) => ({ ...activation }))
+    if (projection.lastTurnReason !== null) {
+      state.lastTurnReason = projection.lastTurnReason
+      state.lastTurnError = projection.lastTurnReason === 'failed'
+        ? projection.lastTurnError
+        : null
+    } else if (projection.lastTurnError !== null) {
+      state.lastTurnError = projection.lastTurnError
+    }
   }
 
   #applyInteractionEvent(state: SessionSyncView, frame: SessionEventFrame): boolean {
@@ -911,7 +1025,11 @@ function emptyView(sessionId: string): SessionSyncView {
     hasMoreMessages: false,
     resyncCount: 0,
     unknownEventCount: 0,
-    error: null
+    error: null,
+    lastTurnReason: null,
+    lastTurnError: null,
+    retry: null,
+    skillActivations: []
   }
 }
 
@@ -938,7 +1056,9 @@ function cloneView(state: SessionSyncView): SessionSyncView {
       ...agent,
       usage: agent.usage === null ? null : { ...agent.usage }
     })),
-    usage: { ...state.usage }
+    usage: { ...state.usage },
+    retry: state.retry === null ? null : { ...state.retry },
+    skillActivations: state.skillActivations.map((activation) => ({ ...activation }))
   }
 }
 
@@ -976,6 +1096,10 @@ function recordString(value: unknown, key: string): string | null {
 
 function booleanValue(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null
+}
+
+function lastTurnReasonValue(value: unknown): LastTurnReason | null {
+  return value === 'completed' || value === 'cancelled' || value === 'failed' ? value : null
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -1204,6 +1328,39 @@ function mapQuestion(question: QuestionRequest): PendingQuestionView {
     })),
     createdAt: timestampString(question.created_at)
   }
+}
+
+/** `/transcript/plan` 条目的 wire → 视图投影（camelCase，与 IPC 契约 `PlanReview` 对齐）。 */
+function mapSessionPlan(plan: SessionPlanItem): SessionPlanView {
+  return {
+    toolCallId: plan.tool_call_id,
+    turnId: plan.turn_id,
+    source: plan.source,
+    plan: plan.plan,
+    ...(plan.path === undefined ? {} : { path: plan.path }),
+    ...(plan.options === undefined || plan.options.length === 0
+      ? {}
+      : { options: plan.options.map((option) => ({
+          label: option.label,
+          ...(option.description === undefined ? {} : { description: option.description })
+        })) }),
+    ...(plan.review === undefined
+      ? {}
+      : { review: {
+          state: plan.review.state,
+          ...(plan.review.selected_option === undefined
+            ? {}
+            : { selectedOption: plan.review.selected_option }),
+          ...(plan.review.feedback === undefined ? {} : { feedback: plan.review.feedback })
+        } })
+  }
+}
+
+/** tool.use / tool.call.started 帧携带 plan_review display 时触发计划合并（0.37.2+）。 */
+function isPlanReviewFrame(frame: SessionEventFrame): boolean {
+  if (frame.type !== 'tool.use' && frame.type !== 'tool.call.started') return false
+  const display = recordValue(frame.payload.display)
+  return recordString(display, 'kind') === 'plan_review'
 }
 
 function interactionPreview(value: unknown): string {

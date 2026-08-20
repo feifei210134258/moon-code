@@ -2,6 +2,7 @@ import type {
   KimiAttachmentPasteInput,
   KimiPromptControls,
   KimiPromptInput,
+  KimiPromptSkill,
   KimiSideChatPromptInput,
   KimiUploadedFile
 } from '../../shared/contracts.js'
@@ -11,6 +12,7 @@ const MAX_PROMPT_TEXT = 200_000
 const MAX_MODEL_ID = 512
 const MAX_THINKING_ID = 64
 const MAX_ATTACHMENTS = 32
+const MAX_SUBMITTED_SKILLS = 32
 const MAX_PASTED_IMAGE_BYTES = 10 * 1024 * 1024
 
 export function validatePromptControls(value: unknown): KimiPromptControls {
@@ -48,12 +50,14 @@ export function validatePromptInput(value: unknown): KimiPromptInput {
   const webElements = value.webElements === undefined
     ? undefined
     : sanitizePickedElements(value.webElements, (item) => String(item), (item) => String(item))
+  const skills = value.skills === undefined ? undefined : validatePromptSkills(value.skills)
   const text = value.text
   const hasWebElements = webElements !== undefined && webElements.length > 0
+  const hasSkills = skills !== undefined && skills.length > 0
   if (
     typeof text !== 'string' ||
     text.length > MAX_PROMPT_TEXT ||
-    (text.trim().length < 1 && attachments.length === 0 && !hasWebElements)
+    (text.trim().length < 1 && attachments.length === 0 && !hasWebElements && !hasSkills)
   ) {
     throw new TypeError('Invalid Kimi prompt text')
   }
@@ -62,9 +66,27 @@ export function validatePromptInput(value: unknown): KimiPromptInput {
     controls: validatePromptControls(value.controls),
     ...(attachments.length === 0 ? {} : { attachments }),
     ...(webElements === undefined || webElements.length === 0 ? {} : { webElements }),
+    ...(skills === undefined || skills.length === 0 ? {} : { skills }),
     ...(goalObjective === undefined ? {} : { goalObjective: goalObjective.trim() }),
     ...(deliveryMode === undefined ? {} : { deliveryMode })
   }
+}
+
+function validatePromptSkills(value: unknown): KimiPromptSkill[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_SUBMITTED_SKILLS) {
+    throw new TypeError('Invalid Kimi prompt skills')
+  }
+  return value.map((item) => {
+    if (!isRecord(item)) throw new TypeError('Invalid Kimi prompt skill')
+    const args = item.args
+    if (args !== undefined && (typeof args !== 'string' || args.length > MAX_PROMPT_TEXT)) {
+      throw new TypeError('Invalid Kimi prompt skill args')
+    }
+    return {
+      name: shortString(item.name, MAX_MODEL_ID, 'skill name'),
+      ...(args === undefined || args.trim().length === 0 ? {} : { args })
+    }
+  })
 }
 
 export function validateSideChatPromptInput(value: unknown): KimiSideChatPromptInput {

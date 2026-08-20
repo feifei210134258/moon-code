@@ -102,8 +102,19 @@ export const sessionSummaryV2Schema = z.object({
   }).optional()
 })
 
+/**
+ * v2 sessions 列表条目：`fields=id,archived` 时服务端返回轻量投影
+ * `{ id, archived }`，否则返回完整条目（workspace/meta/activity）。
+ */
+export const sessionSummaryV2LiteSchema = z.object({
+  id: z.string().min(1),
+  archived: z.boolean()
+})
+
 export const sessionListV2Schema = z.object({
-  items: z.array(sessionSummaryV2Schema),
+  items: z.array(z.union([sessionSummaryV2Schema, sessionSummaryV2LiteSchema])),
+  // 0.37.2+：每次列表响应的总条数（必填）
+  total: z.number().int().nonnegative(),
   has_more: z.boolean(),
   next_page_token: z.string().nullable()
 })
@@ -212,6 +223,7 @@ export const snapshotSubagentSchema = z.object({
   output_preview: z.string().optional(),
   output_bytes: z.number().int().nonnegative().optional(),
   subagent_phase: z.enum(['queued', 'working', 'suspended', 'completed', 'failed']).optional(),
+  agent_id: z.string().optional(),
   subagent_type: z.string().optional(),
   parent_tool_call_id: z.string().optional(),
   suspended_reason: z.string().optional(),
@@ -303,6 +315,43 @@ export const promptSubmitResultSchema = z.object({
   created_at: z.unknown()
 })
 
+/**
+ * `GET /sessions/{id}/transcript/plan`（0.37.2+）：Agent 的 ExitPlanMode 工具调用
+ * 对应的计划内容、计划文件路径、可选操作与审批结果，按时间线顺序返回。
+ * 形状按 contracts/kimi-0.37.2-openapi.json 快照建模。
+ */
+export const sessionPlanOptionSchema = z.object({
+  label: z.string(),
+  description: z.string().optional()
+})
+
+export const sessionPlanReviewOutcomeSchema = z.object({
+  state: z.enum(['pending', 'approved', 'rejected', 'cancelled']),
+  selected_option: z.string().optional(),
+  feedback: z.string().optional()
+})
+
+export const sessionPlanItemSchema = z.object({
+  tool_call_id: z.string().min(1),
+  turn_id: z.string().min(1),
+  source: z.enum(['interaction', 'display', 'output']),
+  plan: z.string(),
+  path: z.string().optional(),
+  options: z.array(sessionPlanOptionSchema).optional(),
+  review: sessionPlanReviewOutcomeSchema.optional()
+})
+
+export const sessionPlanListSchema = z.object({
+  agent_id: z.string().min(1),
+  plans: z.array(sessionPlanItemSchema)
+})
+
+/** POST /sessions/{id}/prompts 请求体中随 prompt 一次激活的 skills（0.37.2+，可选）。 */
+export const promptSkillSchema = z.object({
+  name: z.string().min(1),
+  args: z.string().optional()
+})
+
 export const sessionRuntimeStatusSchema = z.object({
   busy: z.boolean(),
   model: z.string().optional(),
@@ -363,7 +412,11 @@ export const backgroundTaskSchema = z.object({
   started_at: z.unknown().optional(),
   completed_at: z.unknown().optional(),
   output_preview: z.string().optional(),
-  output_bytes: z.number().int().nonnegative().optional()
+  output_bytes: z.number().int().nonnegative().optional(),
+  // 0.37.2+：任务归属的 agent/子代理信息
+  agent_id: z.string().optional(),
+  subagent_type: z.string().optional(),
+  parent_tool_call_id: z.string().optional()
 })
 
 export const backgroundTaskListSchema = z.object({ items: z.array(backgroundTaskSchema) })
@@ -384,6 +437,21 @@ export const sessionAbortResultSchema = z.object({
 })
 
 export const sessionArchiveResultSchema = z.object({ archived: z.literal(true) })
+
+/** v2 批量 archive/restore 的逐项结果（0.37.2+）。 */
+export const sessionBatchItemResultSchema = z.object({
+  id: z.string().min(1),
+  ok: z.boolean(),
+  error: z.object({
+    code: z.number().int(),
+    message: z.string()
+  }).optional()
+})
+export const sessionBatchActionResultSchema = z.object({
+  results: z.array(sessionBatchItemResultSchema),
+  succeeded: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative()
+})
 
 export const interactionResolveResultSchema = z.object({
   resolved: z.literal(true),
@@ -764,6 +832,193 @@ export const mcpServerSchema = z.object({
 export const mcpServerListSchema = z.object({ servers: z.array(mcpServerSchema) })
 export const mcpServerRestartResultSchema = z.object({ restarting: z.literal(true) })
 
+/**
+ * Kimi 0.37.2 会话事件 payload 模型。
+ *
+ * 事件帧的 envelope（type/seq/epoch/.../payload）由 wire/ws.ts 的
+ * `sessionEventFrameSchema` 约束；这里只固定新增/演进的事件 payload 形状，
+ * 供投影器与契约测试按快照核对（字段按 contracts/kimi-0.37.2-asyncapi.json）。
+ */
+
+/** turn.started origin.user.skillActivations 条目。activationId/skillName 必填。 */
+export const skillActivationInfoSchema = z.object({
+  activationId: z.string().min(1),
+  skillName: z.string().min(1),
+  skillArgs: z.string().optional(),
+  skillType: z.string().optional(),
+  skillPath: z.string().optional(),
+  skillSource: skillSourceSchema.optional()
+})
+
+/** turn.started origin 的 user 分支（携带本轮的 skillActivations）。 */
+export const originUserSchema = z.object({
+  kind: z.literal('user'),
+  skillActivations: z.array(skillActivationInfoSchema).default([])
+}).passthrough()
+
+/** turn.started（0.37.2 起可携带 promptId）。origin 为多分支 oneOf，保持不透明。 */
+export const turnStartedEventSchema = z.object({
+  type: z.literal('turn.started'),
+  turnId: z.number().int().nonnegative().optional(),
+  origin: z.unknown().optional(),
+  prompt: z.unknown().optional(),
+  promptId: z.string().optional()
+}).passthrough()
+
+/** turn.ended（0.37.2 起携带 time）。 */
+export const turnEndedEventSchema = z.object({
+  type: z.literal('turn.ended'),
+  time: z.string().optional(),
+  turnId: z.number().int().nonnegative().optional(),
+  reason: z.enum(['completed', 'failed', 'cancelled', 'blocked']).optional(),
+  error: z.unknown().optional(),
+  durationMs: z.number().optional(),
+  interruptReason: z.string().optional()
+}).passthrough()
+
+/** 0.37.2：插件列表变更（全局配置事件，不携带配置数据）。 */
+export const pluginChangedEventSchema = z.object({
+  type: z.literal('event.plugin.changed')
+}).passthrough()
+
+/** 0.37.2：内置能力安装状态变更。 */
+export const capabilityChangedEventSchema = z.object({
+  type: z.literal('event.capability.changed'),
+  capability_id: z.string().min(1),
+  install: z.object({
+    running: z.boolean(),
+    step: z.string().optional(),
+    percent: z.number().optional(),
+    error: z.string().optional(),
+    note: z.string().optional()
+  })
+}).passthrough()
+
+/**
+ * session_event 中 error 变体的错误码枚举（Kimi 0.37.2，114 项）。
+ * 0.37.2 起新增 `prompt.id_conflict`。与 REST 层的数字 code（KimiApiError.code）
+ * 是两套坐标，这里按异步契约快照 pin 住字符串语义码。
+ */
+export const kimiSessionErrorCodes = [
+  'config.invalid',
+  'session.not_found',
+  'session.already_exists',
+  'session.id_invalid',
+  'session.id_required',
+  'session.id_empty',
+  'session.title_empty',
+  'session.state_not_found',
+  'session.state_invalid',
+  'session.fork_active_turn',
+  'session.undo_unavailable',
+  'session.export_not_found',
+  'session.export_missing_version',
+  'session.export_output_conflict',
+  'session.export_too_large',
+  'session.closed',
+  'session.permission_mode_invalid',
+  'session.thinking_empty',
+  'session.model_empty',
+  'session.plan_mode_invalid',
+  'session.approval_handler_error',
+  'session.question_handler_error',
+  'session.init_failed',
+  'agent.not_found',
+  'agent.already_exists',
+  'agent.already_running',
+  'agent.not_a_subagent',
+  'agent.not_owned',
+  'agent.type_not_allowed',
+  'agent.max_tokens_exceeded',
+  'activity.agent_busy',
+  'activity.cancelling',
+  'activity.disposing',
+  'activity.disposed',
+  'activity.initializing',
+  'activity.session_rejected',
+  'turn.agent_busy',
+  'goal.already_exists',
+  'goal.not_found',
+  'goal.objective_empty',
+  'goal.objective_too_long',
+  'goal.status_invalid',
+  'goal.metadata_reserved',
+  'goal.not_resumable',
+  'goal.unsupported_agent',
+  'model.not_configured',
+  'model.config_invalid',
+  'profile.thinking_alias_conflict',
+  'model.not_found',
+  'auth.login_required',
+  'auth.provisioning_required',
+  'auth.token_missing',
+  'auth.token_unauthorized',
+  'auth.model_not_resolved',
+  'context.overflow',
+  'loop.max_steps_exceeded',
+  'provider.api_error',
+  'provider.filtered',
+  'provider.rate_limit',
+  'provider.auth_error',
+  'provider.connection_error',
+  'provider.overloaded',
+  'provider.not_found',
+  'skill.not_found',
+  'skill.type_unsupported',
+  'skill.name_empty',
+  'skill.parse_failed',
+  'skill.nested_too_deep',
+  'records.write_failed',
+  'compaction.failed',
+  'compaction.unable',
+  'task.task_id_empty',
+  'task.limit_exceeded',
+  'usage.turn_id_conflict',
+  'mcp.server_not_found',
+  'mcp.server_disabled',
+  'mcp.startup_failed',
+  'mcp.tool_name_collision',
+  'mcp.oauth_failed',
+  'message.not_found',
+  'plugin.not_found',
+  'plugin.load_failed',
+  'request.invalid',
+  'request.work_dir_required',
+  'request.prompt_input_empty',
+  'prompt.id_conflict',
+  'prompt.not_found',
+  'prompt.already_completed',
+  'session.busy',
+  'shell.git_bash_not_found',
+  'workspace.not_found',
+  'terminal.not_found',
+  'file.not_found',
+  'file.too_large',
+  'fs.path_not_found',
+  'fs.permission_denied',
+  'fs.path_escapes',
+  'fs.is_directory',
+  'fs.is_binary',
+  'fs.too_large',
+  'fs.already_exists',
+  'fs.too_many_results',
+  'fs.grep_timeout',
+  'fs.git_unavailable',
+  'wire.migration_missing',
+  'storage.permission_denied',
+  'storage.disk_full',
+  'cron.expression_invalid',
+  'web.invalid_url',
+  'web.private_address',
+  'web.fetch_failed',
+  'validation.failed',
+  'not_implemented',
+  'internal'
+] as const
+
+export type KimiSessionErrorCode = (typeof kimiSessionErrorCodes)[number]
+export const kimiSessionErrorCodeSchema = z.enum(kimiSessionErrorCodes)
+
 export type WorkspaceSummary = z.infer<typeof workspaceSummarySchema>
 export type WorkspaceDeleteResult = z.infer<typeof workspaceDeleteResultSchema>
 export type UploadedFile = z.infer<typeof uploadedFileSchema>
@@ -780,6 +1035,10 @@ export type SnapshotSubagent = z.infer<typeof snapshotSubagentSchema>
 export type TranscriptItem = z.infer<typeof transcriptItemSchema>
 export type TranscriptMarker = z.infer<typeof transcriptMarkerSchema>
 export type SessionTranscript = z.infer<typeof sessionTranscriptSchema>
+export type SessionPlanOption = z.infer<typeof sessionPlanOptionSchema>
+export type SessionPlanReviewOutcome = z.infer<typeof sessionPlanReviewOutcomeSchema>
+export type SessionPlanItem = z.infer<typeof sessionPlanItemSchema>
+export type SessionPlanList = z.infer<typeof sessionPlanListSchema>
 export type PromptSubmitResult = z.infer<typeof promptSubmitResultSchema>
 export type PromptSteerResult = z.infer<typeof promptSteerResultSchema>
 export type PromptAbortResult = z.infer<typeof promptAbortResultSchema>
@@ -833,3 +1092,13 @@ export type SkillActivationResult = z.infer<typeof skillActivationResultSchema>
 export type ToolDescriptor = z.infer<typeof toolDescriptorSchema>
 export type McpServer = z.infer<typeof mcpServerSchema>
 export type McpServerRestartResult = z.infer<typeof mcpServerRestartResultSchema>
+export type PromptSkill = z.infer<typeof promptSkillSchema>
+export type SkillActivationInfo = z.infer<typeof skillActivationInfoSchema>
+export type OriginUser = z.infer<typeof originUserSchema>
+export type TurnStartedEvent = z.infer<typeof turnStartedEventSchema>
+export type TurnEndedEvent = z.infer<typeof turnEndedEventSchema>
+export type PluginChangedEvent = z.infer<typeof pluginChangedEventSchema>
+export type CapabilityChangedEvent = z.infer<typeof capabilityChangedEventSchema>
+export type SessionSummaryV2Lite = z.infer<typeof sessionSummaryV2LiteSchema>
+export type SessionBatchItemResult = z.infer<typeof sessionBatchItemResultSchema>
+export type SessionBatchActionResult = z.infer<typeof sessionBatchActionResultSchema>

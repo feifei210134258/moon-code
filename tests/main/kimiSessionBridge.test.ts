@@ -490,6 +490,45 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.close()
   })
 
+  it('forwards submitted skills as a structured skills array to the Kimi REST prompt', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    await bridge.submitPrompt('session-1', {
+      text: '提交并生成 PDF',
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      },
+      skills: [
+        { name: 'commit', args: '-m "feat: skills"' },
+        { name: 'pdf' }
+      ]
+    })
+    expect(runtime.submitPrompt).toHaveBeenCalledWith('session-1', expect.objectContaining({
+      content: [{ type: 'text', text: '提交并生成 PDF' }],
+      skills: [
+        { name: 'commit', args: '-m "feat: skills"' },
+        { name: 'pdf' }
+      ]
+    }))
+    await bridge.close()
+  })
+
+  it('omits the REST skills field when the submission carries no skills', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+    await bridge.submitPrompt('session-1', {
+      text: '普通继续',
+      controls: {
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+      }
+    })
+    const submitted = runtime.submitPrompt.mock.calls[0] as unknown as [string, Record<string, unknown>]
+    expect(Object.prototype.hasOwnProperty.call(submitted[1], 'skills')).toBe(false)
+    await bridge.close()
+  })
+
   it('includes a compact 样式 line when a picked element carries computed styles', async () => {
     const runtime = new FakeRuntime(new FakeSocket())
     const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
