@@ -85,7 +85,7 @@ describe('SessionSyncController', () => {
     expect(events).toEqual([
       { scope: 'navigation', eventType: 'event.workspace.updated' },
       { scope: 'config', eventType: 'event.config.changed' },
-      { scope: 'navigation', eventType: 'event.session.work_changed' },
+      { scope: 'navigation', eventType: 'event.session.work_changed', sessionId: 'session-other' },
       { scope: 'navigation', eventType: 'resync' },
       { scope: 'config', eventType: 'resync' }
     ])
@@ -648,6 +648,62 @@ describe('SessionSyncController', () => {
     await vi.waitFor(() => expect(controller.getState('session-1')?.skillActivations).toEqual([
       expect.objectContaining({ activationId: 'act-1', skillName: 'commit', skillArgs: '-m "msg"' }),
       expect.objectContaining({ activationId: 'act-2', skillName: 'pdf' })
+    ]))
+    controller.close()
+  })
+
+  it('emits a navigation invalidation when another client archives a session (0.38.0)', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+    const events: Array<{ scope: string; eventType: string }> = []
+    controller.on('global-event', (event) => events.push(event))
+
+    /* 归档的是别的会话：帧带真实会话 id，仍走全局失效通道 */
+    socket.emit('session-event', {
+      type: 'event.session.archived', seq: 11, epoch: 'epoch-1', session_id: 'session-other',
+      timestamp: '2026-07-24T01:00:03.000Z',
+      payload: { workspace_id: 'workspace-1', agentId: 'main' }
+    } satisfies SessionEventFrame)
+
+    expect(events).toEqual([
+      { scope: 'navigation', eventType: 'event.session.archived', sessionId: 'session-other' }
+    ])
+    /* 不影响当前会话的 transcript */
+    expect(controller.getState('session-1')?.messages).toHaveLength(1)
+    controller.close()
+  })
+
+  it('projects turn.started promptAttachments into the session view (0.38.0)', async () => {
+    const socket = new FakeSocket()
+    const controller = new SessionSyncController({
+      rest: { getSessionSnapshot: vi.fn().mockResolvedValue(makeSnapshot(10)) },
+      socket
+    })
+    await controller.openSession('session-1')
+    expect(controller.getState('session-1')?.promptAttachments).toEqual([])
+
+    socket.cursors['session-1'] = { seq: 11, epoch: 'epoch-1' }
+    socket.emit('session-event', {
+      type: 'turn.started', seq: 11, epoch: 'epoch-1', session_id: 'session-1',
+      timestamp: '2026-07-23T00:04:00.000Z',
+      payload: {
+        turnId: 2,
+        promptId: 'prompt-1',
+        agentId: 'main',
+        promptAttachments: [
+          { kind: 'image', fileId: 'file-1' },
+          { kind: 'audio', fileId: 'file-2' }
+        ]
+      }
+    } satisfies SessionEventFrame)
+
+    await vi.waitFor(() => expect(controller.getState('session-1')?.promptAttachments).toEqual([
+      { kind: 'image', fileId: 'file-1' },
+      { kind: 'audio', fileId: 'file-2' }
     ]))
     controller.close()
   })

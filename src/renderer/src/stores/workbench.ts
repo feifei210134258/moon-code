@@ -106,7 +106,10 @@ export const useWorkbenchStore = defineStore('workbench', {
     viewedSessionUpdates: loadViewedSessionUpdates(),
     navigationActivity: loadNavigationActivity(),
     projectExpansion: loadProjectExpansion(),
-    sessionUpdates: {} as Record<string, string | null>
+    sessionUpdates: {} as Record<string, string | null>,
+    /* 其他客户端归档了当前打开的会话：保留会话视图并显示非阻塞提示。
+       清除时机：用户显式选择其他会话/工作区/草稿，或该会话重新出现在权威树中。 */
+    sessionArchivedNotice: null as { sessionId: string; title: string } | null
   }),
   actions: {
     toggleProject(projectId: string) {
@@ -114,6 +117,14 @@ export const useWorkbenchStore = defineStore('workbench', {
       if (project === undefined) return
       project.expanded = !project.expanded
       rememberProjectExpansion(this.projectExpansion, projectId, project.expanded)
+    },
+    /* 其他客户端归档了当前打开的会话：记录提示，但保留当前会话视图不强制跳出。 */
+    noteSessionArchived(sessionId: string, title: string) {
+      if (sessionId !== this.activeSessionId || this.draftActive) return
+      this.sessionArchivedNotice = { sessionId, title }
+    },
+    dismissSessionArchivedNotice() {
+      this.sessionArchivedNotice = null
     },
     selectWorkspace(workspaceId: string) {
       const workspace = this.projects.find((project) => project.id === workspaceId)
@@ -124,11 +135,13 @@ export const useWorkbenchStore = defineStore('workbench', {
       if (!workspace.sessions.some((session) => session.id === this.activeSessionId)) {
         this.activeSessionId = workspace.sessions[0]?.id ?? ''
       }
+      this.sessionArchivedNotice = null
     },
     startDraft(workspaceId: string) {
       this.draftActive = true
       this.draftWorkspaceId = workspaceId
       this.activeSessionId = ''
+      this.sessionArchivedNotice = null
       if (workspaceId.length > 0) {
         this.activeWorkspaceId = workspaceId
         const workspace = this.projects.find((project) => project.id === workspaceId)
@@ -176,6 +189,7 @@ export const useWorkbenchStore = defineStore('workbench', {
       this.draftActive = false
       this.draftWorkspaceId = ''
       this.activeSessionId = sessionId
+      this.sessionArchivedNotice = null
       const workspace = this.projects.find((project) => project.sessions.some((session) => session.id === sessionId))
       if (workspace !== undefined) this.activeWorkspaceId = workspace.id
       const session = workspace?.sessions.find((item) => item.id === sessionId)
@@ -238,11 +252,16 @@ export const useWorkbenchStore = defineStore('workbench', {
       const activeStillExists = projects.some((project) =>
         project.sessions.some((session) => session.id === this.activeSessionId)
       )
-      if (!activeStillExists && !this.draftActive) {
+      /* 其他客户端归档了当前会话：受控重读后树里不再有它，但保留当前视图
+         不强制跳出；用户显式导航或会话恢复后自动解除。 */
+      const keepArchivedView = this.sessionArchivedNotice !== null &&
+        this.sessionArchivedNotice.sessionId === this.activeSessionId
+      if (!activeStillExists && !this.draftActive && !keepArchivedView) {
         this.activeSessionId = selectedWorkspace?.sessions[0]?.id
           ?? projects.flatMap((project) => project.sessions)[0]?.id
           ?? ''
       }
+      if (activeStillExists && keepArchivedView) this.sessionArchivedNotice = null
       const activeSessionWorkspace = projects.find((project) =>
         project.sessions.some((session) => session.id === this.activeSessionId)
       )

@@ -266,4 +266,28 @@ describe('ProjectSidebar', () => {
     expect(document.querySelector('.session-manager-card')).not.toBeNull()
     wrapper.unmount()
   })
+
+  it('shows the non-blocking archived notice and dismisses it on close', async () => {
+    const wrapper = mount(ProjectSidebar, {
+      props: {
+        projects,
+        activeWorkspaceId: 'workspace-a',
+        activeSessionId: 'session-a',
+        lifecyclePending: null,
+        lifecycleError: null,
+        archivedNotice: { sessionId: 'session-a', title: '实现 Session 生命周期' }
+      }
+    })
+    const notice = wrapper.get('.sidebar-archived-notice')
+    expect(notice.text()).toContain('当前会话已被其他客户端归档，已保留对话视图')
+    await notice.get('button').trigger('click')
+    expect(wrapper.emitted('dismissArchivedNotice')).toEqual([[]])
+    wrapper.unmount()
+  })
+
+  it('hides the archived notice when none is pending', () => {
+    const wrapper = mountSidebar()
+    expect(wrapper.find('.sidebar-archived-notice').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

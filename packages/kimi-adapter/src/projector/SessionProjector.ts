@@ -93,6 +93,12 @@ export function projectSessionEvent(state: SessionProjectionState, frame: Sessio
       })
       return
     }
+    // 0.38.0+：会话被其他客户端归档。ADR-0017 约定结构性 event.session.* 保留
+    // 真实会话 id（在帧 envelope 上），因此直接移除投影条目；未知事件不计。
+    case 'event.session.archived': {
+      if (frame.session_id !== undefined) state.sessions.delete(frame.session_id)
+      return
+    }
     // 0.37.2+ 新增的全局事件：已知但与会话视图无关，不计入未知事件
     case 'event.plugin.changed':
     case 'event.capability.changed':

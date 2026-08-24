@@ -1145,6 +1145,36 @@ select:focus-visible {
   color: var(--red);
 }
 
+/* 其他客户端归档当前会话时的非阻塞提示条（保留视图，不强制跳出）。 */
+.sidebar-archived-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: var(--type-ui-small-size);
+  line-height: 1.5;
+}
+
+.sidebar-archived-notice button {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.sidebar-archived-notice button:hover {
+  color: var(--ink);
+}
+
 .session-row.is-active {
   background: rgba(0, 0, 0, 0.07);
   font-weight: 650;
@@ -7041,6 +7071,88 @@ body.is-panel-resizing {
   cursor: pointer;
   font-size: var(--type-caption-size);
   text-decoration: none;
+}
+
+/* OAuth 登录区域选择器（0.38.0+ `GET /api/v1/oauth/region` 预选） */
+.oauth-region-picker {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 8px;
+  padding: 15px;
+  border: 1px solid rgba(0, 0, 0, 0.11);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.oauth-region-picker-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.oauth-region-picker-copy span {
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+}
+
+.oauth-region-picker-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+.oauth-region-picker-options {
+  display: flex;
+  gap: 6px;
+}
+
+.oauth-region-picker-options button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #ffffff;
+  cursor: pointer;
+  font-size: var(--type-caption-size);
+  white-space: nowrap;
+}
+
+.oauth-region-picker-options button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.oauth-region-picker-options button.is-selected {
+  border-color: var(--accent);
+  color: #fff;
+  background: var(--accent);
+}
+
+.oauth-region-picker-options button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.oauth-region-cancel {
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--type-caption-size);
+}
+
+.oauth-region-cancel:hover {
+  color: var(--accent);
+}
+
+.oauth-region-cancel:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 /* ---------------------------------------------------------------------------

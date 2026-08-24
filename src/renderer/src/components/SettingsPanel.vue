@@ -24,6 +24,7 @@ import type {
   KimiCatalogProviderDetail,
   KimiCatalogProviderSummary,
   KimiOAuthFlow,
+  KimiOAuthRegion,
   KimiMcpServer,
   KimiCliUpdateState,
   KimiPreferencesPatch,
@@ -57,6 +58,8 @@ const actionPending = ref<string | null>(null)
 const error = ref<string | null>(null)
 const notice = ref<string | null>(null)
 const oauthFlow = ref<KimiOAuthFlow | null>(null)
+/** OAuth 登录区域选择器：探测到当前区域后弹出来预选，用户点选后立即开始登录。 */
+const oauthRegionPicker = ref<{ detected: KimiOAuthRegion; selected: KimiOAuthRegion } | null>(null)
 const skills = ref<KimiSkill[]>([])
 const tools = ref<KimiTool[]>([])
 const mcpServers = ref<KimiMcpServer[]>([])
@@ -1048,7 +1051,34 @@ function usageUpdatedLabel(value: string | null): string {
   return value === null ? '尚无成功数据' : new Date(value).toLocaleString(props.usage.preferences.locale ?? 'zh-CN')
 }
 
-async function startOAuthLogin(): Promise<void> {
+async function beginOAuthLogin(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || actionPending.value !== null) return
+  oauthFlow.value = null
+  actionPending.value = 'oauth:region'
+  error.value = null
+  notice.value = null
+  try {
+    // 0.38.0+：先探测当前账号区域并预选登录入口（kimi.ai 国际站 / kimi.com 国内站）。
+    const region = await api.getOAuthRegion()
+    oauthRegionPicker.value = { detected: region, selected: region }
+  } catch {
+    // 探测失败：静默降级为旧流程，直接开始登录（不传 region）。
+    oauthRegionPicker.value = null
+    actionPending.value = null
+    await startOAuthLogin()
+  } finally {
+    actionPending.value = null
+  }
+}
+
+function pickOAuthRegion(region: KimiOAuthRegion): void {
+  if (oauthRegionPicker.value === null || actionPending.value !== null) return
+  oauthRegionPicker.value = { ...oauthRegionPicker.value, selected: region }
+  void startOAuthLogin(region)
+}
+
+async function startOAuthLogin(region?: KimiOAuthRegion): Promise<void> {
   const api = window.kimiAgent
   if (api === undefined || actionPending.value !== null) return
   actionPending.value = 'oauth:start'
@@ -1056,9 +1086,10 @@ async function startOAuthLogin(): Promise<void> {
   error.value = null
   notice.value = null
   try {
-    const flow = await api.startOAuthLogin(managedProviderName.value)
+    const flow = await api.startOAuthLogin(managedProviderName.value, region)
     if (generation !== oauthGeneration || !props.open) return
     oauthFlow.value = flow
+    oauthRegionPicker.value = null
     if (oauthFlow.value.status === 'authenticated') {
       showNotice('Kimi 账号已登录。')
       await loadSettings()
@@ -1158,6 +1189,7 @@ watch(
       clearOAuthPoll()
       clearNoticeTimer()
       notice.value = null
+      oauthRegionPicker.value = null
       showSecondaryProviderForm.value = false
       resetSecondaryProviderDraft()
       return
@@ -1408,6 +1440,35 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                         >打开 Kimi 授权页</a>
                         <button type="button" @click="cancelOAuthLogin">取消登录</button>
                       </div>
+                      <div
+                        v-else-if="provider.id === managedProviderName && oauthRegionPicker !== null"
+                        class="oauth-region-picker"
+                      >
+                        <div class="oauth-region-picker-copy">
+                          <span>选择 Kimi 登录区域</span>
+                          <small>按当前账号预选，选择后立即打开浏览器授权页。</small>
+                        </div>
+                        <div class="oauth-region-picker-options">
+                          <button
+                            type="button"
+                            :class="{ 'is-selected': oauthRegionPicker.selected === 'global' }"
+                            :disabled="actionPending !== null"
+                            @click="pickOAuthRegion('global')"
+                          >kimi.ai（国际站）</button>
+                          <button
+                            type="button"
+                            :class="{ 'is-selected': oauthRegionPicker.selected === 'mainland-cn' }"
+                            :disabled="actionPending !== null"
+                            @click="pickOAuthRegion('mainland-cn')"
+                          >kimi.com（国内站）</button>
+                        </div>
+                        <button
+                          class="oauth-region-cancel"
+                          type="button"
+                          :disabled="actionPending !== null"
+                          @click="oauthRegionPicker = null"
+                        >取消</button>
+                      </div>
                       <footer class="provider-card-actions">
                         <button class="provider-refresh-link" type="button" :disabled="actionPending !== null" @click="refreshProviderModels(provider.id)">
                           <PhArrowClockwise :class="{ spin: actionPending === `refresh:provider:${provider.id}` }" :size="15" />获取模型列表
@@ -1424,7 +1485,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                           class="provider-oauth-login primary-button"
                           type="button"
                           :disabled="actionPending !== null"
-                          @click="startOAuthLogin"
+                          @click="beginOAuthLogin"
                         >登录 Kimi</button>
                         <span class="provider-card-action-spacer" />
                         <button

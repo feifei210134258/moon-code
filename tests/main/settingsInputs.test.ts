@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   validateAddProviderInput,
   validateModelId,
+  validateOAuthRegion,
   validatePreferencesPatch,
   validateProviderId,
   validateProviderRefreshInput,
@@ -174,5 +175,14 @@ describe('settings IPC input validation', () => {
     })).toThrow('Invalid Kimi provider model context size')
     expect(() => validateUpdateProviderInput({ id: 'local:openai', type: 'openai', raw: {} }))
       .toThrow('Invalid Kimi provider update input')
+  })
+
+  it('accepts only the OAuth login regions declared by the 0.38.0 wire contract', () => {
+    expect(validateOAuthRegion(undefined)).toBeUndefined()
+    expect(validateOAuthRegion('global')).toBe('global')
+    expect(validateOAuthRegion('mainland-cn')).toBe('mainland-cn')
+    expect(() => validateOAuthRegion('europe-west')).toThrow('Invalid Kimi OAuth region')
+    expect(() => validateOAuthRegion(42)).toThrow('Invalid Kimi OAuth region')
+    expect(() => validateOAuthRegion(null)).toThrow('Invalid Kimi OAuth region')
   })
 })

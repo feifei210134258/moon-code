@@ -48,6 +48,7 @@ import type {
   WorkspaceNavigationItem
 } from '@shared/contracts'
 import type { WorkspaceFileTreeState } from '../types'
+import { useWorkbenchStore } from '../stores/workbench'
 
 const stoppedState: RuntimePublicState = {
   status: 'stopped',
@@ -59,6 +60,7 @@ const stoppedState: RuntimePublicState = {
 }
 
 export function useRuntimeBridge() {
+  const workbenchStore = useWorkbenchStore()
   const runtime = ref<RuntimePublicState>({ ...stoppedState })
   const discovery = ref<RuntimeDiscovery | null>(null)
   const pending = ref(false)
@@ -246,6 +248,11 @@ export function useRuntimeBridge() {
     if (typeof window.kimiAgent.onKimiGlobalStateChanged === 'function') {
       unsubscribeGlobal = window.kimiAgent.onKimiGlobalStateChanged((event) => {
         if (event.scope === 'navigation') {
+          /* 其他客户端归档会话：先从导航树乐观移除，再走既有 240ms 受控
+             重读收敛（丢失的全局事件最终也会被重读纠正）。 */
+          if (event.eventType === 'event.session.archived' && event.sessionId !== undefined) {
+            noteSessionArchivedElsewhere(event.sessionId)
+          }
           scheduleWorkspaceTreeRefresh()
           return
         }
@@ -306,6 +313,31 @@ export function useRuntimeBridge() {
       workspaceRefreshTimer = undefined
       void refreshWorkspaceTree()
     }, 240)
+  }
+
+  /* 其他客户端归档会话：从导航树乐观移除对应条目（id 来自全局事件透传的非
+     敏感标识），随后仍由 scheduleWorkspaceTreeRefresh 的受控 REST 重读收敛。
+     若归档的正是当前打开的会话，通知 workbench 保留当前视图并展示提示。 */
+  const noteSessionArchivedElsewhere = (sessionId: string): void => {
+    const tree = workspaceTree.value
+    let title: string | null = null
+    if (tree !== null) {
+      for (const workspace of tree) {
+        const session = workspace.sessions.find((item) => item.id === sessionId)
+        if (session !== undefined) {
+          title = session.title || session.lastPrompt || null
+          break
+        }
+      }
+      workspaceTree.value = tree.map((workspace) => (
+        workspace.sessions.some((session) => session.id === sessionId)
+          ? { ...workspace, sessions: workspace.sessions.filter((session) => session.id !== sessionId) }
+          : workspace
+      ))
+    }
+    if (requestedSessionId !== sessionId) return
+    const liveTitle = sessionView.value?.sessionId === sessionId ? sessionView.value.title : null
+    workbenchStore.noteSessionArchived(sessionId, title ?? liveTitle ?? sessionId)
   }
 
   const loadMoreSessions = async (): Promise<void> => {

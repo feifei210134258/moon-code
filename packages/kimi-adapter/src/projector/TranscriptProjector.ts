@@ -1,7 +1,8 @@
-import { originUserSchema } from '../wire/schemas.js'
+import { originUserSchema, promptAttachmentSchema } from '../wire/schemas.js'
 import type {
   InFlightTurn,
   MessageContentPart,
+  PromptAttachment,
   SessionMessage,
   SessionSnapshot,
   SkillActivationInfo
@@ -90,6 +91,8 @@ export interface TranscriptMessage {
   originTaskId?: string
   /** 该用户消息在本轮激活的 skills（0.37.2+，turn.started 时按 promptId 标注）。 */
   skillActivations?: SkillActivationInfo[]
+  /** 该用户消息所在轮的附件（0.38.0+，turn.started 时按 promptId 标注）。 */
+  promptAttachments?: PromptAttachment[]
 }
 
 export interface RetryStatus {
@@ -109,6 +112,8 @@ export interface TranscriptProjection {
   unknownEventCount: number
   /** 当前 turn（turn.started origin.user）激活的 skills（0.37.2+）。 */
   skillActivations: SkillActivationInfo[]
+  /** 当前 turn（turn.started）携带的附件（0.38.0+）。 */
+  promptAttachments: PromptAttachment[]
   /** 最近一次 turn.ended 的 time 字段（0.37.2+）。 */
   lastTurnEndedAt: string | null
   /** 最近一轮的结局；`failed` 用于失败卡片，`cancelled` 用于区分手动取消。 */
@@ -138,6 +143,7 @@ interface ProjectorSessionState {
   lastTurnError: string | null
   retry: RetryStatus | null
   skillActivations: SkillActivationInfo[]
+  promptAttachments: PromptAttachment[]
   lastTurnEndedAt: string | null
   nonMainMessageIds: Set<string>
   nonMainToolCallIds: Set<string>
@@ -203,6 +209,7 @@ export class TranscriptProjector {
       activePromptId: state.currentPromptId,
       unknownEventCount: state.unknownEventCount,
       skillActivations: state.skillActivations.map((activation) => ({ ...activation })),
+      promptAttachments: state.promptAttachments.map((attachment) => ({ ...attachment })),
       lastTurnEndedAt: state.lastTurnEndedAt,
       lastTurnReason: state.lastTurnReason,
       lastTurnError: state.lastTurnError,
@@ -321,6 +328,8 @@ export class TranscriptProjector {
         if (turnId !== null) state.turnPromptIds.set(turnId, promptId)
         state.active = true
         state.skillActivations = turnSkillActivations(payload.origin)
+        // 0.38.0：turn.started 携带本轮附件（image/video/audio），随轮次重置
+        state.promptAttachments = turnPromptAttachments(payload.promptAttachments)
         /* 把本轮激活的 skills 按 promptId 标注到对应的用户消息上，让「使用了
            skill X、Y」的小标签在 turn 结束后仍能落在那条用户消息处。 */
         if (state.skillActivations.length > 0) {
@@ -329,6 +338,15 @@ export class TranscriptProjector {
           )
           if (userMessage !== undefined) {
             userMessage.skillActivations = state.skillActivations.map((activation) => ({ ...activation }))
+          }
+        }
+        /* 附件同样按 promptId 落用户消息，供 turn 结束后以消息维度取用。 */
+        if (state.promptAttachments.length > 0) {
+          const userMessage = state.messages.find(
+            (message) => message.role === 'user' && message.promptId === promptId
+          )
+          if (userMessage !== undefined) {
+            userMessage.promptAttachments = state.promptAttachments.map((attachment) => ({ ...attachment }))
           }
         }
         return changed()
@@ -417,7 +435,11 @@ export class TranscriptProjector {
         const percent = numberValue(update?.percent) ?? numberValue(payload.progress)
         let didChange = false
         if (next !== null && next.length > 0) {
-          tool.outputPreview = appendPreview(tool.outputPreview, next)
+          // 0.38.0：update.replace 表示该片段替换既有输出（如进度条原地刷新），
+          // 覆盖而不是追加预览。
+          tool.outputPreview = update?.replace === true
+            ? appendPreview(undefined, next)
+            : appendPreview(tool.outputPreview, next)
           const stream = progressStream(update?.kind ?? payload.stream)
           if (stream !== undefined) tool.outputStream = mergeOutputStream(tool.outputStream, stream)
           didChange = true
@@ -592,6 +614,8 @@ export class TranscriptProjector {
       case 'agent.status.updated':
       case 'event.session.work_changed':
       case 'event.session.status_changed':
+      // 0.38.0：会话归档对 transcript 无增量（导航层负责失效），仅计入已知事件
+      case 'event.session.archived':
         return { changed: false, resyncRequired: false }
       case 'ping':
       case 'hook.result':
@@ -784,6 +808,7 @@ function createState(): ProjectorSessionState {
     lastTurnError: null,
     retry: null,
     skillActivations: [],
+    promptAttachments: [],
     lastTurnEndedAt: null,
     nonMainMessageIds: new Set(),
     nonMainToolCallIds: new Set(),
@@ -854,6 +879,17 @@ function slashCommandText(name: string, args: string | null): string {
 function turnSkillActivations(origin: unknown): SkillActivationInfo[] {
   const parsed = originUserSchema.safeParse(origin)
   return parsed.success ? parsed.data.skillActivations : []
+}
+
+/** 提取 turn.started 的 promptAttachments；缺失或字段漂移时返回空数组（0.38.0+）。 */
+function turnPromptAttachments(value: unknown): PromptAttachment[] {
+  if (!Array.isArray(value)) return []
+  const attachments: PromptAttachment[] = []
+  for (const item of value) {
+    const parsed = promptAttachmentSchema.safeParse(item)
+    if (parsed.success) attachments.push(parsed.data)
+  }
+  return attachments
 }
 
 function projectContentPart(part: MessageContentPart): TranscriptPart[] {

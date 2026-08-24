@@ -1,6 +1,6 @@
 {
   "name": "moon-code-desktop",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "private": true,
   "description": "Moon Code is a Kimi Code-native desktop agent client.",
   "author": "Moon Code",
@@ -30,7 +30,7 @@
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
-    "@moonshot-ai/kimi-code": "0.37.2",
+    "@moonshot-ai/kimi-code": "0.38.0",
     "@phosphor-icons/vue": "2.2.1",
     "@xterm/addon-fit": "0.10.0",
     "@xterm/xterm": "5.5.0",

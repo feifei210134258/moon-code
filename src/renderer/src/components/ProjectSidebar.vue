@@ -33,6 +33,8 @@ const props = defineProps<{
   sessionPageError?: string | null
   childrenPendingSessionId?: string | null
   childrenError?: string | null
+  /* 其他客户端归档了当前打开的会话时的非阻塞提示（保留视图不强制跳出）。 */
+  archivedNotice?: { sessionId: string; title: string } | null
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +51,7 @@ const emit = defineEmits<{
   loadSessionChildren: [sessionId: string]
   startSideChat: []
   openSettings: []
+  dismissArchivedNotice: []
 }>()
 
 const searchQuery = ref('')
@@ -221,6 +224,15 @@ onBeforeUnmount(() => {
         <PhSlidersHorizontal :size="17" />
         <span>会话管理</span>
       </button>
+    </div>
+
+    <div
+      v-if="archivedNotice"
+      class="sidebar-archived-notice"
+      role="status"
+    >
+      <span>当前会话已被其他客户端归档，已保留对话视图</span>
+      <button type="button" aria-label="关闭提示" @click="$emit('dismissArchivedNotice')"><PhX :size="13" /></button>
     </div>
 
     <label class="session-search">

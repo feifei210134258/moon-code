@@ -372,6 +372,11 @@ const enUS: Record<string, string> = {
   '在浏览器完成授权': 'Complete authorization in the browser',
   '打开 Kimi 授权页': 'Open Kimi authorization page',
   '取消登录': 'Cancel sign-in',
+  /* OAuth 登录区域（0.38.0+ `GET /api/v1/oauth/region` 预选入口） */
+  '选择 Kimi 登录区域': 'Choose Kimi sign-in region',
+  '按当前账号预选，选择后立即打开浏览器授权页。': 'Preselected for your account; choosing one opens the browser authorization page immediately.',
+  'kimi.ai（国际站）': 'kimi.ai (Global)',
+  'kimi.com（国内站）': 'kimi.com (Mainland China)',
   '默认模型': 'Default model',
   '影响新 Session；已有 Session 保留自己的模型。': 'Affects new Sessions; existing Sessions keep their own model.',
   '刷新目录': 'Refresh catalog',
@@ -468,7 +473,10 @@ const enUS: Record<string, string> = {
   '无匹配的会话': 'No matching sessions',
   '已归档': 'Archived',
   '等待操作': 'Needs action',
-  '等待回答': 'Awaiting answer'
+  '等待回答': 'Awaiting answer',
+  /* 会话归档全局同步（其他客户端归档当前会话时，保留视图的非阻塞提示） */
+  '当前会话已被其他客户端归档，已保留对话视图': 'This session was archived by another client; its view is kept.',
+  '关闭提示': 'Dismiss notice'
 }
 
 let locale: RendererLocale = 'zh-CN'

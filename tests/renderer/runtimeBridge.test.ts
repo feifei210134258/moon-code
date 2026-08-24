@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, reactive } from 'vue'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRuntimeBridge } from '../../src/renderer/src/composables/useRuntimeBridge'
+import { useWorkbenchStore } from '../../src/renderer/src/stores/workbench.js'
 import type {
   KimiAgentDesktopApi,
   KimiPromptInput,
@@ -42,6 +44,10 @@ function sessionState(sessionId: string): SessionViewState {
     skillActivations: []
   }
 }
+
+beforeEach(() => {
+  setActivePinia(createPinia())
+})
 
 afterEach(() => {
   delete window.kimiAgent
@@ -253,6 +259,95 @@ describe('useRuntimeBridge session races', () => {
 
     globalListener({ scope: 'config', eventType: 'event.config.changed' })
     expect(bridge.globalConfigRevision.value).toBe(1)
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
+  it('optimistically removes a session archived elsewhere and keeps the open session view with a notice', async () => {
+    vi.useFakeTimers()
+    let globalListener!: (event: { scope: 'navigation' | 'config'; eventType: string; sessionId?: string }) => void
+    const sessionTree = (sessions: unknown[]) => ({
+      workspaces: [{ id: 'workspace-1', name: 'Project', root: '/tmp/project', sessions }],
+      hasMoreSessions: false,
+      nextBeforeId: null
+    })
+    const getWorkspaceTreePage = vi.fn()
+      .mockResolvedValueOnce(sessionTree([
+        { id: 'session-1', title: 'Open session', updatedAt: '2026-07-24T01:00:00.000Z', busy: false, pendingInteraction: 'none', lastTurnReason: null, lastPrompt: null },
+        { id: 'session-2', title: 'Archived elsewhere', updatedAt: '2026-07-24T01:00:01.000Z', busy: false, pendingInteraction: 'none', lastTurnReason: null, lastPrompt: null }
+      ]))
+      .mockResolvedValueOnce(sessionTree([]))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:1234', error: null },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTreePage,
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      onKimiGlobalStateChanged: vi.fn((listener: (event: { scope: 'navigation' | 'config'; eventType: string; sessionId?: string }) => void) => {
+        globalListener = listener
+        return () => {}
+      }),
+      openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
+      listSessionSkills: vi.fn(async () => []),
+      getSessionRuntimeStatus: vi.fn(async () => ({
+        busy: false, model: 'model-1', thinking: 'off', permissionMode: 'manual', planMode: false, swarmMode: false,
+        contextTokens: 0, maxContextTokens: 0, contextUsage: 0
+      })),
+      getKimiSettings: vi.fn(async () => ({
+        auth: { ready: true, providersCount: 0, defaultModel: 'model-1', managedProvider: null },
+        models: [{ id: 'model-1', providerId: 'provider-1', displayName: 'Model', maxContextSize: 0, capabilities: [], supportEfforts: [], defaultEffort: null }],
+        secondaryModelOptions: [], providers: [],
+        preferences: { defaultProvider: null, defaultModel: 'model-1', defaultPermissionMode: 'manual', defaultPlanMode: false, mergeAllAvailableSkills: false, telemetry: false, thinkingEffort: null },
+        secondaryModel: { model: null, defaultEffort: null, maxOutputSize: null },
+        secondaryModelControl: { preference: { mode: 'inherit', model: null, defaultEffort: null }, appliedPreference: null, appliedSource: null, requiresRestart: false, configurationMode: 'read-only' },
+        capabilities: { canAddProvider: false, canEditProvider: false, canDeleteProvider: false, providerManagementUnavailableReason: null, providerDeleteUnavailableReason: null, secondaryModel: { supported: false, enabled: null, writable: false, canDisable: false, maxOutputSizeWritable: false, unavailableReason: null } }
+      })),
+      getSessionOperationalState: vi.fn(async () => ({ goal: null, tasks: [], prompts: { active: null, queued: [] } })),
+      getSessionWarnings: vi.fn(async () => []),
+      listFiles: vi.fn(async () => ({ path: '.', items: [], truncated: false })),
+      getGitStatus: vi.fn(async () => ({
+        available: true, branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+    await bridge.openSession('session-1')
+    await flushPromises()
+    expect(bridge.workspaceTree.value?.[0]?.sessions).toHaveLength(2)
+    const store = useWorkbenchStore()
+    /* 生产路径由 App.vue 的 activeSessionId watcher 把 store 与 composable 联动起来 */
+    store.activeSessionId = 'session-1'
+
+    /* 归档的是其他会话：乐观移除导航条目，不打扰当前视图 */
+    globalListener({ scope: 'navigation', eventType: 'event.session.archived', sessionId: 'session-2' })
+    expect(bridge.workspaceTree.value?.[0]?.sessions.map((session) => session.id)).toEqual(['session-1'])
+    expect(store.sessionArchivedNotice).toBeNull()
+
+    /* 归档的正是当前打开的会话：乐观移除 + 非阻塞提示，视图保留 */
+    globalListener({ scope: 'navigation', eventType: 'event.session.archived', sessionId: 'session-1' })
+    expect(bridge.workspaceTree.value?.[0]?.sessions).toHaveLength(0)
+    expect(store.sessionArchivedNotice).toEqual({ sessionId: 'session-1', title: 'Open session' })
+    expect(bridge.sessionView.value?.sessionId).toBe('session-1')
+
+    /* 两个事件合并为一次 240ms 受控重读收敛 */
+    await vi.advanceTimersByTimeAsync(240)
+    await flushPromises()
+    expect(getWorkspaceTreePage).toHaveBeenCalledTimes(2)
+    expect(bridge.workspaceTree.value?.[0]?.sessions).toHaveLength(0)
     wrapper.unmount()
     vi.useRealTimers()
   })

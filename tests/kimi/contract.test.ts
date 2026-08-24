@@ -166,6 +166,103 @@ describe('pinned Kimi 0.37.2 contract', () => {
   })
 })
 
+const openapi038Path = fileURLToPath(
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.38.0-openapi.json', import.meta.url)
+)
+const asyncapi038Path = fileURLToPath(
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.38.0-asyncapi.json', import.meta.url)
+)
+const openapi038 = JSON.parse(readFileSync(openapi038Path, 'utf8')) as OpenApiDocumentLike
+const asyncapi038 = JSON.parse(readFileSync(asyncapi038Path, 'utf8')) as AsyncApiDocumentLike
+
+/** 按 const type 收集 session_event 的 payload 变体（含各自 properties/required）。 */
+function sessionEventVariants(asyncapi: AsyncApiDocumentLike): Record<string, Record<string, unknown>> {
+  const variants: Record<string, Record<string, unknown>> = {}
+  const walk = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return
+    const record = value as Record<string, unknown>
+    const properties = record.properties as Record<string, unknown> | undefined
+    const typeNode = properties?.type as Record<string, unknown> | undefined
+    if (typeof typeNode?.const === 'string' && Array.isArray(record.required)) {
+      variants[typeNode.const] = record
+    }
+    for (const child of Object.values(record)) walk(child)
+  }
+  walk(asyncapi.components?.messages?.session_event)
+  return variants
+}
+
+describe('pinned Kimi 0.38.0 contract', () => {
+  it('contains every route and WebSocket message required by the desktop foundation', () => {
+    expect(() => assertKimiContract(openapi038, asyncapi038)).not.toThrow()
+  })
+
+  it('broadcasts the event.session.archived variant with its workspace payload', () => {
+    const eventNames = collectConsts(asyncapi038.components?.messages?.session_event)
+    expect(eventNames).toContain('event.session.archived')
+    const archived = sessionEventVariants(asyncapi038)['event.session.archived']
+    expect(archived?.required).toEqual(expect.arrayContaining(['type', 'workspace_id']))
+    expect((archived?.properties as Record<string, unknown>)?.workspace_id).toBeTruthy()
+  })
+
+  it('marks agentId required on session events and adds promptAttachments to turn.started', () => {
+    const variants = sessionEventVariants(asyncapi038)
+    const turnStarted = variants['turn.started']
+    expect(turnStarted?.required).toContain('agentId')
+    expect((turnStarted?.properties as Record<string, unknown>)?.promptAttachments).toBeTruthy()
+    expect(variants['turn.ended']?.required).toContain('agentId')
+    expect(variants['tool.progress']?.required).toContain('agentId')
+    expect(variants['shell.output']?.required).toContain('agentId')
+    expect(variants['prompt.completed']?.required).toContain('agentId')
+    expect(variants['goal.updated']?.required).toContain('agentId')
+    /* subagent.* 保持 subagentId 坐标，0.38.0 不新增 agentId */
+    expect(variants['subagent.completed']?.required).not.toContain('agentId')
+  })
+
+  it('adds optional replace to the tool.progress / shell.output update object', () => {
+    const variants = sessionEventVariants(asyncapi038)
+    const progressUpdate = (variants['tool.progress']?.properties as Record<string, unknown> | undefined)?.update as
+      Record<string, unknown> | undefined
+    expect((progressUpdate?.properties as Record<string, unknown> | undefined)?.replace).toBeTruthy()
+    const shellUpdate = (variants['shell.output']?.properties as Record<string, unknown> | undefined)?.update as
+      Record<string, unknown> | undefined
+    expect((shellUpdate?.properties as Record<string, unknown> | undefined)?.replace).toBeTruthy()
+  })
+
+  it('adds the v2 sessions view/group.page_size/meta.has_prompt parameters and the by_workspace page', () => {
+    const operation = (openapi038 as Record<string, any>).paths?.['/api/v2/sessions']?.get
+    const names = (operation?.parameters ?? []).map((parameter: { name: string }) => parameter.name)
+    expect(names).toContain('view')
+    expect(names).toContain('group.page_size')
+    expect(names).toContain('meta.has_prompt')
+    const data = operation?.responses?.['200']?.content?.['application/json']?.schema
+      ?.oneOf?.[0]?.properties?.data
+    const branches = data?.anyOf ?? []
+    expect(branches.some((branch: { properties?: Record<string, string> }) => branch.properties?.items)).toBe(true)
+    expect(branches.some((branch: { properties?: Record<string, string> }) => branch.properties?.groups)).toBe(true)
+  })
+
+  it('adds the OAuth region endpoint and the login region body', () => {
+    const paths = (openapi038 as Record<string, any>).paths
+    expect(paths?.['/api/v1/oauth/region']?.get).toBeTruthy()
+    const regionBody = (paths as Record<string, any>)['/api/v1/oauth/login']?.post?.requestBody
+    expect(nodeHasProperty(regionBody, 'region')).toBe(true)
+  })
+
+  it('drops context_limit and context_usage from the required field sets', () => {
+    const openapi038Text = JSON.stringify(openapi038)
+    /* usage：required 收窄为 input/output/cache/context_tokens 四件套（无 context_limit） */
+    expect(openapi038Text).toContain(
+      '"required":["input_tokens","output_tokens","cache_read_tokens","cache_creation_tokens","context_tokens"]'
+    )
+    /* status：required 不再包含 context_usage */
+    expect(openapi038Text).toContain(
+      '"required":["busy","thinking_level","permission","plan_mode","swarm_mode","context_tokens"]'
+    )
+    expect(openapi038Text).not.toContain('"context_usage"]')
+  })
+})
+
 function collectConsts(value: unknown, result = new Set<string>()): Set<string> {
   if (value === null || typeof value !== 'object') return result
   const record = value as Record<string, unknown>

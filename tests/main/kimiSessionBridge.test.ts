@@ -198,10 +198,16 @@ describe('KimiSessionBridge terminals', () => {
       type: 'event.config.changed', seq: 2, epoch: 'global-1', session_id: '__global__',
       timestamp: '2026-07-24T01:00:01.000Z', payload: { config: { raw: { api_key: 'never-forwarded' } } }
     })
+    socket.emit('session-event', {
+      type: 'event.session.archived', seq: 3, epoch: 'global-1', session_id: 'session-other',
+      timestamp: '2026-07-24T01:00:02.000Z', payload: { workspace_id: 'workspace-1' }
+    })
 
     expect(events).toEqual([
       { scope: 'navigation', eventType: 'event.workspace.created' },
-      { scope: 'config', eventType: 'event.config.changed' }
+      { scope: 'config', eventType: 'event.config.changed' },
+      /* 归档事件仅透传非敏感会话 id（renderer 乐观移除用），不携带 payload */
+      { scope: 'navigation', eventType: 'event.session.archived', sessionId: 'session-other' }
     ])
     await bridge.close()
   })

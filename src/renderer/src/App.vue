@@ -51,7 +51,8 @@ const {
   terminalOpen,
   turns,
   transcriptPhase,
-  transcriptError
+  transcriptError,
+  sessionArchivedNotice
 } = storeToRefs(store)
 const runtimeBridge = useRuntimeBridge()
 const browserBridge = useBrowserBridge()
@@ -790,6 +791,7 @@ onBeforeUnmount(() => {
         :session-page-error="runtimeBridge.sessionPageError.value"
         :children-pending-session-id="runtimeBridge.childrenPendingSessionId.value"
         :children-error="runtimeBridge.childrenError.value"
+        :archived-notice="sessionArchivedNotice"
         @toggle-project="store.toggleProject"
         @select-session="store.selectSession"
         @create-session="startDraftSession"
@@ -803,6 +805,7 @@ onBeforeUnmount(() => {
         @load-session-children="loadSessionChildren"
         @start-side-chat="startSideChat"
         @open-settings="openSettings"
+        @dismiss-archived-notice="store.dismissSessionArchivedNotice"
       />
 
       <div

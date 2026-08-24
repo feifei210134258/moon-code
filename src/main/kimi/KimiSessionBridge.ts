@@ -783,7 +783,13 @@ export class KimiSessionBridge extends EventEmitter {
 }
 
 function mapGlobalSyncEvent(event: GlobalSyncEvent): KimiGlobalStateEvent {
-  return { scope: event.scope, eventType: event.eventType }
+  /* 结构性 session 事件携带的会话 id 是非敏感标识，跨进程透传用于 renderer
+     乐观更新（如归档后立即移除导航条目），随后仍由既有受控 REST 重读收敛。 */
+  return {
+    scope: event.scope,
+    eventType: event.eventType,
+    ...(event.sessionId === undefined ? {} : { sessionId: event.sessionId })
+  }
 }
 
 function projectFileEntry(entry: {

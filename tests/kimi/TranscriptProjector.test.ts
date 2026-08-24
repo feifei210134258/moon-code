@@ -1217,4 +1217,99 @@ describe('TranscriptProjector turn health projection', () => {
       warn.mockRestore()
     }
   })
+
+  it('exposes turn.started promptAttachments and stamps them onto the user message (0.38.0)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('prompt.submitted', {
+      promptId: 'prompt-att',
+      userMessageId: 'user-att',
+      content: [{ type: 'text', text: 'Look at this' }]
+    }))
+    projector.project(frame('turn.started', {
+      turnId: 8,
+      promptId: 'prompt-att',
+      agentId: 'main',
+      promptAttachments: [
+        { kind: 'image', fileId: 'file-1' },
+        { kind: 'video', fileId: 'file-2' }
+      ]
+    }))
+
+    const projection = projector.getProjection('session-1')
+    expect(projection.promptAttachments).toEqual([
+      { kind: 'image', fileId: 'file-1' },
+      { kind: 'video', fileId: 'file-2' }
+    ])
+    const userMessage = projection.messages.find((message) => message.id === 'user-att')
+    expect(userMessage?.promptAttachments).toEqual([
+      { kind: 'image', fileId: 'file-1' },
+      { kind: 'video', fileId: 'file-2' }
+    ])
+
+    /* 下一轮 turn.started 重置本轮附件 */
+    projector.project(frame('turn.started', {
+      turnId: 9,
+      promptId: 'prompt-att',
+      agentId: 'main',
+      promptAttachments: []
+    }))
+    expect(projector.getProjection('session-1').promptAttachments).toEqual([])
+  })
+
+  it('drops malformed promptAttachments entries without failing the turn (0.38.0)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+    projector.project(frame('turn.started', {
+      turnId: 10,
+      promptId: 'prompt-bad',
+      promptAttachments: [
+        { kind: 'image', fileId: 'file-ok' },
+        { kind: 'document', fileId: 'file-bad' },
+        { kind: 'audio' }
+      ]
+    }))
+    expect(projector.getProjection('session-1').promptAttachments).toEqual([
+      { kind: 'image', fileId: 'file-ok' }
+    ])
+    /* 0.37 响应无该字段：空数组 */
+    projector.project(frame('turn.started', { turnId: 11, promptId: 'prompt-none' }))
+    expect(projector.getProjection('session-1').promptAttachments).toEqual([])
+  })
+
+  it('replaces the tool preview when tool.progress carries update.replace (0.38.0)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('turn.step.started', { turnId: 3, step: 0 }))
+    projector.project(frame('tool.call.started', {
+      turnId: 3, toolCallId: 'tool-3', name: 'Bash', args: { command: 'build' }
+    }))
+    projector.project(frame('tool.progress', {
+      turnId: 3, toolCallId: 'tool-3', update: { kind: 'stdout', text: 'compiling…' }
+    }))
+    projector.project(frame('tool.progress', {
+      turnId: 3, toolCallId: 'tool-3', update: { kind: 'stdout', text: 'linking…' }
+    }))
+
+    const toolPart = () => projector.getProjection('session-1').messages
+      .flatMap((message) => message.content)
+      .find((part): part is Extract<typeof part, { type: 'tool' }> =>
+        part.type === 'tool' && part.toolCallId === 'tool-3')
+    expect(toolPart()?.outputPreview).toBe('compiling…\nlinking…')
+
+    /* replace: true 时原地替换而非追加（如进度条/单行刷新） */
+    projector.project(frame('tool.progress', {
+      turnId: 3, toolCallId: 'tool-3', update: { kind: 'stdout', text: '[ok] built', replace: true }
+    }))
+    expect(toolPart()?.outputPreview).toBe('[ok] built')
+  })
+
+  it('counts the 0.38.0 session archived event as known (no-op for the transcript)', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+    projector.project(frame('event.session.archived', { workspace_id: 'workspace-1', agentId: 'main' }))
+    expect(projector.getProjection('session-1').unknownEventCount).toBe(0)
+  })
 })
