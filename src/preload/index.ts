@@ -117,7 +117,9 @@ const api: KimiAgentDesktopApi = {
   refreshKimiProviders: (input) => ipcRenderer.invoke(ipcChannels.providersRefresh, input),
   listKimiCatalogProviders: () => ipcRenderer.invoke(ipcChannels.catalogProvidersList),
   getKimiCatalogProvider: (catalogId) => ipcRenderer.invoke(ipcChannels.catalogProviderGet, catalogId),
-  startOAuthLogin: (provider) => ipcRenderer.invoke(ipcChannels.oauthLoginStart, provider),
+  startOAuthLogin: (provider, region) =>
+    ipcRenderer.invoke(ipcChannels.oauthLoginStart, provider, region),
+  getOAuthRegion: () => ipcRenderer.invoke(ipcChannels.oauthRegionGet),
   pollOAuthLogin: (provider) => ipcRenderer.invoke(ipcChannels.oauthLoginPoll, provider),
   cancelOAuthLogin: (provider) => ipcRenderer.invoke(ipcChannels.oauthLoginCancel, provider),
   logoutOAuth: (provider) => ipcRenderer.invoke(ipcChannels.oauthLogout, provider),

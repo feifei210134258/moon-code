@@ -221,6 +221,7 @@ export function installSettingsApiFixture(): void {
       return structuredClone(snapshot)
     },
     refreshKimiProviders: async () => ({ changed: [], unchanged: [], failed: [] }),
+    getOAuthRegion: async () => 'global' as const,
     startOAuthLogin: async () => ({
       flowId: 'fixture-flow', provider: 'managed:kimi-code', status: 'authenticated' as const,
       verificationUri: null, verificationUriComplete: null, userCode: null,

@@ -51,7 +51,8 @@ export const sessionSummarySchema = z.object({
     cache_creation_tokens: z.number().int().nonnegative().optional(),
     total_cost_usd: z.number().nonnegative().optional(),
     context_tokens: z.number().int().nonnegative(),
-    context_limit: z.number().int().nonnegative(),
+    // 0.38.0：usage 三字段均降为可选（快照 required 仅 input/output/cache/context_tokens）
+    context_limit: z.number().int().nonnegative().optional(),
     turn_count: z.number().int().nonnegative().optional()
   }).passthrough(),
   permission_rules: z.array(z.unknown()),
@@ -118,6 +119,38 @@ export const sessionListV2Schema = z.object({
   has_more: z.boolean(),
   next_page_token: z.string().nullable()
 })
+
+/** 0.38.0：`view=by_workspace` 时 group 内的 workspace 引用。 */
+export const sessionV2WorkspaceRefSchema = z.object({
+  id: z.string().min(1),
+  cwd: z.string().nullable()
+})
+
+/** 0.38.0：`view=by_workspace` 时按 workspace 分组的会话条目（含组内总条数）。 */
+export const sessionV2GroupSchema = z.object({
+  workspace: sessionV2WorkspaceRefSchema,
+  sessions: z.array(z.union([sessionSummaryV2Schema, sessionSummaryV2LiteSchema])),
+  total: z.number().int().nonnegative()
+})
+
+/** 0.38.0：`view=by_workspace` 的列表响应（groups 替代 items）。 */
+export const sessionListV2ByWorkspaceSchema = z.object({
+  groups: z.array(sessionV2GroupSchema),
+  total: z.number().int().nonnegative(),
+  has_more: z.boolean(),
+  next_page_token: z.string().nullable()
+})
+
+/**
+ * 0.38.0：`GET /api/v2/sessions` 响应 data 按 `view` 查询参数分流——
+ * 默认 `flat`（items/total/has_more/next_page_token，现状）与
+ * `by_workspace`（groups/total/has_more/next_page_token）。两分支键不重叠
+ * （items vs groups），zod 可无歧义收敛。
+ */
+export const sessionListV2PageSchema = z.union([
+  sessionListV2Schema,
+  sessionListV2ByWorkspaceSchema
+])
 
 export const messageContentPartSchema = z.object({
   type: z.string().min(1)
@@ -360,8 +393,10 @@ export const sessionRuntimeStatusSchema = z.object({
   plan_mode: z.boolean(),
   swarm_mode: z.boolean(),
   context_tokens: z.number().int().nonnegative(),
-  max_context_tokens: z.number().int().nonnegative(),
-  context_usage: z.number().min(0).max(1)
+  // 0.38.0：max_context_tokens 与 context_usage 均不在 required 内；default(0) 让下游
+  // （Main 的 runtime status 映射）保持 number 类型，服务端省略时按 0 处理。
+  max_context_tokens: z.number().int().nonnegative().optional().default(0),
+  context_usage: z.number().min(0).max(1).optional().default(0)
 })
 
 export const promptQueueSchema = z.object({
@@ -757,6 +792,11 @@ export const oauthLogoutResultSchema = z.object({
   provider: z.string().min(1)
 })
 
+/** 0.38.0：`GET /api/v1/oauth/region` 的登录区域（必填）。 */
+export const oauthRegionResultSchema = z.object({
+  region: z.enum(['mainland-cn', 'global'])
+})
+
 export const managedUsageWindowSchema = z.object({
   // Kimi <= 0.29 exposes the presentation-ready label/reset_hint pair.
   label: z.string().min(1).optional(),
@@ -833,11 +873,15 @@ export const mcpServerListSchema = z.object({ servers: z.array(mcpServerSchema) 
 export const mcpServerRestartResultSchema = z.object({ restarting: z.literal(true) })
 
 /**
- * Kimi 0.37.2 会话事件 payload 模型。
+ * Kimi 会话事件 payload 模型（0.37.2 基线，0.38.0 增补）。
  *
  * 事件帧的 envelope（type/seq/epoch/.../payload）由 wire/ws.ts 的
  * `sessionEventFrameSchema` 约束；这里只固定新增/演进的事件 payload 形状，
- * 供投影器与契约测试按快照核对（字段按 contracts/kimi-0.37.2-asyncapi.json）。
+ * 供投影器与契约测试按快照核对（字段按 contracts/kimi-0.38.0-asyncapi.json）。
+ *
+ * 0.38.0 起约 30 个事件变体新增 required `agentId`；本套 schema 保持宽松
+ * （0.37 响应同样可解析），因此都建模为 `agentId: z.string().optional()`，
+ * 由投影层按需透传。
  */
 
 /** turn.started origin.user.skillActivations 条目。activationId/skillName 必填。 */
@@ -856,18 +900,26 @@ export const originUserSchema = z.object({
   skillActivations: z.array(skillActivationInfoSchema).default([])
 }).passthrough()
 
-/** turn.started（0.37.2 起可携带 promptId）。origin 为多分支 oneOf，保持不透明。 */
+/** turn.started（0.37.2 起可携带 promptId；0.38.0 起携带 promptAttachments，agentId 必填）。origin 为多分支 oneOf，保持不透明。 */
+export const promptAttachmentSchema = z.object({
+  kind: z.enum(['image', 'video', 'audio']),
+  fileId: z.string().min(1)
+})
+
 export const turnStartedEventSchema = z.object({
   type: z.literal('turn.started'),
+  agentId: z.string().optional(),
   turnId: z.number().int().nonnegative().optional(),
   origin: z.unknown().optional(),
   prompt: z.unknown().optional(),
-  promptId: z.string().optional()
+  promptId: z.string().optional(),
+  promptAttachments: z.array(promptAttachmentSchema).optional()
 }).passthrough()
 
-/** turn.ended（0.37.2 起携带 time）。 */
+/** turn.ended（0.37.2 起携带 time；0.38.0 起 agentId 必填）。 */
 export const turnEndedEventSchema = z.object({
   type: z.literal('turn.ended'),
+  agentId: z.string().optional(),
   time: z.string().optional(),
   turnId: z.number().int().nonnegative().optional(),
   reason: z.enum(['completed', 'failed', 'cancelled', 'blocked']).optional(),
@@ -892,6 +944,45 @@ export const capabilityChangedEventSchema = z.object({
     error: z.string().optional(),
     note: z.string().optional()
   })
+}).passthrough()
+
+/**
+ * 0.38.0：会话被归档（别的客户端/CLI 归档了会话）。
+ * 快照 required 为 `type` + `workspace_id`；实测服务端还会带 `agentId`，
+ * 建模为可选以兼容两种形态。会话 id 不在 payload 里，走帧 envelope 的
+ * `session_id`（ADR-0017：结构性 event.session.* 保留真实会话 id）。
+ */
+export const sessionArchivedEventSchema = z.object({
+  type: z.literal('event.session.archived'),
+  workspace_id: z.string().min(1),
+  agentId: z.string().optional()
+}).passthrough()
+
+/** tool.progress / shell.output 的 update 对象（0.38.0 起含可选 replace）。 */
+export const progressUpdateSchema = z.object({
+  kind: z.enum(['stdout', 'stderr', 'progress', 'status', 'custom']),
+  text: z.string().optional(),
+  percent: z.number().optional(),
+  customKind: z.string().optional(),
+  customData: z.unknown().optional(),
+  replace: z.boolean().optional()
+})
+
+/** 0.38.0：`tool.progress` 会话事件（agentId 必填；update 为可选，0.37 无此帧）。 */
+export const toolProgressEventSchema = z.object({
+  type: z.literal('tool.progress'),
+  agentId: z.string().optional(),
+  turnId: z.number().optional(),
+  toolCallId: z.string().optional(),
+  update: progressUpdateSchema.optional()
+}).passthrough()
+
+/** 0.38.0：`shell.output` 会话事件（agentId 必填；update 含 replace）。 */
+export const shellOutputEventSchema = z.object({
+  type: z.literal('shell.output'),
+  agentId: z.string().optional(),
+  commandId: z.string().optional(),
+  update: progressUpdateSchema.optional()
 }).passthrough()
 
 /**
@@ -1095,10 +1186,21 @@ export type McpServerRestartResult = z.infer<typeof mcpServerRestartResultSchema
 export type PromptSkill = z.infer<typeof promptSkillSchema>
 export type SkillActivationInfo = z.infer<typeof skillActivationInfoSchema>
 export type OriginUser = z.infer<typeof originUserSchema>
+export type PromptAttachment = z.infer<typeof promptAttachmentSchema>
 export type TurnStartedEvent = z.infer<typeof turnStartedEventSchema>
 export type TurnEndedEvent = z.infer<typeof turnEndedEventSchema>
 export type PluginChangedEvent = z.infer<typeof pluginChangedEventSchema>
 export type CapabilityChangedEvent = z.infer<typeof capabilityChangedEventSchema>
+export type SessionArchivedEvent = z.infer<typeof sessionArchivedEventSchema>
+export type ProgressUpdate = z.infer<typeof progressUpdateSchema>
+export type ToolProgressEvent = z.infer<typeof toolProgressEventSchema>
+export type ShellOutputEvent = z.infer<typeof shellOutputEventSchema>
 export type SessionSummaryV2Lite = z.infer<typeof sessionSummaryV2LiteSchema>
 export type SessionBatchItemResult = z.infer<typeof sessionBatchItemResultSchema>
 export type SessionBatchActionResult = z.infer<typeof sessionBatchActionResultSchema>
+export type SessionV2WorkspaceRef = z.infer<typeof sessionV2WorkspaceRefSchema>
+export type SessionV2Group = z.infer<typeof sessionV2GroupSchema>
+export type SessionListV2ByWorkspace = z.infer<typeof sessionListV2ByWorkspaceSchema>
+export type SessionListV2Page = z.infer<typeof sessionListV2PageSchema>
+export type OAuthRegionResult = z.infer<typeof oauthRegionResultSchema>
+export type OAuthRegion = OAuthRegionResult['region']

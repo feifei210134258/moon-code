@@ -16,6 +16,7 @@ import {
   approvalRequestSchema,
   questionRequestSchema,
   type ApprovalRequest,
+  type PromptAttachment,
   type PromptSubmitResult,
   type QuestionRequest,
   type SessionSnapshot,
@@ -90,6 +91,8 @@ export interface SessionSyncView {
   retry: RetryStatus | null
   /** 当前 turn（turn.started origin.user）激活的 skills（0.37.2+）。 */
   skillActivations: SkillActivationInfo[]
+  /** 当前 turn（turn.started）携带的附件（0.38.0+）。 */
+  promptAttachments: PromptAttachment[]
 }
 
 export interface SessionTranscriptMarkerView {
@@ -146,6 +149,9 @@ export interface SessionUsageView {
 export interface GlobalSyncEvent {
   scope: 'navigation' | 'config'
   eventType: string
+  /** 事件携带的会话标识（如 event.session.archived 的被归档会话，来自帧
+      envelope 的真实 session_id）；非敏感标识，仅供上层乐观更新导航。 */
+  sessionId?: string
 }
 
 interface SyncRestClient {
@@ -319,7 +325,8 @@ export class SessionSyncController extends EventEmitter {
         lastTurnReason: snapshot.session.last_turn_reason ?? null,
         lastTurnError: null,
         retry: null,
-        skillActivations: projection.skillActivations.map((activation) => ({ ...activation }))
+        skillActivations: projection.skillActivations.map((activation) => ({ ...activation })),
+        promptAttachments: projection.promptAttachments.map((attachment) => ({ ...attachment }))
       }
       this.#states.set(sessionId, ready)
 
@@ -896,6 +903,7 @@ export class SessionSyncController extends EventEmitter {
        联动：非 failed 结局（completed/cancelled）会清掉旧摘要。 */
     state.retry = projection.retry === null ? null : { ...projection.retry }
     state.skillActivations = projection.skillActivations.map((activation) => ({ ...activation }))
+    state.promptAttachments = projection.promptAttachments.map((attachment) => ({ ...attachment }))
     if (projection.lastTurnReason !== null) {
       state.lastTurnReason = projection.lastTurnReason
       state.lastTurnError = projection.lastTurnReason === 'failed'
@@ -989,6 +997,8 @@ function globalSyncEvent(frame: SessionEventFrame): GlobalSyncEvent | null {
     frame.type === 'event.session.created' ||
     frame.type === 'event.session.updated' ||
     frame.type === 'event.session.deleted' ||
+    // 0.38.0：会话被其他客户端归档 → 导航失效，侧边栏经 REST 重读权威树
+    frame.type === 'event.session.archived' ||
     frame.type === 'event.session.work_changed' ||
     frame.type === 'event.session.status_changed' ||
     frame.type === 'session.meta.updated' ||
@@ -996,11 +1006,34 @@ function globalSyncEvent(frame: SessionEventFrame): GlobalSyncEvent | null {
     frame.type === 'turn.ended' ||
     frame.type === 'prompt.completed' ||
     frame.type === 'prompt.aborted'
-  ) return { scope: 'navigation', eventType: frame.type }
+  ) {
+    const base = { scope: 'navigation', eventType: frame.type } satisfies GlobalSyncEvent
+    /* 结构性 session 事件才透传 envelope 里的真实会话 id（非敏感标识）；turn/prompt
+       高频事件只做导航失效，避免不必要的跨进程字段。 */
+    if (
+      frame.type === 'event.session.created' ||
+      frame.type === 'event.session.updated' ||
+      frame.type === 'event.session.deleted' ||
+      frame.type === 'event.session.archived' ||
+      frame.type === 'event.session.work_changed' ||
+      frame.type === 'event.session.status_changed' ||
+      frame.type === 'session.meta.updated'
+    ) return { ...base, ...sessionScopeId(frame) }
+    return base
+  }
   if (frame.type === 'event.config.changed' || frame.type === 'event.model_catalog.changed') {
     return { scope: 'config', eventType: frame.type }
   }
   return null
+}
+
+/* 结构性 session 事件保留真实会话 id（envelope），把它作为非敏感标识透传给
+   上层，用于乐观移除导航条目；`__global__` 或缺失时不携带。 */
+function sessionScopeId(frame: SessionEventFrame): { sessionId: string } | Record<string, never> {
+  if (typeof frame.session_id !== 'string' || frame.session_id.length === 0 || frame.session_id === '__global__') {
+    return {}
+  }
+  return { sessionId: frame.session_id }
 }
 
 function emptyView(sessionId: string): SessionSyncView {
@@ -1029,7 +1062,8 @@ function emptyView(sessionId: string): SessionSyncView {
     lastTurnReason: null,
     lastTurnError: null,
     retry: null,
-    skillActivations: []
+    skillActivations: [],
+    promptAttachments: []
   }
 }
 
@@ -1058,7 +1092,8 @@ function cloneView(state: SessionSyncView): SessionSyncView {
     })),
     usage: { ...state.usage },
     retry: state.retry === null ? null : { ...state.retry },
-    skillActivations: state.skillActivations.map((activation) => ({ ...activation }))
+    skillActivations: state.skillActivations.map((activation) => ({ ...activation })),
+    promptAttachments: state.promptAttachments.map((attachment) => ({ ...attachment }))
   }
 }
 
@@ -1083,7 +1118,8 @@ function mapSnapshotUsage(usage: SessionSnapshot['session']['usage']): SessionUs
     cacheCreationTokens: usage.cache_creation_tokens ?? 0,
     totalCostUsd: usage.total_cost_usd ?? null,
     contextTokens: usage.context_tokens,
-    contextLimit: usage.context_limit,
+    // 0.38.0：context_limit 降为可选，缺失时按 0（未设置/未知上限）
+    contextLimit: usage.context_limit ?? 0,
     turnCount: usage.turn_count ?? null
   }
 }

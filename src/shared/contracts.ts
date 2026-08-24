@@ -92,6 +92,7 @@ export const ipcChannels = {
   catalogProvidersList: 'catalog:providers:list',
   catalogProviderGet: 'catalog:provider:get',
   oauthLoginStart: 'oauth:login:start',
+  oauthRegionGet: 'oauth:region:get',
   oauthLoginPoll: 'oauth:login:poll',
   oauthLoginCancel: 'oauth:login:cancel',
   oauthLogout: 'oauth:logout',
@@ -969,6 +970,10 @@ export interface KimiSettingsSnapshot {
 export interface KimiGlobalStateEvent {
   scope: 'navigation' | 'config'
   eventType: string
+  /** 事件关联的会话 id（如 event.session.archived 的被归档会话，来自 WS 帧
+      envelope 的真实 session_id）。仅透传非敏感标识，供 renderer 乐观移除
+      导航条目；与具体会话无关的事件（workspace/config/resync）不携带。 */
+  sessionId?: string
 }
 
 export interface KimiPreferencesPatch {
@@ -1039,6 +1044,10 @@ export interface KimiOAuthFlow {
   resolvedAt: string | null
   errorMessage: string | null
 }
+
+/** OAuth 登录区域（0.38.0+ `GET /api/v1/oauth/region`），
+ *  kimi.ai 国际站 ↔ `global`，kimi.com 国内站 ↔ `mainland-cn`。 */
+export type KimiOAuthRegion = 'mainland-cn' | 'global'
 
 export interface KimiOAuthCancelResult {
   cancelled: boolean
@@ -1347,7 +1356,9 @@ export interface KimiAgentDesktopApi {
   refreshKimiProviders(input: { scope: 'all' | 'oauth' | 'provider'; providerId?: string }): Promise<KimiProviderRefreshResult>
   listKimiCatalogProviders(): Promise<KimiCatalogProviderSummary[]>
   getKimiCatalogProvider(catalogId: string): Promise<KimiCatalogProviderDetail>
-  startOAuthLogin(provider?: string): Promise<KimiOAuthFlow>
+  startOAuthLogin(provider?: string, region?: KimiOAuthRegion): Promise<KimiOAuthFlow>
+  /** 0.38.0+：查询 OAuth 登录区域（`mainland-cn` / `global`），用于预选登录入口。 */
+  getOAuthRegion(): Promise<KimiOAuthRegion>
   pollOAuthLogin(provider?: string): Promise<KimiOAuthFlow | null>
   cancelOAuthLogin(provider?: string): Promise<KimiOAuthCancelResult>
   logoutOAuth(provider?: string): Promise<{ loggedOut: true; provider: string }>

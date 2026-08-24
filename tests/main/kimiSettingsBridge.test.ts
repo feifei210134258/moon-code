@@ -95,6 +95,7 @@ function createClient() {
       unchanged: [], failed: []
     })),
     refreshOAuthProviderModels: vi.fn(async () => ({ changed: [], unchanged: [], failed: [] })),
+    getOAuthRegion: vi.fn(async () => 'global' as const),
     startOAuthLogin: vi.fn(async () => ({
       flow_id: 'flow-1',
       provider: 'managed:kimi-code',
@@ -183,6 +184,30 @@ describe('KimiSettingsBridge', () => {
       status: 'pending',
       userCode: 'ABCD'
     }))
+  })
+
+  it('reads the OAuth login region and forwards it into startOAuthLogin (0.38.0)', async () => {
+    const client = createClient()
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.38.0', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+    const bridge = new KimiSettingsBridge(runtime)
+
+    await expect(bridge.getOAuthRegion()).resolves.toBe('global')
+    expect(client.getOAuthRegion).toHaveBeenCalledTimes(1)
+
+    await expect(bridge.startOAuthLogin('managed:kimi-code', 'mainland-cn')).resolves.toEqual(
+      expect.objectContaining({ flowId: 'flow-1', status: 'pending' })
+    )
+    expect(client.startOAuthLogin).toHaveBeenCalledWith('managed:kimi-code', 'mainland-cn')
+
+    // 不传 region 时仍保持旧调用形态（不携带 region 字段）。
+    await bridge.startOAuthLogin('managed:kimi-code')
+    expect(client.startOAuthLogin).toHaveBeenLastCalledWith('managed:kimi-code', undefined)
   })
 
   it('does not claim that a shared Runtime enabled the secondary experiment', async () => {

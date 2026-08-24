@@ -659,3 +659,87 @@ describe('workbench draft session state', () => {
     expect(store.activeSessionId).not.toBe('')
   })
 })
+
+describe('workbench archived-session view retention', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    window.localStorage.removeItem('moon-code:navigation-activity:v2')
+    window.localStorage.removeItem('moon-code:project-expansion:v1')
+  })
+
+  function treeWith(sessions: Array<{ id: string; title: string }>) {
+    return [{
+      id: 'workspace-a', name: 'A', root: '/a', sessions: sessions.map((session) => ({
+        id: session.id, title: session.title, updatedAt: null, busy: false,
+        pendingInteraction: 'none' as const, lastTurnReason: null, lastPrompt: null
+      }))
+    }]
+  }
+
+  it('keeps the current session view when another client archives it and the authoritative tree no longer lists it', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(treeWith([{ id: 'session-1', title: 'Open' }, { id: 'session-2', title: 'Other' }]))
+    store.selectSession('session-1')
+
+    store.noteSessionArchived('session-1', 'Open')
+    expect(store.sessionArchivedNotice).toEqual({ sessionId: 'session-1', title: 'Open' })
+
+    /* 240ms 受控重读后权威树里不再有它：保留视图，不自动跳到别的会话 */
+    store.hydrateProjects(treeWith([{ id: 'session-2', title: 'Other' }]))
+
+    expect(store.activeSessionId).toBe('session-1')
+    expect(store.sessionArchivedNotice).toEqual({ sessionId: 'session-1', title: 'Open' })
+
+    /* 用户显式离开被归档会话后提示解除，恢复自动重选 */
+    store.selectSession('session-2')
+    expect(store.sessionArchivedNotice).toBeNull()
+
+    /* 之后 session-2 也被归档：同样保留视图并在受控重读后维持保护 */
+    store.noteSessionArchived('session-2', 'Other')
+    store.hydrateProjects([])
+    expect(store.sessionArchivedNotice).toEqual({ sessionId: 'session-2', title: 'Other' })
+    expect(store.activeSessionId).toBe('session-2')
+  })
+
+  it('ignores an archived notice for a session that is not the current one', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(treeWith([{ id: 'session-1', title: 'Open' }]))
+    store.selectSession('session-1')
+
+    store.noteSessionArchived('session-other', 'Elsewhere')
+
+    expect(store.sessionArchivedNotice).toBeNull()
+  })
+
+  it('dismisses the archived notice manually and still keeps the retained view until the user navigates', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(treeWith([{ id: 'session-1', title: 'Open' }, { id: 'session-2', title: 'Other' }]))
+    store.selectSession('session-1')
+    store.noteSessionArchived('session-1', 'Open')
+
+    store.dismissSessionArchivedNotice()
+    expect(store.sessionArchivedNotice).toBeNull()
+
+    /* 提示已关闭但保护标志同步清除：下次重读仍保持（notice 是唯一保护依据，
+       因此 dismiss 同时也意味着下次树重读不再保留视图）。 */
+    store.noteSessionArchived('session-1', 'Open')
+    store.hydrateProjects(treeWith([{ id: 'session-2', title: 'Other' }]))
+    expect(store.activeSessionId).toBe('session-1')
+    store.dismissSessionArchivedNotice()
+    store.hydrateProjects(treeWith([{ id: 'session-2', title: 'Other' }]))
+    expect(store.activeSessionId).toBe('session-2')
+  })
+
+  it('clears the notice when the archived session reappears in the authoritative tree', () => {
+    const store = useWorkbenchStore()
+    store.hydrateProjects(treeWith([{ id: 'session-1', title: 'Open' }]))
+    store.selectSession('session-1')
+    store.noteSessionArchived('session-1', 'Open')
+
+    /* 会话被恢复：权威树里再次出现 → 解除提示，视图保留是不需要保护的正常态 */
+    store.hydrateProjects(treeWith([{ id: 'session-1', title: 'Open' }]))
+
+    expect(store.sessionArchivedNotice).toBeNull()
+    expect(store.activeSessionId).toBe('session-1')
+  })
+})

@@ -78,6 +78,72 @@ describe('KimiRestClient', () => {
     }))
   })
 
+  it('reads the OAuth login region from the new region endpoint (0.38.0)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      msg: 'ok',
+      data: { region: 'global' }
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.getOAuthRegion()).resolves.toBe('global')
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/oauth/region',
+      expect.objectContaining({ headers: expect.any(Headers) })
+    )
+  })
+
+  it('passes the login region through the OAuth login body (0.38.0)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      msg: 'ok',
+      data: {
+        flow_id: 'flow-1',
+        provider: 'managed:kimi-code',
+        status: 'pending',
+        verification_uri: 'https://example.com/verify',
+        verification_uri_complete: 'https://example.com/verify?code=abc',
+        user_code: 'ABC-DEF',
+        expires_in: 300,
+        interval: 5,
+        expires_at: '2026-07-23T00:05:00.000Z'
+      }
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.startOAuthLogin('managed:kimi-code', 'mainland-cn')).resolves.toEqual(
+      expect.objectContaining({ flow_id: 'flow-1', provider: 'managed:kimi-code' })
+    )
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/oauth/login',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ provider: 'managed:kimi-code', region: 'mainland-cn' })
+      })
+    )
+    /* 旧调用形态（无 region）仍只发 provider */
+    fetchImpl.mockResolvedValueOnce(new Response(JSON.stringify({
+      code: 0,
+      msg: 'ok',
+      data: {
+        flow_id: 'flow-2',
+        provider: 'managed:kimi-code',
+        status: 'pending',
+        verification_uri: 'https://example.com/verify',
+        verification_uri_complete: 'https://example.com/verify?code=abc',
+        user_code: 'ABC-DEF',
+        expires_in: 300,
+        interval: 5,
+        expires_at: '2026-07-23T00:05:00.000Z'
+      }
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    await client.startOAuthLogin('managed:kimi-code')
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/oauth/login',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ provider: 'managed:kimi-code' }) })
+    )
+  })
+
   it('treats a non-zero envelope code as an error even with HTTP 200', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ code: 40001, msg: 'bad request', data: null, request_id: 'req-1' }), {
@@ -257,6 +323,55 @@ describe('KimiRestClient', () => {
     expect(url.searchParams.get('meta.archived')).toBe('false')
     expect(url.searchParams.get('page_size')).toBe('10000')
     expect(url.searchParams.has('page_token')).toBe(false)
+  })
+
+  it('queries the v2 session list grouped by workspace with the new parameters (0.38.0)', async () => {
+    const sessionItem = {
+      id: 'session-1',
+      workspace: { id: 'workspace-1', cwd: '/tmp' },
+      meta: { title: 'T', last_prompt: null, created_at: 1, updated_at: 2, archived: false, archived_at: null },
+      activity: { status: 'idle' }
+    }
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        code: 0,
+        msg: 'ok',
+        data: {
+          groups: [{
+            workspace: { id: 'workspace-1', cwd: '/tmp' },
+            sessions: [sessionItem],
+            total: 1
+          }],
+          total: 1,
+          has_more: false,
+          next_page_token: null
+        }
+      }), { status: 200, headers: { 'content-type': 'application/json' } })
+    )
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.listSessionPageV2({
+      view: 'by_workspace',
+      workspaceId: 'workspace-1',
+      groupPageSize: 50,
+      hasPrompt: 'true',
+      archived: 'false'
+    })).resolves.toEqual({
+      groups: [{
+        workspace: { id: 'workspace-1', cwd: '/tmp' },
+        sessions: [expect.objectContaining({ id: 'session-1' })],
+        total: 1
+      }],
+      hasMore: false,
+      total: 1,
+      nextPageToken: null
+    })
+    const url = new URL(fetchImpl.mock.calls[0]?.[0] as string)
+    expect(url.searchParams.get('view')).toBe('by_workspace')
+    expect(url.searchParams.get('group.page_size')).toBe('50')
+    expect(url.searchParams.get('meta.has_prompt')).toBe('true')
+    expect(url.searchParams.get('workspace.id')).toBe('workspace-1')
+    expect(url.searchParams.get('meta.archived')).toBe('false')
   })
 
   it('submits text prompts with bearer auth and validates the authoritative response', async () => {

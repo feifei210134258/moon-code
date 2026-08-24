@@ -65,4 +65,34 @@ describe('SessionProjector', () => {
     expect(state.unknownEventCount).toBe(0)
     expect(state.sessions.size).toBe(0)
   })
+
+  it('drops the session on a 0.38.0 archived event and counts it as known', () => {
+    const state = createSessionProjectionState()
+    projectSessionEvent(
+      state,
+      frame({
+        type: 'event.session.created',
+        session: {
+          id: 'session-1',
+          workspace_id: 'workspace-1',
+          title: 'Build desktop client',
+          updated_at: '2026-07-23T00:00:00.000Z',
+          busy: false
+        }
+      })
+    )
+    expect(state.sessions.size).toBe(1)
+    /* 帧 envelope 携带真实会话 id（ADR-0017），payload 只有 workspace_id */
+    projectSessionEvent(state, frame({
+      type: 'event.session.archived',
+      workspace_id: 'workspace-1',
+      agentId: 'main'
+    }, 2))
+    expect(state.sessions.size).toBe(0)
+    expect(state.unknownEventCount).toBe(0)
+    /* 未投影的会话不受影响（删除按 frame.session_id 定向） */
+    projectSessionEvent(state, frame({ type: 'event.session.archived', workspace_id: 'workspace-9' }, 3))
+    expect(state.sessions.size).toBe(0)
+    expect(state.unknownEventCount).toBe(0)
+  })
 })

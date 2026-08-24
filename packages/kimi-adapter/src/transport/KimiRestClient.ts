@@ -21,6 +21,7 @@ import {
   oauthFlowStartSchema,
   oauthLoginCancelResultSchema,
   oauthLogoutResultSchema,
+  oauthRegionResultSchema,
   managedUsageResultSchema,
   skillActivationResultSchema,
   skillListSchema,
@@ -45,6 +46,7 @@ import {
   sessionPlanListSchema,
   sideChatStartResultSchema,
   sessionListSchema,
+  sessionListV2PageSchema,
   sessionListV2Schema,
   sessionSummarySchema,
   terminalCloseResultSchema,
@@ -76,6 +78,7 @@ import {
   type OAuthFlowStart,
   type OAuthLoginCancelResult,
   type OAuthLogoutResult,
+  type OAuthRegion,
   type ManagedUsageResult,
   type SkillDescriptor,
   type SkillActivationResult,
@@ -150,6 +153,48 @@ export interface KimiClientIdentity {
   clientName: string
   clientVersion: string
   clientUiMode: string
+}
+
+/** `GET /api/v2/sessions`（0.38.0：view / group.page_size / meta.has_prompt）的查询参数。 */
+export interface SessionListPageV2Options {
+  workspaceId?: string | string[]
+  activityStatus?: SessionActivityStatus | SessionActivityStatus[]
+  updatedAfter?: number
+  updatedBefore?: number
+  archived?: 'true' | 'false' | 'all'
+  /** 0.38.0：`meta.has_prompt`，按会话是否含 prompt 过滤。 */
+  hasPrompt?: 'true' | 'false'
+  sort?: 'meta.updated_at_desc' | 'meta.updated_at_asc' | 'meta.created_at_desc'
+  includeGit?: boolean
+  /** 0.38.0：`group.page_size`，`view=by_workspace` 时每组的条数上限。 */
+  groupPageSize?: number
+  pageSize?: number
+  page?: number
+  pageToken?: string
+  view?: 'flat' | 'by_workspace'
+}
+
+/** 默认 `view=flat` 的 v2 会话列表页（现状行为）。 */
+export interface SessionListV2FlatPage {
+  items: SessionSummaryV2[]
+  hasMore: boolean
+  total: number
+  nextPageToken: string | null
+}
+
+/** `view=by_workspace` 单个 workspace 分组（0.38.0）。 */
+export interface SessionListV2WorkspaceGroup {
+  workspace: SessionSummaryV2['workspace']
+  sessions: SessionSummaryV2[]
+  total: number
+}
+
+/** `view=by_workspace` 的 v2 会话列表页（0.38.0）。 */
+export interface SessionListV2ByWorkspacePage {
+  groups: SessionListV2WorkspaceGroup[]
+  hasMore: boolean
+  total: number
+  nextPageToken: string | null
 }
 
 interface KimiRestClientOptions {
@@ -403,12 +448,20 @@ export class KimiRestClient {
     )
   }
 
-  startOAuthLogin(provider?: string): Promise<OAuthFlowStart> {
+  /** 0.38.0+：查询 OAuth 登录区域（mainland-cn / global）。 */
+  getOAuthRegion(): Promise<OAuthRegion> {
+    return this.request('/api/v1/oauth/region', {}, oauthRegionResultSchema).then((result) => result.region)
+  }
+
+  startOAuthLogin(provider?: string, region?: OAuthRegion): Promise<OAuthFlowStart> {
     return this.request(
       '/api/v1/oauth/login',
       {
         method: 'POST',
-        body: JSON.stringify(provider === undefined ? {} : { provider })
+        body: JSON.stringify({
+          ...(provider === undefined ? {} : { provider }),
+          ...(region === undefined ? {} : { region })
+        })
       },
       oauthFlowStartSchema
     )
@@ -558,18 +611,17 @@ export class KimiRestClient {
     return (await this.listSessionPage(options)).items
   }
 
-  async listSessionPageV2(options: {
-    workspaceId?: string | string[]
-    activityStatus?: SessionActivityStatus | SessionActivityStatus[]
-    updatedAfter?: number
-    updatedBefore?: number
-    archived?: 'true' | 'false' | 'all'
-    sort?: 'meta.updated_at_desc' | 'meta.updated_at_asc' | 'meta.created_at_desc'
-    includeGit?: boolean
-    pageSize?: number
-    page?: number
-    pageToken?: string
-  } = {}): Promise<{ items: SessionSummaryV2[]; hasMore: boolean; total: number; nextPageToken: string | null }> {
+  /** 默认 `view=flat` 的 v2 会话列表页（现状行为）。 */
+  async listSessionPageV2(
+    options?: SessionListPageV2Options & { view?: 'flat' }
+  ): Promise<SessionListV2FlatPage>
+  /** 0.38.0：`view=by_workspace` 按 workspace 分组的会话列表页。 */
+  async listSessionPageV2(
+    options: SessionListPageV2Options & { view: 'by_workspace' }
+  ): Promise<SessionListV2ByWorkspacePage>
+  async listSessionPageV2(
+    options: SessionListPageV2Options = {}
+  ): Promise<SessionListV2FlatPage | SessionListV2ByWorkspacePage> {
     const query = new URLSearchParams()
     const setList = (key: string, value: string | string[] | undefined) => {
       if (value === undefined) return
@@ -580,13 +632,28 @@ export class KimiRestClient {
     if (options.updatedAfter !== undefined) query.set('meta.updated_after', String(options.updatedAfter))
     if (options.updatedBefore !== undefined) query.set('meta.updated_before', String(options.updatedBefore))
     if (options.archived !== undefined) query.set('meta.archived', options.archived)
+    if (options.hasPrompt !== undefined) query.set('meta.has_prompt', options.hasPrompt)
     if (options.sort !== undefined) query.set('sort', options.sort)
     if (options.includeGit === true) query.set('include', 'git')
+    if (options.view !== undefined) query.set('view', options.view)
+    if (options.groupPageSize !== undefined) query.set('group.page_size', String(options.groupPageSize))
     query.set('page_size', String(clampPageSize(options.pageSize ?? 100)))
     if (options.page !== undefined) query.set('page', String(options.page))
     if (options.pageToken !== undefined) query.set('page_token', options.pageToken)
-    const data = await this.request(`/api/v2/sessions?${query}`, {}, sessionListV2Schema)
+    const data = await this.request(`/api/v2/sessions?${query}`, {}, sessionListV2PageSchema)
     // 本方法不请求 fields=id,archived，服务端始终返回完整条目
+    if ('groups' in data) {
+      return {
+        groups: data.groups.map((group) => ({
+          workspace: group.workspace,
+          sessions: group.sessions.filter(isFullV2Item),
+          total: group.total
+        })),
+        hasMore: data.has_more,
+        total: data.total,
+        nextPageToken: data.next_page_token
+      }
+    }
     return {
       items: data.items.filter(isFullV2Item),
       hasMore: data.has_more,

@@ -5,6 +5,7 @@ import type {
   KimiCatalogProviderSummary,
   KimiOAuthCancelResult,
   KimiOAuthFlow,
+  KimiOAuthRegion,
   KimiPreferencesPatch,
   KimiProviderCatalogItem,
   KimiProviderModelInput,
@@ -497,8 +498,13 @@ export class KimiSettingsBridge {
     return mapRefreshResult(result)
   }
 
-  async startOAuthLogin(provider?: string): Promise<KimiOAuthFlow> {
-    return mapOAuthFlow(await this.runtime.createRestClient().startOAuthLogin(provider))
+  async startOAuthLogin(provider?: string, region?: KimiOAuthRegion): Promise<KimiOAuthFlow> {
+    return mapOAuthFlow(await this.runtime.createRestClient().startOAuthLogin(provider, region))
+  }
+
+  /** 0.38.0+：读取 OAuth 登录区域（`mainland-cn` / `global`）。 */
+  async getOAuthRegion(): Promise<KimiOAuthRegion> {
+    return await this.runtime.createRestClient().getOAuthRegion()
   }
 
   async pollOAuthLogin(provider?: string): Promise<KimiOAuthFlow | null> {

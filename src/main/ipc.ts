@@ -10,6 +10,7 @@ import {
   type BrowserViewState,
   type KimiOAuthCancelResult,
   type KimiOAuthFlow,
+  type KimiOAuthRegion,
   type KimiMcpServer,
   type KimiAttachmentBlob,
   type KimiAttachmentPickResult,
@@ -91,6 +92,7 @@ import {
   validateAddProviderInput,
   validateCatalogId,
   validateModelId,
+  validateOAuthRegion,
   validatePreferencesPatch,
   validateProviderId,
   validateProviderRefreshInput,
@@ -909,11 +911,21 @@ export function registerIpc(
   )
   ipcMain.handle(
     ipcChannels.oauthLoginStart,
-    async (event, provider?: unknown): Promise<KimiOAuthFlow> => {
+    async (event, provider?: unknown, region?: unknown): Promise<KimiOAuthFlow> => {
       assertTrustedSender(event)
-      const flow = await settings.startOAuthLogin(validateProviderId(provider, true))
+      const flow = await settings.startOAuthLogin(
+        validateProviderId(provider, true),
+        validateOAuthRegion(region)
+      )
       if (flow.status === 'authenticated') void usage.refresh()
       return flow
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.oauthRegionGet,
+    async (event): Promise<KimiOAuthRegion> => {
+      assertTrustedSender(event)
+      return await settings.getOAuthRegion()
     }
   )
   ipcMain.handle(

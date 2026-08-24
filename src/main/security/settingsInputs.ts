@@ -1,5 +1,6 @@
 import type {
   AddKimiProviderInput,
+  KimiOAuthRegion,
   KimiPreferencesPatch,
   KimiProviderModelInput,
   KimiProviderType,
@@ -80,6 +81,16 @@ export function validateNewProviderId(value: unknown): string {
 export function validateCatalogId(value: unknown): string {
   if (typeof value !== 'string' || value.length < 1 || value.length > PROVIDER_ID_MAX_LENGTH || value.includes('\0')) {
     throw new TypeError('Invalid Kimi catalog id')
+  }
+  return value
+}
+
+/** OAuth 登录区域（0.38.0+）。未提供（undefined）时返回 undefined，
+ *  只放行协议快照声明的 `mainland-cn` / `global` 两个值。 */
+export function validateOAuthRegion(value: unknown): KimiOAuthRegion | undefined {
+  if (value === undefined) return undefined
+  if (value !== 'mainland-cn' && value !== 'global') {
+    throw new TypeError('Invalid Kimi OAuth region')
   }
   return value
 }

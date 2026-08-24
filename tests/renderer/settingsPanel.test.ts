@@ -1392,9 +1392,10 @@ describe('SettingsPanel', () => {
     wrapper.unmount()
   })
 
-  it('starts the official device-code flow from the Kimi provider card and renders its authorization link', async () => {
+  it('preselects the detected OAuth region, then starts the official device-code flow from the Kimi provider card', async () => {
     const api = {
       getKimiSettings: vi.fn(async () => snapshot),
+      getOAuthRegion: vi.fn(async () => 'global' as const),
       startOAuthLogin: vi.fn(async () => ({
         flowId: 'flow-1', provider: 'managed:kimi-code', status: 'pending' as const,
         verificationUri: 'https://auth.kimi.com/device',
@@ -1415,9 +1416,88 @@ describe('SettingsPanel', () => {
     await kimiCard.get('.provider-oauth-login').trigger('click')
     await flushPromises()
 
-    expect(api.startOAuthLogin).toHaveBeenCalledWith('managed:kimi-code')
+    // 先探测区域并弹出选择器：探测到 global 时预选 kimi.ai（国际站）。
+    expect(api.getOAuthRegion).toHaveBeenCalledTimes(1)
+    expect(api.startOAuthLogin).not.toHaveBeenCalled()
+    const picker = wrapper.get('.oauth-region-picker')
+    expect(picker.text()).toContain('kimi.ai（国际站）')
+    expect(picker.text()).toContain('kimi.com（国内站）')
+    const globalOption = picker.findAll('.oauth-region-picker-options button')
+      .find((button) => button.text().includes('kimi.ai'))!
+    expect(globalOption.classes()).toContain('is-selected')
+
+    // 选择预选区域后立即开始登录，region 随登录请求透传。
+    await globalOption.trigger('click')
+    await flushPromises()
+
+    expect(api.startOAuthLogin).toHaveBeenCalledWith('managed:kimi-code', 'global')
     expect(wrapper.get('.oauth-device-panel').text()).toContain('ABCD')
     expect(wrapper.get('.oauth-device-panel a').attributes('href')).toBe('https://auth.kimi.com/device?code=ABCD')
+    wrapper.unmount()
+  })
+
+  it('lets the user switch to the domestic region before starting OAuth login', async () => {
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      getOAuthRegion: vi.fn(async () => 'global' as const),
+      startOAuthLogin: vi.fn(async () => ({
+        flowId: 'flow-1', provider: 'managed:kimi-code', status: 'pending' as const,
+        verificationUri: 'https://auth.kimi.com/device',
+        verificationUriComplete: 'https://auth.kimi.com/device?code=ABCD',
+        userCode: 'ABCD', expiresIn: 600, interval: 60, expiresAt: '2026-07-23T01:00:00.000Z',
+        resolvedAt: null, errorMessage: null
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    const kimiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('Kimi'))!
+    await kimiCard.get('.provider-oauth-login').trigger('click')
+    await flushPromises()
+
+    const picker = wrapper.get('.oauth-region-picker')
+    const mainlandOption = picker.findAll('.oauth-region-picker-options button')
+      .find((button) => button.text().includes('kimi.com'))!
+    expect(mainlandOption.classes()).not.toContain('is-selected')
+    await mainlandOption.trigger('click')
+    await flushPromises()
+
+    expect(api.startOAuthLogin).toHaveBeenCalledWith('managed:kimi-code', 'mainland-cn')
+    expect(wrapper.get('.oauth-device-panel a').attributes('href')).toBe('https://auth.kimi.com/device?code=ABCD')
+    wrapper.unmount()
+  })
+
+  it('silently falls back to the legacy login when the region probe fails', async () => {
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      getOAuthRegion: vi.fn(async () => { throw new Error('region probe failed') }),
+      startOAuthLogin: vi.fn(async () => ({
+        flowId: 'flow-1', provider: 'managed:kimi-code', status: 'pending' as const,
+        verificationUri: 'https://auth.kimi.com/device',
+        verificationUriComplete: 'https://auth.kimi.com/device?code=ABCD',
+        userCode: 'ABCD', expiresIn: 600, interval: 60, expiresAt: '2026-07-23T01:00:00.000Z',
+        resolvedAt: null, errorMessage: null
+      }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[1]!.trigger('click')
+    const kimiCard = wrapper.findAll('.provider-card').find((card) => card.text().includes('Kimi'))!
+    await kimiCard.get('.provider-oauth-login').trigger('click')
+    await flushPromises()
+
+    // 探测失败：不弹选择器、不报错，直接按旧流程登录（不传 region）。
+    expect(wrapper.find('.oauth-region-picker').exists()).toBe(false)
+    expect(api.startOAuthLogin).toHaveBeenCalledWith('managed:kimi-code', undefined)
+    expect(wrapper.get('.oauth-device-panel').text()).toContain('ABCD')
     wrapper.unmount()
   })
 
