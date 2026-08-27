@@ -164,6 +164,7 @@ export function useRuntimeBridge() {
   let operationalTimer: number | undefined
   let workspaceRefreshTimer: number | undefined
   let requestedSessionId: string | null = null
+  let mentionSearchGeneration = 0
   /* 草稿态（新建任务未发消息）没有真实会话，文件树改按这个工作区本地列举。 */
   let requestedDraftWorkspaceId: string | null = null
   /* 运行时掉线（如重启）前打开的会话：恢复 running 后由桥接层直接重连。
@@ -1060,11 +1061,14 @@ export function useRuntimeBridge() {
   }
 
   const searchMentionFiles = async (query: string): Promise<WorkspaceFileSearchItem[]> => {
-    const sessionId = requestedSessionId
-    if (window.kimiAgent === undefined || sessionId === null) return []
+    // kimi 0.39 fs:suggest：@ 补全统一走 workspace 口径，草稿态（无 session）同样可用。
+    const workspaceId = requestedDraftWorkspaceId ?? workbenchStore.activeWorkspaceId
+    if (window.kimiAgent === undefined || workspaceId.length === 0) return []
+    const generation = ++mentionSearchGeneration
     try {
-      const result = await window.kimiAgent.searchFiles(sessionId, query)
-      return sessionId === requestedSessionId ? result.items.slice(0, 20) : []
+      const result = await window.kimiAgent.suggestWorkspaceFiles(workspaceId, query)
+      if (generation !== mentionSearchGeneration) return []
+      return result.items.slice(0, 20)
     } catch {
       return []
     }

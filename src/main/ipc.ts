@@ -24,6 +24,10 @@ import {
   type KimiProviderRefreshResult,
   type KimiCatalogProviderDetail,
   type KimiCatalogProviderSummary,
+  type KimiManagedMcpServer,
+  type KimiMcpAuthBeginResult,
+  type KimiMcpServerInspection,
+  type KimiMcpServerTestResult,
   type KimiSettingsPreferences,
   type KimiSettingsSnapshot,
   type KimiSkill,
@@ -81,6 +85,12 @@ import {
   validateOptionalSessionId,
   validateOptionalSkillArgs
 } from './security/capabilityInputs.js'
+import {
+  validateMcpConfig,
+  validateMcpFlowId,
+  validateMcpServerInput,
+  validateMcpServerName
+} from './security/mcpInputs.js'
 import { validateApprovalResponse, validateQuestionAnswers } from './security/interactionInputs.js'
 import {
   assertTerminalId,
@@ -682,6 +692,16 @@ export function registerIpc(
     }
   )
   ipcMain.handle(
+    ipcChannels.filesSuggest,
+    async (event, workspaceId?: unknown, query?: unknown): Promise<WorkspaceFileSearchResult> => {
+      assertTrustedSender(event)
+      return await sessions.suggestWorkspaceFiles(
+        validateWorkspaceId(workspaceId),
+        validateFileSearchQuery(query, 'search')
+      )
+    }
+  )
+  ipcMain.handle(
     ipcChannels.filesGrep,
     async (event, sessionId?: unknown, pattern?: unknown): Promise<WorkspaceGrepResult> => {
       assertTrustedSender(event)
@@ -1074,6 +1094,80 @@ export function registerIpc(
     async (event, serverId?: unknown): Promise<{ restarting: true }> => {
       assertTrustedSender(event)
       return await capabilities.restartMcpServer(validateCapabilityId(serverId, 'MCP server id'))
+    }
+  )
+  ipcMain.handle(ipcChannels.mcpManagedServersList, async (event): Promise<KimiManagedMcpServer[]> => {
+    assertTrustedSender(event)
+    return await capabilities.listManagedMcpServers()
+  })
+  ipcMain.handle(
+    ipcChannels.mcpManagedServerAdd,
+    async (event, input?: unknown): Promise<KimiManagedMcpServer[]> => {
+      assertTrustedSender(event)
+      return await capabilities.addManagedMcpServer(validateMcpServerInput(input))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.mcpManagedServerReplace,
+    async (event, name?: unknown, config?: unknown): Promise<KimiManagedMcpServer[]> => {
+      assertTrustedSender(event)
+      return await capabilities.replaceManagedMcpServer(
+        validateMcpServerName(name),
+        validateMcpConfig(config)
+      )
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.mcpManagedServerDelete,
+    async (event, name?: unknown): Promise<KimiManagedMcpServer[]> => {
+      assertTrustedSender(event)
+      return await capabilities.deleteManagedMcpServer(validateMcpServerName(name))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.mcpManagedServerTest,
+    async (event, input?: unknown): Promise<KimiMcpServerTestResult> => {
+      assertTrustedSender(event)
+      if (input !== null && typeof input !== 'object') throw new TypeError('Invalid MCP test input')
+      const record = input as Record<string, unknown>
+      return await capabilities.testMcpServer({
+        ...(typeof record.name === 'string' && record.name.length > 0
+          ? { name: validateMcpServerName(record.name) }
+          : {}),
+        ...(record.config === undefined ? {} : { config: validateMcpConfig(record.config) })
+      })
+    }
+  )
+  ipcMain.handle(ipcChannels.mcpManagedServersInspect, async (event): Promise<KimiMcpServerInspection[]> => {
+    assertTrustedSender(event)
+    return await capabilities.inspectMcpServers()
+  })
+  ipcMain.handle(
+    ipcChannels.mcpAuthBegin,
+    async (event, name?: unknown): Promise<KimiMcpAuthBeginResult> => {
+      assertTrustedSender(event)
+      return await capabilities.beginMcpAuth(validateMcpServerName(name))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.mcpAuthComplete,
+    async (event, flowId?: unknown): Promise<null> => {
+      assertTrustedSender(event)
+      return await capabilities.completeMcpAuth(validateMcpFlowId(flowId))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.mcpAuthCancel,
+    async (event, flowId?: unknown): Promise<null> => {
+      assertTrustedSender(event)
+      return await capabilities.cancelMcpAuth(validateMcpFlowId(flowId))
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.mcpAuthReset,
+    async (event, name?: unknown): Promise<null> => {
+      assertTrustedSender(event)
+      return await capabilities.resetMcpAuth(validateMcpServerName(name))
     }
   )
   ipcMain.handle(

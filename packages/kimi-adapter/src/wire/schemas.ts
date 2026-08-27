@@ -556,6 +556,10 @@ export const fileSearchResultSchema = z.object({
   truncated: z.boolean()
 })
 
+/* kimi 0.39 `/api/v1/fs:suggest`：跨多 root 的补全建议，不依赖 session。
+   响应结构与 fs:search 一致（items + truncated）。 */
+export const fileSuggestResultSchema = fileSearchResultSchema
+
 export const fileGrepMatchSchema = z.object({
   line: z.number().int().positive(),
   col: z.number().int().positive(),
@@ -872,6 +876,113 @@ export const mcpServerSchema = z.object({
 export const mcpServerListSchema = z.object({ servers: z.array(mcpServerSchema) })
 export const mcpServerRestartResultSchema = z.object({ restarting: z.literal(true) })
 
+/* ---- kimi 0.39 MCP v2 管理面（/api/v2/mcp/*）---- */
+
+const mcpToolFilterFields = {
+  enabledTools: z.array(z.string()).optional(),
+  disabledTools: z.array(z.string()).optional()
+}
+const mcpTimeoutFields = {
+  startupTimeoutMs: z.number().int().min(1).optional(),
+  toolTimeoutMs: z.number().int().min(1).optional()
+}
+
+export const mcpStdioServerConfigSchema = z.object({
+  transport: z.literal('stdio'),
+  command: z.string().min(1),
+  args: z.array(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  cwd: z.string().optional(),
+  executor: z.enum(['local', 'kaos']).optional(),
+  runtime_id: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+  ...mcpTimeoutFields,
+  ...mcpToolFilterFields,
+  envKeys: z.array(z.string()).optional()
+})
+export const mcpRemoteServerConfigSchema = z.object({
+  transport: z.literal('http'),
+  url: z.string().min(1),
+  headers: z.record(z.string(), z.string()).optional(),
+  auth: z.literal('oauth').optional(),
+  bearerTokenEnvVar: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+  ...mcpTimeoutFields,
+  ...mcpToolFilterFields
+})
+export const mcpSseServerConfigSchema = z.object({
+  transport: z.literal('sse'),
+  url: z.string().min(1),
+  headers: z.record(z.string(), z.string()).optional(),
+  enabled: z.boolean().optional(),
+  ...mcpTimeoutFields,
+  ...mcpToolFilterFields
+})
+export const mcpServerConfigSchema = z.discriminatedUnion('transport', [
+  mcpStdioServerConfigSchema,
+  mcpRemoteServerConfigSchema,
+  mcpSseServerConfigSchema
+])
+
+export const mcpManagedServerSchema = z.object({
+  name: z.string(),
+  config: mcpServerConfigSchema,
+  source: z.enum(['global', 'plugin', 'caller']),
+  origin: z.string().optional(),
+  mutable: z.boolean(),
+  plugin: z.object({ id: z.string(), name: z.string() }).optional()
+})
+export const mcpManagedServerListSchema = z.array(mcpManagedServerSchema)
+
+export const mcpAuthStatusSchema = z.enum([
+  'not-applicable',
+  'bearer-token',
+  'oauth-required',
+  'oauth-authorized',
+  'oauth-expired',
+  'unavailable'
+])
+
+export const mcpLocatorSchema = z.discriminatedUnion('source', [
+  z.object({ source: z.literal('global'), name: z.string().min(1) }),
+  z.object({ source: z.literal('plugin'), pluginId: z.string().min(1), serverName: z.string().min(1) })
+])
+
+export const mcpServerInspectionSchema = z.object({
+  serverId: z.string(),
+  locator: mcpLocatorSchema,
+  runtimeName: z.string(),
+  canonicalUrl: z.string().optional(),
+  origin: z.enum(['global', 'plugin', 'caller']),
+  config: mcpServerConfigSchema.optional(),
+  enabled: z.boolean().optional(),
+  editable: z.boolean().optional(),
+  authStatus: mcpAuthStatusSchema.optional(),
+  checkedAt: z.number().optional(),
+  error: z.string().nullable().optional()
+})
+export const mcpServerInspectionListSchema = z.array(mcpServerInspectionSchema)
+
+export const mcpServerTestResultSchema = z.object({
+  success: z.boolean(),
+  output: z.string()
+})
+
+export const mcpAuthStatusItemSchema = z.object({
+  name: z.string(),
+  authStatus: mcpAuthStatusSchema
+})
+export const mcpAuthStatusListSchema = z.array(mcpAuthStatusItemSchema)
+
+export const mcpAuthBeginResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('authorization-required'),
+    flowId: z.string(),
+    authorizationUrl: z.string()
+  }),
+  z.object({ status: z.literal('already-authorized') })
+])
+
 /**
  * Kimi 会话事件 payload 模型（0.37.2 基线，0.38.0 增补）。
  *
@@ -1148,6 +1259,7 @@ export type FileReadResult = z.infer<typeof fileReadResultSchema>
 export type SessionTodo = z.infer<typeof sessionTodoSchema>
 export type SideChatStartResult = z.infer<typeof sideChatStartResultSchema>
 export type FileSearchResult = z.infer<typeof fileSearchResultSchema>
+export type FileSuggestResult = z.infer<typeof fileSuggestResultSchema>
 export type FileGrepResult = z.infer<typeof fileGrepResultSchema>
 export type FileOpenResult = z.infer<typeof fileOpenResultSchema>
 export type FileRevealResult = z.infer<typeof fileRevealResultSchema>
@@ -1182,6 +1294,13 @@ export type SkillDescriptor = z.infer<typeof skillDescriptorSchema>
 export type SkillActivationResult = z.infer<typeof skillActivationResultSchema>
 export type ToolDescriptor = z.infer<typeof toolDescriptorSchema>
 export type McpServer = z.infer<typeof mcpServerSchema>
+export type McpServerConfig = z.infer<typeof mcpServerConfigSchema>
+export type McpServerTestResult = z.infer<typeof mcpServerTestResultSchema>
+export type McpManagedServer = z.infer<typeof mcpManagedServerSchema>
+export type McpLocator = z.infer<typeof mcpLocatorSchema>
+export type McpServerInspection = z.infer<typeof mcpServerInspectionSchema>
+export type McpAuthStatus = z.infer<typeof mcpAuthStatusSchema>
+export type McpAuthBeginResult = z.infer<typeof mcpAuthBeginResultSchema>
 export type McpServerRestartResult = z.infer<typeof mcpServerRestartResultSchema>
 export type PromptSkill = z.infer<typeof promptSkillSchema>
 export type SkillActivationInfo = z.infer<typeof skillActivationInfoSchema>

@@ -755,6 +755,36 @@ describe('KimiSessionBridge terminals', () => {
   })
 })
 
+describe('KimiSessionBridge workspace file suggestions', () => {
+  it('forwards fs:suggest with the workspace root and maps items (kimi 0.39)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'moon-code-suggest-'))
+    try {
+      const suggestFiles = vi.fn(async () => ({
+        items: [{ path: 'src/main.ts', name: 'main.ts', kind: 'file' as const, score: 0.9, match_positions: [0, 1] }],
+        truncated: true
+      }))
+      const runtime = new EventEmitter() as EventEmitter & { createRestClient: () => unknown }
+      Object.assign(runtime, {
+        state: { status: 'running', mode: 'managed', version: '0.39.0', serverId: 'server-1', origin: 'http://127.0.0.1:54959', error: null },
+        createRestClient: () => ({
+          listWorkspaces: vi.fn(async () => [{ id: 'workspace-1', name: 'demo', root }]),
+          suggestFiles
+        })
+      })
+      const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+
+      await expect(bridge.suggestWorkspaceFiles('workspace-1', 'mai')).resolves.toEqual({
+        items: [{ path: 'src/main.ts', name: 'main.ts', kind: 'file', score: 0.9, matchPositions: [0, 1] }],
+        truncated: true
+      })
+      expect(suggestFiles).toHaveBeenCalledWith({ query: 'mai', roots: [root], limit: 50 })
+      await expect(bridge.suggestWorkspaceFiles('workspace-missing', 'x')).rejects.toThrow('unavailable')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('KimiSessionBridge draft workspace listing', () => {
   it('lists the workspace directory locally with directories first and hidden entries skipped', async () => {
     const root = await mkdtemp(join(tmpdir(), 'moon-code-ws-'))

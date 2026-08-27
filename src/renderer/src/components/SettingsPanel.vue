@@ -23,6 +23,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   KimiCatalogProviderDetail,
   KimiCatalogProviderSummary,
+  KimiManagedMcpServer,
+  KimiMcpAuthStatus,
+  KimiMcpConfig,
   KimiOAuthFlow,
   KimiOAuthRegion,
   KimiMcpServer,
@@ -651,6 +654,10 @@ async function loadCapabilityTab(): Promise<void> {
         mcpServers.value = nextServers
         tools.value = nextTools
       }
+      // 管理面列表独立容错：v2 端点缺失（<0.39）只降级提示，不影响运行态列表。
+      if (generation === capabilitiesGeneration && managedMcpServers.value.length === 0) {
+        await loadManagedMcpServers()
+      }
     }
   } catch (reason) {
     if (generation === capabilitiesGeneration) error.value = errorMessage(reason)
@@ -712,6 +719,278 @@ async function restartMcpServer(serverId: string): Promise<void> {
     error.value = errorMessage(reason)
   } finally {
     actionPending.value = null
+  }
+}
+
+/* ---- kimi 0.39 MCP v2 管理面 ---- */
+
+type McpEditorMode = 'idle' | 'add' | 'edit'
+interface McpServerDraft {
+  name: string
+  transport: 'stdio' | 'http' | 'sse'
+  command: string
+  args: string
+  url: string
+  headers: string
+  bearerTokenEnvVar: string
+  useOAuth: boolean
+}
+
+const managedMcpServers = ref<KimiManagedMcpServer[]>([])
+const managedMcpPending = ref(false)
+const managedMcpError = ref<string | null>(null)
+const mcpEditorMode = ref<McpEditorMode>('idle')
+const mcpEditorOriginalName = ref('')
+const mcpDraft = ref<McpServerDraft>(emptyMcpDraft())
+const mcpTestOutput = ref<string | null>(null)
+const mcpAuthFlow = ref<{ flowId: string; authorizationUrl: string; serverName: string } | null>(null)
+
+function emptyMcpDraft(): McpServerDraft {
+  return {
+    name: '', transport: 'stdio', command: '', args: '', url: '',
+    headers: '', bearerTokenEnvVar: '', useOAuth: false
+  }
+}
+
+async function loadManagedMcpServers(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined) return
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    managedMcpServers.value = await api.listManagedMcpServers()
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+function beginAddMcpServer(): void {
+  mcpEditorMode.value = 'add'
+  mcpEditorOriginalName.value = ''
+  mcpDraft.value = emptyMcpDraft()
+  mcpTestOutput.value = null
+}
+
+function beginEditMcpServer(server: KimiManagedMcpServer): void {
+  if (!server.mutable) return
+  mcpEditorMode.value = 'edit'
+  mcpEditorOriginalName.value = server.name
+  const config = server.config
+  mcpDraft.value = {
+    name: server.name,
+    transport: config.transport,
+    command: config.transport === 'stdio' ? config.command : '',
+    args: config.transport === 'stdio' && config.args !== undefined ? config.args.join(' ') : '',
+    url: config.transport === 'stdio' ? '' : config.url,
+    headers: config.transport !== 'stdio' && config.headers !== undefined
+      ? Object.entries(config.headers).map(([key, value]) => `${key}: ${value}`).join('\n')
+      : '',
+    bearerTokenEnvVar: config.transport === 'http' && config.bearerTokenEnvVar !== undefined ? config.bearerTokenEnvVar : '',
+    useOAuth: config.transport === 'http' && config.auth === 'oauth'
+  }
+  mcpTestOutput.value = null
+}
+
+function cancelMcpEditor(): void {
+  mcpEditorMode.value = 'idle'
+  mcpDraft.value = emptyMcpDraft()
+  mcpTestOutput.value = null
+}
+
+function draftToConfig(draft: McpServerDraft): KimiMcpConfig | null {
+  const name = draft.name.trim()
+  if (name.length < 1) return null
+  if (draft.transport === 'stdio') {
+    const command = draft.command.trim()
+    if (command.length < 1) return null
+    const args = draft.args.trim().length > 0 ? draft.args.trim().split(/\s+/) : undefined
+    return { transport: 'stdio', command, ...(args === undefined ? {} : { args }) }
+  }
+  const url = draft.url.trim()
+  if (url.length < 1) return null
+  const headers = parseHeaderLines(draft.headers)
+  if (headers === null) return null
+  if (draft.transport === 'http') {
+    const bearerTokenEnvVar = draft.bearerTokenEnvVar.trim()
+    return {
+      transport: 'http',
+      url,
+      ...(headers === undefined ? {} : { headers }),
+      ...(draft.useOAuth ? { auth: 'oauth' } : {}),
+      ...(bearerTokenEnvVar.length > 0 ? { bearerTokenEnvVar } : {})
+    }
+  }
+  return { transport: 'sse', url, ...(headers === undefined ? {} : { headers }) }
+}
+
+function parseHeaderLines(text: string): Record<string, string> | undefined | null {
+  const trimmed = text.trim()
+  if (trimmed.length === 0) return undefined
+  const headers: Record<string, string> = {}
+  for (const line of trimmed.split('\n')) {
+    const separator = line.indexOf(':')
+    if (separator <= 0) return null
+    const key = line.slice(0, separator).trim()
+    const value = line.slice(separator + 1).trim()
+    if (key.length < 1 || value.length < 1) return null
+    headers[key] = value
+  }
+  return headers
+}
+
+async function saveMcpServer(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || managedMcpPending.value) return
+  const config = draftToConfig(mcpDraft.value)
+  const name = mcpDraft.value.name.trim()
+  if (config === null || name.length < 1) {
+    managedMcpError.value = '请补全名称与必填的连接字段。'
+    return
+  }
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    managedMcpServers.value = mcpEditorMode.value === 'add'
+      ? await api.addManagedMcpServer({ name, config })
+      : await api.replaceManagedMcpServer(mcpEditorOriginalName.value, config)
+    cancelMcpEditor()
+    await loadCapabilityTab()
+    showNotice(`MCP Server「${name}」已保存。`)
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+async function deleteMcpServer(server: KimiManagedMcpServer): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || managedMcpPending.value) return
+  if (!window.confirm(`删除 MCP Server「${server.name}」？该操作会写入用户级 mcp.json。`)) return
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    managedMcpServers.value = await api.deleteManagedMcpServer(server.name)
+    await loadCapabilityTab()
+    showNotice(`MCP Server「${server.name}」已删除。`)
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+async function testMcpServer(name: string): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || managedMcpPending.value) return
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    const result = await api.testMcpServer({ name })
+    mcpTestOutput.value = `「${name}」连接测试${result.success ? '成功' : '失败'}：\n${result.output}`
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+async function testMcpDraft(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || managedMcpPending.value) return
+  const config = draftToConfig(mcpDraft.value)
+  if (config === null) {
+    managedMcpError.value = '请先补全必填的连接字段再测试。'
+    return
+  }
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    const result = await api.testMcpServer({ config })
+    mcpTestOutput.value = `连接测试${result.success ? '成功' : '失败'}：\n${result.output}`
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+async function beginMcpAuth(server: KimiManagedMcpServer): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || managedMcpPending.value) return
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    const result = await api.beginMcpAuth(server.name)
+    if (result.status === 'already-authorized') {
+      showNotice(`「${server.name}」已有有效授权。`)
+      return
+    }
+    mcpAuthFlow.value = {
+      flowId: result.flowId,
+      authorizationUrl: result.authorizationUrl,
+      serverName: server.name
+    }
+    void window.kimiAgent?.openExternalUrl(result.authorizationUrl)
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+async function completeMcpAuth(): Promise<void> {
+  const api = window.kimiAgent
+  const flow = mcpAuthFlow.value
+  if (api === undefined || flow === null || managedMcpPending.value) return
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    await api.completeMcpAuth(flow.flowId)
+    mcpAuthFlow.value = null
+    await loadManagedMcpServers()
+    showNotice(`「${flow.serverName}」授权完成。`)
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+function cancelMcpAuthFlow(): void {
+  const flow = mcpAuthFlow.value
+  if (flow === null) return
+  mcpAuthFlow.value = null
+  void window.kimiAgent?.cancelMcpAuth(flow.flowId).catch(() => undefined)
+}
+
+async function resetMcpAuth(server: KimiManagedMcpServer): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || managedMcpPending.value) return
+  if (!window.confirm(`撤销「${server.name}」的 OAuth 授权？`)) return
+  managedMcpPending.value = true
+  managedMcpError.value = null
+  try {
+    await api.resetMcpAuth(server.name)
+    showNotice(`「${server.name}」的授权已撤销。`)
+  } catch (reason) {
+    managedMcpError.value = errorMessage(reason)
+  } finally {
+    managedMcpPending.value = false
+  }
+}
+
+function mcpAuthStatusLabel(status: KimiMcpAuthStatus | null): string {
+  switch (status) {
+    case 'not-applicable': return '无需授权'
+    case 'bearer-token': return 'Token 授权'
+    case 'oauth-required': return '待授权'
+    case 'oauth-authorized': return '已授权'
+    case 'oauth-expired': return '授权过期'
+    case 'unavailable': return '不可用'
+    default: return '未知'
   }
 }
 
@@ -1950,6 +2229,90 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                       <PhArrowClockwise :class="{ spin: actionPending === `mcp:${server.id}` }" :size="14" />
                     </button>
                   </article>
+                </div>
+
+                <h3 class="settings-subtitle tools-title">
+                  模型服务管理
+                  <button class="secondary-button mcp-add-button" type="button" :disabled="managedMcpPending || mcpEditorMode !== 'idle'" @click="beginAddMcpServer">
+                    <PhPlus :size="13" />添加 MCP Server
+                  </button>
+                </h3>
+                <p v-if="managedMcpError" class="compatibility-note is-error">{{ managedMcpError }}</p>
+                <p v-if="managedMcpServers.length === 0 && !managedMcpPending && managedMcpError === null" class="compatibility-note">
+                  用户级 mcp.json 还没有条目；添加后对新会话生效。
+                </p>
+                <div v-if="managedMcpPending && managedMcpServers.length === 0" class="settings-inline-empty">
+                  <PhSpinnerGap class="spin" :size="18" />正在读取 MCP 配置…
+                </div>
+                <div v-else class="mcp-list">
+                  <article v-for="server in managedMcpServers" :key="`${server.source}:${server.name}`" class="mcp-row">
+                    <div>
+                      <strong>{{ server.name }}</strong>
+                      <small>
+                        {{ server.config.transport }} · {{ server.source }}{{ server.plugin === null ? '' : ` · ${server.plugin.name}` }}
+                        · {{ server.mutable ? '可编辑' : '只读' }}
+                      </small>
+                    </div>
+                    <div class="mcp-managed-actions">
+                      <button class="secondary-button" type="button" :disabled="managedMcpPending" @click="testMcpServer(server.name)">测试</button>
+                      <button v-if="server.mutable" class="secondary-button" type="button" :disabled="managedMcpPending" @click="beginEditMcpServer(server)">编辑</button>
+                      <button v-if="server.mutable" class="secondary-button is-danger" type="button" :disabled="managedMcpPending" @click="deleteMcpServer(server)">删除</button>
+                    </div>
+                  </article>
+                </div>
+                <p v-if="mcpTestOutput" class="mcp-test-output">{{ mcpTestOutput }}</p>
+
+                <div v-if="mcpEditorMode !== 'idle'" class="mcp-editor">
+                  <h4>{{ mcpEditorMode === 'add' ? '添加' : '编辑' }} MCP Server</h4>
+                  <label class="preference-row"><span><strong>名称</strong><small>mcp.json 里的唯一标识</small></span>
+                    <input v-model="mcpDraft.name" type="text" :disabled="mcpEditorMode === 'edit'" placeholder="my-server" />
+                  </label>
+                  <label class="preference-row"><span><strong>传输方式</strong><small>stdio 本地命令；http/sse 远程服务</small></span>
+                    <select v-model="mcpDraft.transport" :disabled="managedMcpPending">
+                      <option value="stdio">stdio（本地命令）</option>
+                      <option value="http">http（远程流式）</option>
+                      <option value="sse">sse（远程 SSE）</option>
+                    </select>
+                  </label>
+                  <template v-if="mcpDraft.transport === 'stdio'">
+                    <label class="preference-row"><span><strong>命令</strong><small>可执行文件路径或名称</small></span>
+                      <input v-model="mcpDraft.command" type="text" placeholder="npx -y @example/mcp-server" />
+                    </label>
+                    <label class="preference-row"><span><strong>参数</strong><small>空格分隔，可选</small></span>
+                      <input v-model="mcpDraft.args" type="text" placeholder="--port 3000" />
+                    </label>
+                  </template>
+                  <template v-else>
+                    <label class="preference-row"><span><strong>URL</strong><small>远程 MCP 端点</small></span>
+                      <input v-model="mcpDraft.url" type="text" placeholder="https://example.com/mcp" />
+                    </label>
+                    <label class="preference-row"><span><strong>请求头</strong><small>每行一条 Key: Value，可选</small></span>
+                      <textarea v-model="mcpDraft.headers" rows="3" placeholder="Authorization: Bearer …" />
+                    </label>
+                    <template v-if="mcpDraft.transport === 'http'">
+                      <label class="preference-row"><span><strong>OAuth</strong><small>由 Kimi 代管 OAuth 授权流</small></span>
+                        <input v-model="mcpDraft.useOAuth" type="checkbox" />
+                      </label>
+                      <label v-if="!mcpDraft.useOAuth" class="preference-row"><span><strong>Bearer Token 环境变量</strong><small>凭据只存环境变量，不落 mcp.json</small></span>
+                        <input v-model="mcpDraft.bearerTokenEnvVar" type="text" placeholder="MY_MCP_TOKEN" />
+                      </label>
+                    </template>
+                  </template>
+                  <div class="mcp-editor-actions">
+                    <button class="secondary-button" type="button" :disabled="managedMcpPending" @click="testMcpDraft">测试连接</button>
+                    <button class="primary-button" type="button" :disabled="managedMcpPending" @click="saveMcpServer">保存</button>
+                    <button class="secondary-button" type="button" :disabled="managedMcpPending" @click="cancelMcpEditor">取消</button>
+                  </div>
+                </div>
+
+                <div v-if="mcpAuthFlow" class="mcp-editor">
+                  <h4>「{{ mcpAuthFlow.serverName }}」等待授权</h4>
+                  <p class="compatibility-note">已在浏览器打开授权页面；完成后点击「我已完成授权」。</p>
+                  <code class="mcp-auth-url">{{ mcpAuthFlow.authorizationUrl }}</code>
+                  <div class="mcp-editor-actions">
+                    <button class="primary-button" type="button" :disabled="managedMcpPending" @click="completeMcpAuth">我已完成授权</button>
+                    <button class="secondary-button" type="button" :disabled="managedMcpPending" @click="cancelMcpAuthFlow">取消</button>
+                  </div>
                 </div>
                 <h3 class="settings-subtitle tools-title">有效工具 <span>{{ tools.filter((tool) => tool.active).length }}/{{ tools.length }}</span></h3>
                 <div v-if="tools.length === 0" class="settings-inline-empty">当前 Agent 尚未公布工具。</div>

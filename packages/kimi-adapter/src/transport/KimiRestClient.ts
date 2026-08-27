@@ -1,4 +1,4 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import {
   kimiServerMetaSchema,
   authSummarySchema,
@@ -8,6 +8,7 @@ import {
   fileListResultSchema,
   fileReadResultSchema,
   fileSearchResultSchema,
+  fileSuggestResultSchema,
   fileGrepResultSchema,
   fileOpenResultSchema,
   fileRevealResultSchema,
@@ -28,6 +29,11 @@ import {
   toolListSchema,
   mcpServerListSchema,
   mcpServerRestartResultSchema,
+  mcpManagedServerListSchema,
+  mcpServerTestResultSchema,
+  mcpServerInspectionListSchema,
+  mcpAuthStatusListSchema,
+  mcpAuthBeginResultSchema,
   providerCatalogItemSchema,
   providerCatalogListSchema,
   providerDirectoryItemSchema,
@@ -67,6 +73,7 @@ import {
   type FileListResult,
   type FileReadResult,
   type FileSearchResult,
+  type FileSuggestResult,
   type FileGrepResult,
   type FileOpenResult,
   type FileRevealResult,
@@ -84,6 +91,13 @@ import {
   type SkillActivationResult,
   type ToolDescriptor,
   type McpServer,
+  type McpServerConfig,
+  type McpServerTestResult,
+  type McpManagedServer,
+  type McpLocator,
+  type McpServerInspection,
+  type McpAuthStatus,
+  type McpAuthBeginResult,
   type McpServerRestartResult,
   type PromptAbortResult,
   type SessionAbortResult,
@@ -548,6 +562,104 @@ export class KimiRestClient {
       { method: 'POST' },
       mcpServerRestartResultSchema
     )
+  }
+
+  /* ---- kimi 0.39 MCP v2 管理面 ---- */
+
+  /** 管理面全量列表（user 级 mcp.json + 插件清单；只读项携带脱敏配置）。 */
+  listManagedMcpServers(cwd?: string): Promise<McpManagedServer[]> {
+    const query = cwd === undefined ? '' : `?cwd=${encodeURIComponent(cwd)}`
+    return this.request(`/api/v2/mcp/servers${query}`, {}, mcpManagedServerListSchema)
+  }
+
+  addManagedMcpServer(input: { name: string } & McpServerConfig): Promise<McpManagedServer[]> {
+    return this.request('/api/v2/mcp/servers', {
+      method: 'POST',
+      body: JSON.stringify(input)
+    }, mcpManagedServerListSchema)
+  }
+
+  replaceManagedMcpServer(name: string, config: McpServerConfig): Promise<McpManagedServer[]> {
+    return this.request(
+      `/api/v2/mcp/servers/${encodeURIComponent(name)}`,
+      { method: 'PUT', body: JSON.stringify(config) },
+      mcpManagedServerListSchema
+    )
+  }
+
+  deleteManagedMcpServer(name: string): Promise<McpManagedServer[]> {
+    return this.request(
+      `/api/v2/mcp/servers/${encodeURIComponent(name)}`,
+      { method: 'DELETE' },
+      mcpManagedServerListSchema
+    )
+  }
+
+  /** 真实连接探测：name 测注册项，server 内联配置原样探测；永不持久化。 */
+  testMcpServer(input: { name?: string; server?: McpServerConfig; cwd?: string }): Promise<McpServerTestResult> {
+    return this.request('/api/v2/mcp/servers:test', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.server === undefined ? {} : { server: input.server }),
+        ...(input.cwd === undefined ? {} : { cwd: input.cwd })
+      })
+    }, mcpServerTestResultSchema)
+  }
+
+  /** 定位器寻址目录（脱敏配置）+ 全部 OAuth 候选的批量连接探测。 */
+  inspectMcpServers(input: { targets?: McpLocator[]; cwd?: string } = {}): Promise<McpServerInspection[]> {
+    return this.request('/api/v2/mcp/servers:inspect', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(input.targets === undefined ? {} : { targets: input.targets }),
+        ...(input.cwd === undefined ? {} : { cwd: input.cwd })
+      })
+    }, mcpServerInspectionListSchema)
+  }
+
+  listMcpAuthStatuses(cwd?: string): Promise<Array<{ name: string; authStatus: McpAuthStatus }>> {
+    const query = cwd === undefined ? '' : `?cwd=${encodeURIComponent(cwd)}`
+    return this.request(`/api/v2/mcp/auth-statuses${query}`, {}, mcpAuthStatusListSchema)
+  }
+
+  beginMcpAuth(input: { source: 'global'; name: string; cwd?: string }): Promise<McpAuthBeginResult> {
+    return this.request('/api/v2/mcp/auth:begin', {
+      method: 'POST',
+      body: JSON.stringify({
+        source: input.source,
+        name: input.name,
+        ...(input.cwd === undefined ? {} : { cwd: input.cwd })
+      })
+    }, mcpAuthBeginResultSchema)
+  }
+
+  completeMcpAuth(input: { flowId: string; timeoutMs?: number }): Promise<null> {
+    return this.request('/api/v2/mcp/auth:complete', {
+      method: 'POST',
+      body: JSON.stringify({
+        flowId: input.flowId,
+        ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs })
+      })
+    }, z.null())
+  }
+
+  cancelMcpAuth(flowId: string): Promise<null> {
+    return this.request('/api/v2/mcp/auth:cancel', {
+      method: 'POST',
+      body: JSON.stringify({ flowId })
+    }, z.null())
+  }
+
+  resetMcpAuth(input: { source: 'global'; name: string; cwd?: string }): Promise<null> {
+    return this.request('/api/v2/mcp/auth:reset', {
+      method: 'POST',
+      body: JSON.stringify({
+        source: input.source,
+        name: input.name,
+        ...(input.cwd === undefined ? {} : { cwd: input.cwd })
+      })
+    }, z.null())
   }
 
   async listWorkspaces(): Promise<WorkspaceSummary[]> {
@@ -1120,6 +1232,24 @@ export class KimiRestClient {
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/fs:search`,
       { method: 'POST', body: JSON.stringify({ query, limit: 50, follow_gitignore: true }) },
       fileSearchResultSchema
+    )
+  }
+
+  /** kimi 0.39+：跨 root 的文件/目录补全建议，不需要 session/workspace 注册。
+      主 root 的候选返回相对路径，附加 root 返回绝对路径。 */
+  suggestFiles(input: { query: string; roots: string[]; limit?: number }): Promise<FileSuggestResult> {
+    return this.request(
+      '/api/v1/fs:suggest',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          query: input.query,
+          roots: input.roots,
+          limit: input.limit ?? 50,
+          follow_gitignore: true
+        })
+      },
+      fileSuggestResultSchema
     )
   }
 

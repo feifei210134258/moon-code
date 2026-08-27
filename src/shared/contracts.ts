@@ -60,6 +60,7 @@ export const ipcChannels = {
   filesRead: 'files:read',
   filesReadWorkspace: 'files:read-workspace',
   filesSearch: 'files:search',
+  filesSuggest: 'files:suggest',
   filesGrep: 'files:grep',
   filesDownload: 'files:download',
   filesOpen: 'files:open',
@@ -109,6 +110,16 @@ export const ipcChannels = {
   toolsList: 'tools:list',
   mcpServersList: 'mcp:servers:list',
   mcpServerRestart: 'mcp:server:restart',
+  mcpManagedServersList: 'mcp:managed:list',
+  mcpManagedServerAdd: 'mcp:managed:add',
+  mcpManagedServerReplace: 'mcp:managed:replace',
+  mcpManagedServerDelete: 'mcp:managed:delete',
+  mcpManagedServerTest: 'mcp:managed:test',
+  mcpManagedServersInspect: 'mcp:managed:inspect',
+  mcpAuthBegin: 'mcp:auth:begin',
+  mcpAuthComplete: 'mcp:auth:complete',
+  mcpAuthCancel: 'mcp:auth:cancel',
+  mcpAuthReset: 'mcp:auth:reset',
   browserOpenHtml: 'browser:open-html',
   browserNavigate: 'browser:navigate',
   browserBack: 'browser:back',
@@ -1125,6 +1136,94 @@ export interface KimiMcpServer {
   toolCount: number
 }
 
+/* ---- kimi 0.39 MCP v2 管理面（/api/v2/mcp/*）---- */
+
+export type KimiMcpAuthStatus =
+  | 'not-applicable'
+  | 'bearer-token'
+  | 'oauth-required'
+  | 'oauth-authorized'
+  | 'oauth-expired'
+  | 'unavailable'
+
+export interface KimiMcpStdioConfig {
+  transport: 'stdio'
+  command: string
+  args?: string[]
+  env?: Record<string, string>
+  cwd?: string
+  executor?: 'local' | 'kaos'
+  enabled?: boolean
+  startupTimeoutMs?: number
+  toolTimeoutMs?: number
+  enabledTools?: string[]
+  disabledTools?: string[]
+}
+
+export interface KimiMcpHttpConfig {
+  transport: 'http'
+  url: string
+  headers?: Record<string, string>
+  auth?: 'oauth'
+  bearerTokenEnvVar?: string
+  enabled?: boolean
+  startupTimeoutMs?: number
+  toolTimeoutMs?: number
+  enabledTools?: string[]
+  disabledTools?: string[]
+}
+
+export interface KimiMcpSseConfig {
+  transport: 'sse'
+  url: string
+  headers?: Record<string, string>
+  enabled?: boolean
+  startupTimeoutMs?: number
+  toolTimeoutMs?: number
+  enabledTools?: string[]
+  disabledTools?: string[]
+}
+
+export type KimiMcpConfig = KimiMcpStdioConfig | KimiMcpHttpConfig | KimiMcpSseConfig
+
+/** 管理面 server 条目：来源分层（global/plugin/caller）与可写性。 */
+export interface KimiManagedMcpServer {
+  name: string
+  config: KimiMcpConfig
+  source: 'global' | 'plugin' | 'caller'
+  origin: string | null
+  mutable: boolean
+  plugin: { id: string; name: string } | null
+}
+
+export interface KimiMcpServerTestResult {
+  success: boolean
+  output: string
+}
+
+export interface KimiMcpServerInspection {
+  serverId: string
+  name: string
+  origin: 'global' | 'plugin' | 'caller'
+  runtimeName: string | null
+  canonicalUrl: string | null
+  config: KimiMcpConfig | null
+  enabled: boolean | null
+  editable: boolean | null
+  authStatus: KimiMcpAuthStatus | null
+  checkedAt: number | null
+  error: string | null
+}
+
+export type KimiMcpAuthBeginResult =
+  | { status: 'authorization-required'; flowId: string; authorizationUrl: string }
+  | { status: 'already-authorized' }
+
+export interface KimiMcpServerInput {
+  name: string
+  config: KimiMcpConfig
+}
+
 export interface BrowserBounds {
   x: number
   y: number
@@ -1357,6 +1456,8 @@ export interface KimiAgentDesktopApi {
   readWorkspaceFileFromWorkspace(workspaceId: string, path: string): Promise<WorkspaceFilePreview>
   readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview>
   searchFiles(sessionId: string, query: string): Promise<WorkspaceFileSearchResult>
+  /** kimi 0.39 fs:suggest：@ 补全统一入口，草稿态（无 session）同样可用。 */
+  suggestWorkspaceFiles(workspaceId: string, query: string): Promise<WorkspaceFileSearchResult>
   grepFiles(sessionId: string, pattern: string): Promise<WorkspaceGrepResult>
   downloadWorkspaceFile(sessionId: string, path: string): Promise<{ saved: boolean }>
   openWorkspaceFile(sessionId: string, path: string, line?: number): Promise<{ opened: true }>
@@ -1405,6 +1506,17 @@ export interface KimiAgentDesktopApi {
   activateSkill(sessionId: string, skillName: string, args?: string): Promise<KimiSkillActivationResult>
   listKimiTools(sessionId?: string): Promise<KimiTool[]>
   listMcpServers(): Promise<KimiMcpServer[]>
+  /** kimi 0.39 MCP v2 管理面。 */
+  listManagedMcpServers(): Promise<KimiManagedMcpServer[]>
+  addManagedMcpServer(input: KimiMcpServerInput): Promise<KimiManagedMcpServer[]>
+  replaceManagedMcpServer(name: string, config: KimiMcpConfig): Promise<KimiManagedMcpServer[]>
+  deleteManagedMcpServer(name: string): Promise<KimiManagedMcpServer[]>
+  testMcpServer(input: { name?: string; config?: KimiMcpConfig }): Promise<KimiMcpServerTestResult>
+  inspectMcpServers(): Promise<KimiMcpServerInspection[]>
+  beginMcpAuth(name: string): Promise<KimiMcpAuthBeginResult>
+  completeMcpAuth(flowId: string): Promise<null>
+  cancelMcpAuth(flowId: string): Promise<null>
+  resetMcpAuth(name: string): Promise<null>
   restartMcpServer(serverId: string): Promise<{ restarting: true }>
   openHtmlPreview(sessionId: string, path: string): Promise<BrowserViewState>
   navigateBrowser(url: string): Promise<BrowserViewState>

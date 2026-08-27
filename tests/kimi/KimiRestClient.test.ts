@@ -890,6 +890,25 @@ describe('KimiRestClient', () => {
     )
   })
 
+  it('suggests files across roots without a session (kimi 0.39 fs:suggest)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: 0, msg: 'ok', data: {
+        items: [{ path: 'src/App.vue', name: 'App.vue', kind: 'file', score: 0.95, match_positions: [0] }],
+        truncated: true
+      } }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.suggestFiles({ query: 'app', roots: ['/repo'], limit: 20 })).resolves.toEqual(
+      expect.objectContaining({ truncated: true })
+    )
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://127.0.0.1:1234/api/v1/fs:suggest',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({
+        query: 'app', roots: ['/repo'], limit: 20, follow_gitignore: true
+      }) })
+    )
+  })
+
   it('uses Kimi native file search, grep, download and external file actions', async () => {
     const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
       status: 200,
@@ -1390,5 +1409,67 @@ describe('KimiRestClient', () => {
     expect(fetchImpl.mock.calls[1]?.[0]).toBe(
       'http://127.0.0.1:1234/api/v1/sessions/session%2Fparent/warnings'
     )
+  })
+  it('manages MCP servers through the kimi 0.39 v2 endpoints', async () => {
+    const managedServer = {
+      name: 'github',
+      config: { transport: 'stdio', command: 'npx', args: ['-y', '@example/mcp'] },
+      source: 'global',
+      mutable: true
+    }
+    const inspection = {
+      serverId: 'srv-1',
+      locator: { source: 'global', name: 'github' },
+      runtimeName: 'node',
+      origin: 'global',
+      config: { transport: 'http', url: 'https://example.com/mcp' },
+      enabled: true,
+      editable: true,
+      authStatus: 'oauth-required',
+      checkedAt: 1_756_300_000_000,
+      error: null
+    }
+    const envelope = (data: unknown) => new Response(JSON.stringify({ code: 0, msg: 'ok', data }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(envelope([managedServer]))
+      .mockResolvedValueOnce(envelope([managedServer]))
+      .mockResolvedValueOnce(envelope([managedServer]))
+      .mockResolvedValueOnce(envelope([managedServer]))
+      .mockResolvedValueOnce(envelope({ success: true, output: 'connected' }))
+      .mockResolvedValueOnce(envelope([inspection]))
+      .mockResolvedValueOnce(envelope({ status: 'authorization-required', flowId: 'flow-1', authorizationUrl: 'https://example.com/auth' }))
+      .mockResolvedValueOnce(envelope(null))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.listManagedMcpServers()).resolves.toHaveLength(1)
+    await expect(client.addManagedMcpServer({
+      name: 'github', transport: 'stdio', command: 'npx', args: ['-y', '@example/mcp']
+    })).resolves.toHaveLength(1)
+    await expect(client.replaceManagedMcpServer('github', {
+      transport: 'http', url: 'https://example.com/mcp'
+    })).resolves.toHaveLength(1)
+    await expect(client.deleteManagedMcpServer('github')).resolves.toHaveLength(1)
+    await expect(client.testMcpServer({ name: 'github' })).resolves.toEqual({ success: true, output: 'connected' })
+    await expect(client.inspectMcpServers()).resolves.toEqual([expect.objectContaining({ serverId: 'srv-1', authStatus: 'oauth-required' })])
+    await expect(client.beginMcpAuth({ source: 'global', name: 'github' })).resolves.toEqual({
+      status: 'authorization-required', flowId: 'flow-1', authorizationUrl: 'https://example.com/auth'
+    })
+    await expect(client.completeMcpAuth({ flowId: 'flow-1' })).resolves.toBeNull()
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe('http://127.0.0.1:1234/api/v2/mcp/servers')
+    expect(fetchImpl.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ name: 'github', transport: 'stdio', command: 'npx', args: ['-y', '@example/mcp'] })
+    }))
+    expect(fetchImpl.mock.calls[2]?.[0]).toBe('http://127.0.0.1:1234/api/v2/mcp/servers/github')
+    expect(fetchImpl.mock.calls[2]?.[1]).toEqual(expect.objectContaining({ method: 'PUT' }))
+    expect(fetchImpl.mock.calls[3]?.[1]).toEqual(expect.objectContaining({ method: 'DELETE' }))
+    expect(fetchImpl.mock.calls[4]?.[0]).toBe('http://127.0.0.1:1234/api/v2/mcp/servers:test')
+    expect(fetchImpl.mock.calls[5]?.[0]).toBe('http://127.0.0.1:1234/api/v2/mcp/servers:inspect')
+    expect(fetchImpl.mock.calls[6]?.[0]).toBe('http://127.0.0.1:1234/api/v2/mcp/auth:begin')
+    expect(fetchImpl.mock.calls[7]?.[0]).toBe('http://127.0.0.1:1234/api/v2/mcp/auth:complete')
   })
 })

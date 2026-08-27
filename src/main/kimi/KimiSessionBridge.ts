@@ -504,6 +504,26 @@ export class KimiSessionBridge extends EventEmitter {
     }
   }
 
+  /* kimi 0.39 fs:suggest：@ 文件补全的统一入口，草稿态（会话未创建）与
+     会话态共用——接口不依赖 session，主 root 候选返回相对路径。 */
+  async suggestWorkspaceFiles(workspaceId: string, query: string): Promise<WorkspaceFileSearchResult> {
+    const client = this.#runtime.createRestClient()
+    const workspaces = await client.listWorkspaces()
+    const root = workspaces.find((workspace) => workspace.id === workspaceId)?.root ?? ''
+    if (root.length === 0) throw new Error('Kimi Workspace path is unavailable')
+    const result = await client.suggestFiles({ query, roots: [root], limit: 50 })
+    return {
+      items: result.items.map((item) => ({
+        path: item.path,
+        name: item.name,
+        kind: item.kind,
+        score: item.score,
+        matchPositions: [...item.match_positions]
+      })),
+      truncated: result.truncated
+    }
+  }
+
   async grepFiles(sessionId: string, pattern: string): Promise<WorkspaceGrepResult> {
     this.#assertActiveSession(sessionId)
     const result = await this.#runtime.createRestClient().grepFiles(sessionId, pattern)

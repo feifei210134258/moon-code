@@ -1516,7 +1516,8 @@ describe('SettingsPanel', () => {
         name: 'mcp__github__search', description: 'Search GitHub', source: 'mcp' as const,
         mcpServerId: 'github', active: true
       }]),
-      restartMcpServer: vi.fn(async () => ({ restarting: true as const }))
+      restartMcpServer: vi.fn(async () => ({ restarting: true as const })),
+      listManagedMcpServers: vi.fn(async () => [])
     } as unknown as KimiAgentDesktopApi
     window.kimiAgent = api
     const wrapper = mount(SettingsPanel, {
@@ -1539,6 +1540,69 @@ describe('SettingsPanel', () => {
     expect(api.restartMcpServer).toHaveBeenCalledWith('github')
     expect(api.listMcpServers).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('已请求 Kimi 重启 MCP Server github；当前状态：connected。')
+    wrapper.unmount()
+  })
+
+  it('manages MCP servers through the v2 management plane', async () => {
+    const managedServer = {
+      name: 'github',
+      config: { transport: 'stdio' as const, command: 'npx', args: ['-y', '@example/mcp'] },
+      source: 'global' as const,
+      origin: 'global',
+      mutable: true,
+      plugin: null
+    }
+    const api = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      listMcpServers: vi.fn(async () => []),
+      listKimiTools: vi.fn(async () => []),
+      listManagedMcpServers: vi.fn(async () => [managedServer]),
+      addManagedMcpServer: vi.fn(async () => [managedServer]),
+      replaceManagedMcpServer: vi.fn(async () => [managedServer]),
+      deleteManagedMcpServer: vi.fn(async () => []),
+      testMcpServer: vi.fn(async () => ({ success: true, output: 'connected' }))
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    window.confirm = vi.fn(() => true)
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('.settings-tab')[3]!.trigger('click')
+    await flushPromises()
+    expect(api.listManagedMcpServers).toHaveBeenCalledOnce()
+    expect(wrapper.text()).toContain('模型服务管理')
+    expect(wrapper.text()).toContain('github')
+
+    // 编辑现有条目：名称锁定，命令与参数回填
+    const editButton = wrapper.findAll('.mcp-managed-actions .secondary-button').find((b) => b.text() === '编辑')
+    await editButton!.trigger('click')
+    await flushPromises()
+    const editor = wrapper.get('.mcp-editor')
+    expect((editor.find('input[type="text"]').element as HTMLInputElement).value).toBe('github')
+    expect(editor.text()).toContain('编辑 MCP Server')
+
+    // 保存 → replaceManagedMcpServer
+    await editor.findAll('button').find((b) => b.text() === '保存')!.trigger('click')
+    await flushPromises()
+    expect(api.replaceManagedMcpServer).toHaveBeenCalledWith('github', {
+      transport: 'stdio', command: 'npx', args: ['-y', '@example/mcp']
+    })
+
+    // 连接测试
+    const testButton = wrapper.findAll('.mcp-managed-actions .secondary-button').find((b) => b.text() === '测试')
+    await testButton!.trigger('click')
+    await flushPromises()
+    expect(api.testMcpServer).toHaveBeenCalledWith({ name: 'github' })
+    expect(wrapper.get('.mcp-test-output').text()).toContain('connected')
+
+    // 删除
+    const deleteButton = wrapper.findAll('.mcp-managed-actions .secondary-button').find((b) => b.text() === '删除')
+    await deleteButton!.trigger('click')
+    await flushPromises()
+    expect(api.deleteManagedMcpServer).toHaveBeenCalledWith('github')
     wrapper.unmount()
   })
 
