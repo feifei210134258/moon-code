@@ -24,6 +24,45 @@ afterEach(async () => {
 })
 
 describe('KimiRuntimeManager remote-control launch preference', () => {
+  it('connects without the ready line when remote control replaces stdout with the RC banner', { timeout: 15_000 }, async () => {
+    // RC 模式下 kimi web 的 stdout 只有横幅/二维码，没有
+    // `Kimi server: <origin>#token=` 就绪行；就绪探测必须走
+    // healthz 轮询 + 共享 token 文件路径。
+    let activeChild: FakeChild | null = null
+    const { origin, token } = await startRuntimeProtocolServer(() => activeChild?.kill())
+    const spawnImpl = vi.fn(() => {
+      const child = new FakeChild()
+      activeChild = child
+      queueMicrotask(() => child.stdout.emit('data', Buffer.from(
+        `  Kimi Remote Control ready  0.39.0 (experimental)\n  ✓ Connected to code-rc.kimi.com…\n`
+      )))
+      return child
+    })
+    const manager = new KimiRuntimeManager({
+      startupTimeoutMs: 4_000,
+      spawnImpl: spawnImpl as never,
+      readSharedToken: async () => token,
+      sharedOrigin: origin,
+      remoteControlPreferencesStore: { load: async () => ({ enabled: true }) },
+      discoverRuntimes: async () => ({
+        supportedRange: '>=0.29.2',
+        managed: {
+          kind: 'managed', version: '0.39.0', executable: '/managed.mjs', compatible: true, reason: null
+        },
+        system: {
+          kind: 'system', version: '0.39.0', executable: '/usr/local/bin/kimi', compatible: true, reason: null
+        }
+      })
+    })
+
+    // 轮询间隔 400ms：给 3 秒预算避免计时器粒度导致的 flake
+    await expect(manager.start('system')).resolves.toEqual(expect.objectContaining({
+      status: 'running', mode: 'system', version: '0.39.0'
+    }))
+    expect(manager.appliedRemoteControlEnabled).toBe(true)
+    await manager.stop()
+  })
+
   it('appends --remote-control and sets the experiment env when the preference is enabled', async () => {
     let activeChild: FakeChild | null = null
     const { origin } = await startRuntimeProtocolServer(() => activeChild?.kill())
@@ -197,7 +236,8 @@ class FakeChild extends EventEmitter {
   }
 }
 
-async function startRuntimeProtocolServer(onShutdown: () => void): Promise<{ origin: string }> {
+async function startRuntimeProtocolServer(onShutdown: () => void): Promise<{ origin: string; token: string }> {
+  const token = 'remote-control-shared-token'
   const server = createServer((request, response) => {
     if (request.url === '/api/v1/healthz') {
       response.writeHead(200).end('ok')
@@ -229,5 +269,5 @@ async function startRuntimeProtocolServer(onShutdown: () => void): Promise<{ ori
   })
   servers.push(server)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  return { origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }
+  return { origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, token }
 }

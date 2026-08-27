@@ -163,7 +163,13 @@ export class KimiRuntimeManager extends EventEmitter {
     })
 
     try {
-      const sharedConnection = await this.#tryConnectSharedRuntime()
+      const remoteControlPreference = await this.#loadRemoteControlPreference()
+      // RC 偏好开启时必须由本进程带 --remote-control 启动；直接连上既有
+      // shared server 会静默丢掉 RC（那个进程没有注册中继），所以跳过
+      // shared 连接，走下方 owned spawn。偏好关闭时维持原有 shared 优先。
+      const sharedConnection = remoteControlPreference.enabled
+        ? null
+        : await this.#tryConnectSharedRuntime()
       if (sharedConnection !== null) {
         this.#connection = sharedConnection
         this.#setState({
@@ -184,7 +190,6 @@ export class KimiRuntimeManager extends EventEmitter {
       }
 
       const managed = mode === 'managed'
-      const remoteControlPreference = await this.#loadRemoteControlPreference()
       const executable = managed ? process.execPath : candidate.executable
       const baseArgs = ['web', '--port', '58627', '--no-open', '--log-level', 'error']
       const args = managed
@@ -209,7 +214,7 @@ export class KimiRuntimeManager extends EventEmitter {
       })
       this.#process = child
 
-      const connection = await this.#waitUntilReady(child)
+      const connection = await this.#waitUntilReady(child, remoteControlPreference.enabled)
       this.#connection = connection
       this.#appliedSecondaryModelPreference = { ...secondaryPreference }
       this.#appliedSecondaryModelSource = secondaryModelRuntimeSource(
@@ -410,7 +415,14 @@ export class KimiRuntimeManager extends EventEmitter {
     }
   }
 
-  async #waitUntilReady(child: RuntimeChild): Promise<RuntimeConnection> {
+  /**
+   * 普通模式：kimi web 会输出 `Kimi server: <origin>#token=<token>` 就绪行，
+   * 解析后经 healthz/meta 验证连接。
+   * RC 模式（--remote-control）：stdout 全部换成 RC 横幅与二维码，不再输出
+   * 就绪行；server 照常监听 58627 并沿用 ~/.kimi-code/server.token 共享令牌，
+   * 因此改为轮询 healthz + 读共享 token 文件验证。
+   */
+  async #waitUntilReady(child: RuntimeChild, remoteControl: boolean): Promise<RuntimeConnection> {
     return await new Promise<RuntimeConnection>((resolve, reject) => {
       let buffer = ''
       let settled = false
@@ -450,7 +462,45 @@ export class KimiRuntimeManager extends EventEmitter {
         finish(new Error(`Kimi runtime did not become ready within ${this.#startupTimeoutMs}ms`))
       }, this.#startupTimeoutMs)
       timer.unref()
+
+      if (remoteControl) {
+        void this.#pollUntilRemoteControlReady().then(
+          (connection) => finish(undefined, connection),
+          (error) => finish(error instanceof Error ? error : new Error(String(error)))
+        )
+      }
     })
+  }
+
+  async #pollUntilRemoteControlReady(): Promise<RuntimeConnection> {
+    const origin = this.#sharedOrigin
+    const deadline = Date.now() + this.#startupTimeoutMs
+    let lastError: Error = new Error('Kimi remote-control runtime did not become ready')
+    while (Date.now() < deadline) {
+      if (this.#process === null) throw lastError
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      try {
+        const health = await fetch(`${origin}/api/v1/healthz`)
+        if (!health.ok) {
+          lastError = new Error(`Kimi health check failed with HTTP ${health.status}`)
+          continue
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+        continue
+      }
+      const token = await this.#readSharedToken()
+      if (token === null) {
+        lastError = new Error('Kimi runtime did not publish its shared server token')
+        continue
+      }
+      try {
+        return await this.#verifyRuntimeConnection(origin, token)
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+      }
+    }
+    throw lastError
   }
 
   #setState(next: RuntimePublicState): void {
