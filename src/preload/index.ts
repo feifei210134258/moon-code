@@ -6,6 +6,7 @@ import {
   type KimiGlobalStateEvent,
   type KimiUsageState,
   type PetOpenSessionIntent,
+  type RemoteControlState,
   type RuntimePublicState,
   type SessionViewState,
   type TerminalExitEvent,
@@ -114,6 +115,8 @@ const api: KimiAgentDesktopApi = {
   closeTerminal: (sessionId, terminalId) =>
     ipcRenderer.invoke(ipcChannels.terminalClose, sessionId, terminalId),
   getKimiSettings: () => ipcRenderer.invoke(ipcChannels.settingsGet),
+  getRemoteControlState: () => ipcRenderer.invoke(ipcChannels.remoteControlGet),
+  setRemoteControlEnabled: (enabled) => ipcRenderer.invoke(ipcChannels.remoteControlSet, enabled),
   setDefaultModel: (modelId) => ipcRenderer.invoke(ipcChannels.settingsDefaultModelSet, modelId),
   setSecondaryModel: (input) => ipcRenderer.invoke(ipcChannels.settingsSecondaryModelSet, input),
   disableSecondaryModel: () => ipcRenderer.invoke(ipcChannels.settingsSecondaryModelDisable),
@@ -165,6 +168,11 @@ const api: KimiAgentDesktopApi = {
     const handler = (_event: Electron.IpcRendererEvent, state: RuntimePublicState): void => listener(state)
     ipcRenderer.on(ipcChannels.runtimeStateChanged, handler)
     return () => ipcRenderer.removeListener(ipcChannels.runtimeStateChanged, handler)
+  },
+  onRemoteControlStateChanged: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: RemoteControlState): void => listener(state)
+    ipcRenderer.on(ipcChannels.remoteControlStateChanged, handler)
+    return () => ipcRenderer.removeListener(ipcChannels.remoteControlStateChanged, handler)
   },
   onKimiGlobalStateChanged: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, state: KimiGlobalStateEvent): void => listener(state)

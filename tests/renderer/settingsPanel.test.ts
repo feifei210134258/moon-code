@@ -1787,4 +1787,115 @@ describe('SettingsPanel', () => {
     expect(wrapper.get('.model-view-switch button.is-active').text()).toBe('供应商')
     wrapper.unmount()
   })
+
+  it('shows the remote control card with the device link and QR code when the relay is active', async () => {
+    const remoteState = {
+      preference: { enabled: true },
+      runtimeMode: 'system' as const,
+      appliedEnabled: true,
+      requiresRestart: false,
+      active: true,
+      url: 'https://code-rc.kimi.com/devices/dev-1234567890/',
+      deviceId: 'dev-1234567890',
+      startedAt: 1_756_300_000_000,
+      qrCodeDataUrl: 'data:image/png;base64,iVBORw0KGgo='
+    }
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      getRemoteControlState: vi.fn(async () => remoteState),
+      onRemoteControlStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+
+    const card = wrapper.get('.remote-control-card')
+    expect(card.classes()).toContain('is-active')
+    expect(card.text()).toContain('远程控制')
+    expect(card.text()).toContain('https://code-rc.kimi.com/devices/dev-1234567890/')
+    expect(card.find('.remote-control-qr').attributes('src')).toBe('data:image/png;base64,iVBORw0KGgo=')
+    expect(card.find('.secondary-restart-notice').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('toggles remote control off and keeps it local until the runtime restarts', async () => {
+    const enabledState = {
+      preference: { enabled: true },
+      runtimeMode: 'system' as const,
+      appliedEnabled: true,
+      requiresRestart: false,
+      active: false,
+      url: null,
+      deviceId: null,
+      startedAt: null,
+      qrCodeDataUrl: null
+    }
+    const disabledState = {
+      ...enabledState,
+      preference: { enabled: false },
+      appliedEnabled: true,
+      requiresRestart: true
+    }
+    window.confirm = vi.fn(() => true)
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      getRemoteControlState: vi.fn(async () => enabledState),
+      setRemoteControlEnabled: vi.fn(async () => disabledState),
+      onRemoteControlStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+
+    const card = wrapper.get('.remote-control-card')
+    const checkbox = card.get('input[type="checkbox"]')
+    ;(checkbox.element as HTMLInputElement).checked = false
+    await checkbox.trigger('change')
+    await flushPromises()
+
+    expect(window.kimiAgent.setRemoteControlEnabled).toHaveBeenCalledWith(false)
+    const updated = wrapper.get('.remote-control-card')
+    expect(updated.find('.secondary-restart-notice').exists()).toBe(true)
+    expect(updated.text()).toContain('重启')
+    wrapper.unmount()
+  })
+
+  it('asks for confirmation before enabling remote control and reverts when declined', async () => {
+    const disabledState = {
+      preference: { enabled: false },
+      runtimeMode: 'system' as const,
+      appliedEnabled: false,
+      requiresRestart: false,
+      active: false,
+      url: null,
+      deviceId: null,
+      startedAt: null,
+      qrCodeDataUrl: null
+    }
+    window.confirm = vi.fn(() => false)
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      getRemoteControlState: vi.fn(async () => disabledState),
+      setRemoteControlEnabled: vi.fn(),
+      onRemoteControlStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+
+    const checkbox = wrapper.get('.remote-control-card input[type="checkbox"]')
+    ;(checkbox.element as HTMLInputElement).checked = true
+    await checkbox.trigger('change')
+    await flushPromises()
+
+    expect(window.kimiAgent.setRemoteControlEnabled).not.toHaveBeenCalled()
+    expect((checkbox.element as HTMLInputElement).checked).toBe(false)
+    wrapper.unmount()
+  })
 })

@@ -6763,6 +6763,98 @@ body.is-panel-resizing {
 
 .cli-update-note code { font-family: var(--mono); }
 
+/* 远程控制卡片：偏好开关 + 设备二维码/链接。 */
+.remote-control-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px 13px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.remote-control-card.is-active {
+  border-color: rgba(46, 160, 67, 0.25);
+  background: rgba(46, 160, 67, 0.06);
+}
+
+.remote-control-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.remote-control-head > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.remote-control-head strong {
+  font-size: var(--type-ui-small-size);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.remote-control-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  color: var(--faint);
+  font-size: var(--type-micro-size);
+}
+
+.remote-control-head small {
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  line-height: 1.45;
+}
+
+.remote-control-body {
+  display: grid;
+  gap: 10px;
+}
+
+.remote-control-active {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.remote-control-qr {
+  width: 148px;
+  height: 148px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #fff;
+}
+
+.remote-control-link {
+  min-width: 0;
+  display: grid;
+  gap: 9px;
+}
+
+.remote-control-link code {
+  display: block;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.05);
+  font-family: var(--mono);
+  font-size: var(--type-caption-size);
+  overflow-wrap: anywhere;
+}
+
+.remote-control-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .settings-inline-empty {
   min-height: 74px;
   display: flex;

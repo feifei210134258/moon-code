@@ -84,6 +84,9 @@ export const ipcChannels = {
   terminalOutput: 'terminal:output',
   terminalExit: 'terminal:exit',
   settingsGet: 'settings:get',
+  remoteControlGet: 'remote-control:get',
+  remoteControlSet: 'remote-control:set',
+  remoteControlStateChanged: 'remote-control:state-changed',
   settingsDefaultModelSet: 'settings:default-model:set',
   settingsSecondaryModelSet: 'settings:secondary-model:set',
   settingsSecondaryModelDisable: 'settings:secondary-model:disable',
@@ -159,6 +162,26 @@ export interface RuntimePublicState {
 export interface RuntimeExternalConnectionInput {
   origin: string
   token: string
+}
+
+export interface RemoteControlPreference {
+  enabled: boolean
+}
+
+/** 远程控制（Kimi Code 0.39 Remote Control）只读状态：偏好 + 实际生效 + 设备链接。 */
+export interface RemoteControlState {
+  preference: RemoteControlPreference
+  runtimeMode: RuntimePublicState['mode']
+  /** 本次 owned Runtime 启动时注入的开关；null = 非 owned Runtime 或未启动。 */
+  appliedEnabled: boolean | null
+  /** 偏好与已启动 Runtime 的开关不一致，重启后生效。 */
+  requiresRestart: boolean
+  /** rc.json 存在且持有进程存活，代表 relay 已注册、设备链接可用。 */
+  active: boolean
+  url: string | null
+  deviceId: string | null
+  startedAt: number | null
+  qrCodeDataUrl: string | null
 }
 
 export interface RuntimeDiscovery {
@@ -1357,6 +1380,9 @@ export interface KimiAgentDesktopApi {
   resizeTerminal(sessionId: string, terminalId: string, cols: number, rows: number): Promise<void>
   closeTerminal(sessionId: string, terminalId: string): Promise<{ closed: boolean }>
   getKimiSettings(): Promise<KimiSettingsSnapshot>
+  getRemoteControlState(): Promise<RemoteControlState>
+  setRemoteControlEnabled(enabled: boolean): Promise<RemoteControlState>
+  onRemoteControlStateChanged(listener: (state: RemoteControlState) => void): () => void
   setDefaultModel(modelId: string): Promise<KimiSettingsSnapshot>
   setSecondaryModel(input: KimiSecondaryModelUpdateInput): Promise<KimiSettingsSnapshot>
   disableSecondaryModel(): Promise<KimiSettingsSnapshot>

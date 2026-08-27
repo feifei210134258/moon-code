@@ -19,6 +19,10 @@ import {
   DEFAULT_SECONDARY_MODEL_PREFERENCE,
   type SecondaryModelPreferencesStore
 } from './SecondaryModelPreferencesStore.js'
+import {
+  DEFAULT_REMOTE_CONTROL_PREFERENCE,
+  type RemoteControlPreferencesStore
+} from './RemoteControlPreferencesStore.js'
 
 interface RuntimeConnection {
   origin: string
@@ -36,6 +40,7 @@ interface RuntimeManagerOptions {
   sharedOrigin?: string
   clientVersion?: string
   secondaryModelPreferencesStore?: Pick<SecondaryModelPreferencesStore, 'load'>
+  remoteControlPreferencesStore?: Pick<RemoteControlPreferencesStore, 'load'>
 }
 
 type RuntimeChild = ChildProcessByStdio<null, Readable, Readable>
@@ -46,6 +51,7 @@ const SECONDARY_MODEL_EXPERIMENT_ENV = 'KIMI_CODE_EXPERIMENTAL_SECONDARY_MODEL'
 const EXPERIMENT_MASTER_ENV = 'KIMI_CODE_EXPERIMENTAL_FLAG'
 const SECONDARY_MODEL_ENV = 'KIMI_SECONDARY_MODEL'
 const SECONDARY_EFFORT_ENV = 'KIMI_SECONDARY_EFFORT'
+export const REMOTE_CONTROL_EXPERIMENT_ENV = 'KIMI_CODE_EXPERIMENTAL_REMOTE_CONTROL'
 
 async function readSharedKimiWebToken(): Promise<string | null> {
   try {
@@ -64,10 +70,12 @@ export class KimiRuntimeManager extends EventEmitter {
   readonly #sharedOrigin: string
   readonly #clientVersion: string
   readonly #secondaryModelPreferencesStore: Pick<SecondaryModelPreferencesStore, 'load'> | null
+  readonly #remoteControlPreferencesStore: Pick<RemoteControlPreferencesStore, 'load'> | null
   #process: RuntimeChild | null = null
   #connection: RuntimeConnection | null = null
   #appliedSecondaryModelPreference: KimiSecondaryModelPreference | null = null
   #appliedSecondaryModelSource: KimiSecondaryModelAppliedSource | null = null
+  #appliedRemoteControlEnabled: boolean | null = null
   #state: RuntimePublicState = {
     status: 'stopped',
     mode: null,
@@ -86,6 +94,7 @@ export class KimiRuntimeManager extends EventEmitter {
     this.#sharedOrigin = (options.sharedOrigin ?? DEFAULT_SHARED_KIMI_WEB_ORIGIN).replace(/\/$/, '')
     this.#clientVersion = options.clientVersion ?? '0.0.0-dev'
     this.#secondaryModelPreferencesStore = options.secondaryModelPreferencesStore ?? null
+    this.#remoteControlPreferencesStore = options.remoteControlPreferencesStore ?? null
   }
 
   get state(): RuntimePublicState {
@@ -104,6 +113,11 @@ export class KimiRuntimeManager extends EventEmitter {
 
   get appliedSecondaryModelSource(): KimiSecondaryModelAppliedSource | null {
     return this.#appliedSecondaryModelSource
+  }
+
+  /** 本次 owned Runtime 启动时 Remote Control 的生效状态；null = 非 owned/未启动。 */
+  get appliedRemoteControlEnabled(): boolean | null {
+    return this.#appliedRemoteControlEnabled
   }
 
   createRestClient(): KimiRestClient {
@@ -170,15 +184,23 @@ export class KimiRuntimeManager extends EventEmitter {
       }
 
       const managed = mode === 'managed'
+      const remoteControlPreference = await this.#loadRemoteControlPreference()
       const executable = managed ? process.execPath : candidate.executable
+      const baseArgs = ['web', '--port', '58627', '--no-open', '--log-level', 'error']
       const args = managed
-        ? [resolveManagedKimiEntry(), 'web', '--port', '58627', '--no-open', '--log-level', 'error']
-        : ['web', '--port', '58627', '--no-open', '--log-level', 'error']
+        ? [resolveManagedKimiEntry(), ...baseArgs]
+        : [...baseArgs]
+      // Remote Control 与 server 同进程（kimi rc ≡ kimi web --remote-control）：
+      // 开关只在 owned 启动时生效，需要 Kimi 登录态（refreshToken）才能注册中继。
+      if (remoteControlPreference.enabled) args.push('--remote-control')
       const secondaryPreference = await this.#loadSecondaryModelPreference()
       const launchEnvironment = {
         ...process.env,
         NO_COLOR: '1',
-        ...(managed && process.versions.electron !== undefined ? { ELECTRON_RUN_AS_NODE: '1' } : {})
+        ...(managed && process.versions.electron !== undefined ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
+        ...(remoteControlPreference.enabled
+          ? { [REMOTE_CONTROL_EXPERIMENT_ENV]: '1' }
+          : { [REMOTE_CONTROL_EXPERIMENT_ENV]: '0' })
       }
       const child = this.#spawn(executable, args, {
         cwd: process.cwd(),
@@ -194,6 +216,7 @@ export class KimiRuntimeManager extends EventEmitter {
         launchEnvironment,
         secondaryPreference
       )
+      this.#appliedRemoteControlEnabled = remoteControlPreference.enabled
       this.#setState({
         status: 'running',
         mode,
@@ -209,6 +232,7 @@ export class KimiRuntimeManager extends EventEmitter {
         this.#connection = null
         this.#appliedSecondaryModelPreference = null
         this.#appliedSecondaryModelSource = null
+        this.#appliedRemoteControlEnabled = null
         const expected = this.#state.status === 'stopping'
         this.#setState({
           status: expected ? 'stopped' : 'error',
@@ -227,6 +251,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#connection = null
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
+      this.#appliedRemoteControlEnabled = null
       this.#setState({
         status: 'error',
         mode,
@@ -255,6 +280,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#connection = connection
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
+      this.#appliedRemoteControlEnabled = null
       this.#setState({
         status: 'running', mode: 'external', version: connection.version,
         serverId: connection.serverId, origin, error: null
@@ -263,6 +289,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#connection = null
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
+      this.#appliedRemoteControlEnabled = null
       this.#setState({
         status: 'error', mode: 'external', version: null, serverId: null, origin: null,
         error: 'Unable to connect to the protected Kimi Runtime.'
@@ -278,6 +305,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#connection = null
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
+      this.#appliedRemoteControlEnabled = null
       this.#setState({
         status: 'stopped',
         mode: null,
@@ -314,6 +342,7 @@ export class KimiRuntimeManager extends EventEmitter {
     this.#connection = null
     this.#appliedSecondaryModelPreference = null
     this.#appliedSecondaryModelSource = null
+    this.#appliedRemoteControlEnabled = null
     this.#setState({
       status: 'stopped',
       mode: null,
@@ -339,6 +368,13 @@ export class KimiRuntimeManager extends EventEmitter {
       return { ...DEFAULT_SECONDARY_MODEL_PREFERENCE }
     }
     return await this.#secondaryModelPreferencesStore.load()
+  }
+
+  async #loadRemoteControlPreference(): Promise<{ enabled: boolean }> {
+    if (this.#remoteControlPreferencesStore === null) {
+      return { ...DEFAULT_REMOTE_CONTROL_PREFERENCE }
+    }
+    return await this.#remoteControlPreferencesStore.load()
   }
 
   async #tryConnectSharedRuntime(): Promise<RuntimeConnection | null> {

@@ -34,6 +34,7 @@ import type {
   KimiTool,
   KimiUsagePreferences,
   KimiUsageState,
+  RemoteControlState,
   SessionNavigationItem
 } from '@shared/contracts'
 
@@ -68,6 +69,8 @@ const archivedSessions = ref<SessionNavigationItem[]>([])
 const archivesPending = ref(false)
 const cliUpdate = ref<KimiCliUpdateState | null>(null)
 const cliUpdateAction = ref<'check' | 'download' | null>(null)
+const remoteControlState = ref<RemoteControlState | null>(null)
+const remoteControlPending = ref(false)
 const secondaryMaxOutputInput = ref('')
 const showSecondaryProviderForm = ref(false)
 const secondaryProviderDraft = ref<{
@@ -375,6 +378,60 @@ async function loadSettings(): Promise<void> {
     error.value = errorMessage(reason)
   } finally {
     pending.value = false
+  }
+}
+
+async function loadRemoteControlState(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined) return
+  try {
+    remoteControlState.value = await api.getRemoteControlState()
+  } catch {
+    remoteControlState.value = null
+  }
+}
+
+async function toggleRemoteControl(event: Event): Promise<void> {
+  const api = window.kimiAgent
+  const enabled = (event.target as HTMLInputElement).checked
+  if (api === undefined || remoteControlPending.value) return
+  if (enabled && !window.confirm(
+    '远程控制会把本机 Kimi 会话通过 Moonshot 官方中继（code-rc.kimi.com）暴露给扫码设备，需要已登录 Kimi 账号。确定开启吗？'
+  )) {
+    ;(event.target as HTMLInputElement).checked = !enabled
+    return
+  }
+  remoteControlPending.value = true
+  error.value = null
+  notice.value = null
+  try {
+    remoteControlState.value = await api.setRemoteControlEnabled(enabled)
+    showNotice(remoteControlState.value.requiresRestart
+      ? `远程控制已${enabled ? '开启' : '关闭'}，重启 Kimi Runtime 后生效。`
+      : `远程控制已${enabled ? '开启' : '关闭'}。`)
+  } catch (reason) {
+    error.value = errorMessage(reason)
+  } finally {
+    remoteControlPending.value = false
+  }
+}
+
+async function restartRuntimeForRemoteControl(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || actionPending.value !== null) return
+  if (!window.confirm('重启 Kimi Runtime 会中断当前正在执行的任务，并关闭当前 Session 连接。确定继续吗？')) return
+  actionPending.value = 'remote-control:restart'
+  error.value = null
+  notice.value = null
+  try {
+    const state = await api.restartRuntime()
+    if (state.status !== 'running') throw new Error(state.error ?? 'Kimi Runtime 重启失败')
+    await loadRemoteControlState()
+    showNotice('Kimi Runtime 已重启，远程控制设置已生效。')
+  } catch (reason) {
+    error.value = errorMessage(reason)
+  } finally {
+    actionPending.value = null
   }
 }
 
@@ -1199,6 +1256,7 @@ watch(
       void loadCapabilityTab()
       void loadArchivedSessions()
     }
+    void loadRemoteControlState()
   },
   { immediate: true }
 )
@@ -1223,6 +1281,23 @@ watch(
     void loadCapabilityTab()
   }
 )
+
+async function copyRemoteControlUrl(): Promise<void> {
+  const url = remoteControlState.value?.url
+  if (url === null || url === undefined) return
+  try {
+    await navigator.clipboard.writeText(url)
+    showNotice('设备链接已复制。')
+  } catch {
+    error.value = '复制失败，请手动选择链接复制。'
+  }
+}
+
+function openRemoteControlUrl(): void {
+  const url = remoteControlState.value?.url
+  if (url === null || url === undefined) return
+  void window.kimiAgent?.openExternalUrl(url)
+}
 
 function toggleDescription(key: string): void {
   const next = new Set(expandedDescriptions.value)
@@ -1260,15 +1335,25 @@ function onWindowMousedown(): void {
   if (providerPickerOpen.value) providerPickerOpen.value = false
 }
 
+let disposeRemoteControlSubscription: (() => void) | null = null
+
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeydown, true)
   window.addEventListener('mousedown', onWindowMousedown)
   void nextTick(measureDescriptionOverflow)
+  const api = window.kimiAgent
+  if (api !== undefined && typeof api.onRemoteControlStateChanged === 'function') {
+    disposeRemoteControlSubscription = api.onRemoteControlStateChanged((state) => {
+      remoteControlState.value = state
+    })
+  }
 })
 onBeforeUnmount(() => {
   clearOAuthPoll()
   clearNoticeTimer()
   resetSecondaryProviderDraft()
+  disposeRemoteControlSubscription?.()
+  disposeRemoteControlSubscription = null
   window.removeEventListener('keydown', onWindowKeydown, true)
   window.removeEventListener('mousedown', onWindowMousedown)
 })
@@ -1360,6 +1445,47 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                   <input type="checkbox" :checked="snapshot.preferences.telemetry === true" :disabled="actionPending !== null" @change="updatePreference({ telemetry: ($event.target as HTMLInputElement).checked })" />
                 </label>
               </template>
+              <p v-if="snapshot === null" class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
+              <article v-if="remoteControlState" class="remote-control-card" :class="{ 'is-active': remoteControlState.active }">
+                <div class="remote-control-head">
+                  <div>
+                    <strong>远程控制 <small class="remote-control-tag">Kimi 官方实验特性</small></strong>
+                    <small>{{ remoteControlState.active ? '已通过 Moonshot 中继上线，扫码或在其他设备打开链接即可继续本机会话。' : '把本机 Kimi 会话经 Moonshot 官方中继暴露给手机或其他电脑的浏览器；需要已登录 Kimi 账号。' }}</small>
+                  </div>
+                  <input type="checkbox" :checked="remoteControlState.preference.enabled" :disabled="remoteControlPending" @change="toggleRemoteControl" />
+                </div>
+                <div v-if="remoteControlState.preference.enabled" class="remote-control-body">
+                  <p v-if="remoteControlState.runtimeMode === 'external' || remoteControlState.runtimeMode === 'shared'" class="compatibility-note">
+                    当前 Runtime 不是由 Moon Code 启动，开关只作为偏好保存；请用 <code>kimi web --remote-control</code> 手动启动。
+                  </p>
+                  <template v-else>
+                    <div v-if="remoteControlState.requiresRestart" class="secondary-restart-notice">
+                      <span>远程控制设置已变更，重启 Kimi Runtime 后生效。</span>
+                      <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForRemoteControl">立即重启</button>
+                    </div>
+                    <div v-if="remoteControlState.active" class="remote-control-active">
+                      <img v-if="remoteControlState.qrCodeDataUrl" class="remote-control-qr" :src="remoteControlState.qrCodeDataUrl" alt="远程控制二维码" />
+                      <div class="remote-control-link">
+                        <code>{{ remoteControlState.url }}</code>
+                        <div class="remote-control-actions">
+                          <button class="secondary-button" type="button" @click="copyRemoteControlUrl">复制链接</button>
+                          <button class="secondary-button" type="button" @click="openRemoteControlUrl">在浏览器打开</button>
+                        </div>
+                      </div>
+                    </div>
+                    <p v-else class="compatibility-note">
+                      {{ remoteControlState.appliedEnabled === true ? '中继尚未上线：确认已登录 Kimi 账号（kimi login），Runtime 启动时会自动注册。' : '开启并重启 Kimi Runtime 后，这里会显示设备二维码与链接。' }}
+                    </p>
+                  </template>
+                </div>
+                <div
+                  v-else-if="remoteControlState.requiresRestart && remoteControlState.runtimeMode !== 'external' && remoteControlState.runtimeMode !== 'shared'"
+                  class="secondary-restart-notice"
+                >
+                  <span>远程控制已关闭，重启 Kimi Runtime 后生效。</span>
+                  <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForRemoteControl">立即重启</button>
+                </div>
+              </article>
               <p v-else class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
             </section>
 

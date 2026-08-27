@@ -36,6 +36,7 @@ import {
   type PromptSteerResult,
   type PromptSubmissionResult,
   type QuestionDismissResult,
+  type RemoteControlState,
   type RuntimePublicState,
   type SessionTerminal,
   type SessionViewState,
@@ -68,6 +69,7 @@ import { discoverRuntimes } from './runtime/discovery.js'
 import type { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
 import type { KimiSessionBridge } from './kimi/KimiSessionBridge.js'
 import type { KimiSettingsBridge } from './kimi/KimiSettingsBridge.js'
+import type { KimiRemoteControlBridge } from './kimi/KimiRemoteControlBridge.js'
 import type { KimiCapabilitiesBridge } from './kimi/KimiCapabilitiesBridge.js'
 import type { KimiBrowserManager } from './browser/KimiBrowserManager.js'
 import type { KimiUsageService } from './kimi/KimiUsageService.js'
@@ -136,6 +138,7 @@ export function registerIpc(
   runtime: KimiRuntimeManager,
   sessions: KimiSessionBridge,
   settings: KimiSettingsBridge,
+  remoteControl: KimiRemoteControlBridge,
   capabilities: KimiCapabilitiesBridge,
   browser: KimiBrowserManager,
   usage: KimiUsageService,
@@ -885,6 +888,18 @@ export function registerIpc(
     assertTrustedSender(event)
     return await settings.getSnapshot()
   })
+  ipcMain.handle(ipcChannels.remoteControlGet, async (event): Promise<RemoteControlState> => {
+    assertTrustedSender(event)
+    return await remoteControl.getState()
+  })
+  ipcMain.handle(
+    ipcChannels.remoteControlSet,
+    async (event, enabled?: unknown): Promise<RemoteControlState> => {
+      assertTrustedSender(event)
+      if (typeof enabled !== 'boolean') throw new TypeError('Invalid remote control enabled flag')
+      return await remoteControl.setEnabled(enabled)
+    }
+  )
   ipcMain.handle(
     ipcChannels.settingsDefaultModelSet,
     async (event, modelId?: unknown): Promise<KimiSettingsSnapshot> => {
@@ -1182,6 +1197,12 @@ export function registerIpc(
     const window = getMainWindow()
     if (window !== null && !window.isDestroyed()) {
       window.webContents.send(ipcChannels.runtimeStateChanged, state)
+    }
+  })
+  remoteControl.on('state-changed', (state: RemoteControlState) => {
+    const window = getMainWindow()
+    if (window !== null && !window.isDestroyed()) {
+      window.webContents.send(ipcChannels.remoteControlStateChanged, state)
     }
   })
   const mainTurnBySession = new Map<string, boolean>()
