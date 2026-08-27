@@ -313,9 +313,6 @@ onBeforeUnmount(() => {
                   <span v-if="session.relativeTime" class="session-time">{{ session.relativeTime }}</span>
                 </button>
                 <div class="tree-action-area session-action-area">
-                  <button class="tree-more-button" type="button" :aria-label="`${session.title} 任务操作`" @click.stop="toggleMenu(`session:${session.id}`, $event)">
-                    <PhDotsThree :size="16" weight="bold" />
-                  </button>
                   <button class="tree-more-button session-archive-trigger" type="button" :aria-label="`归档 ${session.title}`" title="归档" @click.stop="toggleSwipe(session)">
                     <PhArchive :size="16" />
                   </button>

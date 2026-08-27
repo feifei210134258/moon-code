@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { execFile } from 'node:child_process'
-import { readdir } from 'node:fs/promises'
+import { readdir, stat as statFile, open as openFile } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import {
@@ -465,6 +465,30 @@ export class KimiSessionBridge extends EventEmitter {
     }
   }
 
+  /* 草稿态（会话尚未创建）的文件预览：直接读工作区本地文件。
+     大小、行数、截断口径对齐 runtime readFile 的默认值。 */
+  async readWorkspaceFileFromWorkspace(workspaceId: string, path: string): Promise<WorkspaceFilePreview> {
+    const target = await this.workspaceFileSystemPathFromWorkspace(workspaceId, path)
+    const stat = await statFile(target)
+    const limit = 200 * 1024
+    const bytes = await readFileLimited(target, limit + 1)
+    const truncated = bytes.length > limit
+    const slice = truncated ? bytes.subarray(0, limit) : bytes
+    const binary = slice.includes(0)
+    const text = binary ? '' : slice.toString('utf8')
+    return {
+      path,
+      content: text,
+      encoding: 'utf-8',
+      size: stat.size,
+      truncated,
+      mime: '',
+      languageId: null,
+      lineCount: binary ? null : text.split('\n').length,
+      isBinary: binary
+    }
+  }
+
   async searchFiles(sessionId: string, query: string): Promise<WorkspaceFileSearchResult> {
     this.#assertActiveSession(sessionId)
     const result = await this.#runtime.createRestClient().searchFiles(sessionId, query)
@@ -529,6 +553,19 @@ export class KimiSessionBridge extends EventEmitter {
     this.#assertActiveSession(sessionId)
     const state = this.#getController().getState(sessionId)
     if (state === null || state.workspaceRoot.length === 0) throw new Error('Kimi Workspace path is unavailable')
+    return this.#resolveInsideWorkspace(state.workspaceRoot, path)
+  }
+
+  /* 草稿态（会话尚未创建）与 workspaceFileSystemPath 同一套越界校验，
+     只是根从 session state 换成 REST 的 workspace root。 */
+  async workspaceFileSystemPathFromWorkspace(workspaceId: string, path: string): Promise<string> {
+    const workspaces = await this.#runtime.createRestClient().listWorkspaces()
+    const root = workspaces.find((workspace) => workspace.id === workspaceId)?.root ?? ''
+    if (root.length === 0) throw new Error('Kimi Workspace path is unavailable')
+    return this.#resolveInsideWorkspace(root, path)
+  }
+
+  #resolveInsideWorkspace(workspaceRoot: string, path: string): string {
     const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
     if (
       normalized.length === 0 ||
@@ -537,7 +574,7 @@ export class KimiSessionBridge extends EventEmitter {
       /^[A-Za-z]:\//.test(normalized) ||
       normalized.split('/').some((segment) => segment === '..')
     ) throw new Error('Workspace file path escapes the active Kimi Workspace')
-    const root = resolve(state.workspaceRoot)
+    const root = resolve(workspaceRoot)
     const target = resolve(root, ...normalized.split('/'))
     const inside = relative(root, target)
     if (inside.length === 0 || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
@@ -848,6 +885,18 @@ function decodeTextFallback(
 
 function isTextLikePath(path: string): boolean {
   return /\.(?:md|mdx|markdown|txt|text|log|json|jsonc|ya?ml|toml|ini|cfg|conf|xml|html?|css|s[ac]ss|less|m?[jt]sx?|c[jt]sx?|vue|svelte|astro|py|go|rs|java|kt|kts|swift|c|cc|cpp|cxx|h|hpp|cs|php|rb|lua|r|sh|bash|zsh|fish|ps1|sql|graphql|gql|csv|tsv|lock)$/i.test(path)
+}
+
+/** 最多读取 length 字节；目录等不可读目标直接抛错。 */
+async function readFileLimited(path: string, length: number): Promise<Buffer> {
+  const handle = await openFile(path, 'r')
+  try {
+    const buffer = Buffer.alloc(length)
+    const { bytesRead } = await handle.read(buffer, 0, length, 0)
+    return buffer.subarray(0, bytesRead)
+  } finally {
+    await handle.close()
+  }
 }
 
 function formatWebElementsContext(elements: BrowserPickedElement[]): string {

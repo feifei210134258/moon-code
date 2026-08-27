@@ -35,7 +35,7 @@ const previewClipped = computed(() => (
 const previewMeta = computed(() => {
   const preview = props.preview
   if (preview === null) return '正在读取文件内容'
-  const details = [preview.languageId ?? preview.mime ?? '文本文件']
+  const details = [preview.languageId ?? (preview.mime.length > 0 ? preview.mime : null) ?? '文本文件']
   if (!preview.isBinary) details.push(`${preview.lineCount} 行`)
   details.push(formatBytes(preview.size))
   return details.join(' · ')

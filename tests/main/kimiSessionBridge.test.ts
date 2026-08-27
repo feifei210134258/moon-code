@@ -788,4 +788,41 @@ describe('KimiSessionBridge draft workspace listing', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  it('resolves draft workspace paths for system-open/trash and reads local file previews', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'moon-code-ws-'))
+    try {
+      await mkdir(join(root, 'src'))
+      await writeFile(join(root, 'src', 'main.ts'), 'const x = 1\n')
+      await writeFile(join(root, 'logo.bin'), Buffer.from([0x00, 0x01, 0x02]))
+      const runtime = new EventEmitter() as EventEmitter & { createRestClient: () => unknown }
+      Object.assign(runtime, {
+        state: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:54959', error: null },
+        createRestClient: () => ({
+          listWorkspaces: vi.fn(async () => [{ id: 'workspace-1', name: 'demo', root }])
+        })
+      })
+      const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+
+      await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-1', 'src/main.ts')).resolves.toBe(join(root, 'src', 'main.ts'))
+      await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-1', '.')).rejects.toThrow('escapes')
+      await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-1', '../outside')).rejects.toThrow('escapes')
+      await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-missing', 'src')).rejects.toThrow('unavailable')
+
+      const textPreview = await bridge.readWorkspaceFileFromWorkspace('workspace-1', 'src/main.ts')
+      expect(textPreview.content).toBe('const x = 1\n')
+      expect(textPreview.isBinary).toBe(false)
+      expect(textPreview.encoding).toBe('utf-8')
+      expect(textPreview.lineCount).toBe(2)
+
+      const binaryPreview = await bridge.readWorkspaceFileFromWorkspace('workspace-1', 'logo.bin')
+      expect(binaryPreview.isBinary).toBe(true)
+      expect(binaryPreview.content).toBe('')
+      expect(binaryPreview.lineCount).toBeNull()
+
+      await expect(bridge.readWorkspaceFileFromWorkspace('workspace-1', 'missing.ts')).rejects.toThrow()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })

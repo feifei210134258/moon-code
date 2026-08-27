@@ -474,8 +474,18 @@ function openWorkspaceEntry(entry: WorkspaceFileEntry): void {
 
 function selectExtension(tab: ExtensionTab): void {
   store.setExtension(tab)
-  if (tab === 'files' && activeSessionId.value.length > 0) {
+  if (tab === 'files') refreshWorkspaceFiles()
+}
+
+/* 右栏「项目文件」刷新：会话态走 session 口径，草稿态（新建任务未发首条消息）
+   按草稿工作区本地重载。 */
+function refreshWorkspaceFiles(): void {
+  if (activeSessionId.value.length > 0) {
     void runtimeBridge.refreshWorkspaceContext(activeSessionId.value)
+    return
+  }
+  if (draftActive.value && draftWorkspaceId.value.length > 0) {
+    runtimeBridge.openDraftWorkspaceTree(draftWorkspaceId.value)
   }
 }
 
@@ -954,7 +964,7 @@ onBeforeUnmount(() => {
           @attach-to-session="attachFileToSession"
           @search-files="runtimeBridge.searchFiles"
           @grep-files="runtimeBridge.grepFiles"
-          @refresh="runtimeBridge.refreshWorkspaceContext(activeSessionId)"
+          @refresh="refreshWorkspaceFiles"
           @browser-bounds="browserBridge.setBounds"
           @browser-viewport="browserBridge.setViewport"
           @browser-pick-elements="pickBrowserElements"

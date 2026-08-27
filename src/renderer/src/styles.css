@@ -883,7 +883,9 @@ select:focus-visible {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding-right: 2px;
+  /* 滚动条贴住卡片右缘：树用负外边距吃掉侧栏的 10px 内边距，
+     行文本因此多出约 12px 可用宽度（行自身的 9px 右内边距已是与滚动条的间距）。 */
+  margin-right: -10px;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
@@ -1026,7 +1028,7 @@ select:focus-visible {
   transform: translateX(-64px);
 }
 
-/* 托盘第二枚按钮与「三个点」并排横排。 */
+/* 会话行 hover 托盘只保留归档一枚按钮；完整菜单走行右键。 */
 .session-action-area {
   grid-auto-flow: column;
   gap: 1px;

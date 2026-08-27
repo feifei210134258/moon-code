@@ -582,6 +582,27 @@ export function registerIpc(
       }
     }
   )
+  /* 草稿态（会话尚未创建）：同一套校验，只是路径按工作区解析。 */
+  ipcMain.handle(
+    ipcChannels.attachmentsAddWorkspaceFileFromWorkspace,
+    async (event, workspaceId?: unknown, path?: unknown): Promise<KimiUploadedFile> => {
+      assertTrustedSender(event)
+      const safeWorkspaceId = validateWorkspaceId(workspaceId)
+      const target = await sessions.workspaceFileSystemPathFromWorkspace(safeWorkspaceId, validateWorkspacePath(path))
+      const targetStat = await stat(target)
+      if (!targetStat.isFile()) throw new Error('只能将文件添加为会话附件，文件夹请以路径形式引用。')
+      const mediaType = lookupMediaType(target) || 'application/octet-stream'
+      const uploaded = await runtime
+        .createRestClient()
+        .uploadFile({ bytes: await readFile(target), name: basename(target), mediaType })
+      return {
+        fileId: uploaded.id,
+        name: uploaded.name,
+        mediaType: uploaded.media_type,
+        size: uploaded.size
+      }
+    }
+  )
   ipcMain.handle(
     ipcChannels.attachmentRead,
     async (event, fileId?: unknown, mediaType?: unknown): Promise<KimiAttachmentBlob> => {
@@ -638,6 +659,15 @@ export function registerIpc(
       assertTrustedSender(event)
       assertSessionId(sessionId)
       return await sessions.readFile(sessionId, validateWorkspacePath(path))
+    }
+  )
+  /* 草稿态（会话尚未创建）：按工作区读本地文件预览。 */
+  ipcMain.handle(
+    ipcChannels.filesReadWorkspace,
+    async (event, workspaceId?: unknown, path?: unknown): Promise<WorkspaceFilePreview> => {
+      assertTrustedSender(event)
+      const safeWorkspaceId = validateWorkspaceId(workspaceId)
+      return await sessions.readWorkspaceFileFromWorkspace(safeWorkspaceId, validateWorkspacePath(path))
     }
   )
   ipcMain.handle(
@@ -718,12 +748,35 @@ export function registerIpc(
       return { opened: true }
     }
   )
+  /* 草稿态（会话尚未创建）：路径按工作区解析后用系统默认应用打开。 */
+  ipcMain.handle(
+    ipcChannels.filesOpenSystemWorkspace,
+    async (event, workspaceId?: unknown, path?: unknown): Promise<{ opened: true }> => {
+      assertTrustedSender(event)
+      const safeWorkspaceId = validateWorkspaceId(workspaceId)
+      const target = await sessions.workspaceFileSystemPathFromWorkspace(safeWorkspaceId, validateWorkspacePath(path))
+      const reason = await shell.openPath(target)
+      if (reason.length > 0) throw new Error(`系统无法打开该文件：${reason}`)
+      return { opened: true }
+    }
+  )
   ipcMain.handle(
     ipcChannels.filesTrash,
     async (event, sessionId?: unknown, path?: unknown): Promise<{ trashed: true }> => {
       assertTrustedSender(event)
       assertSessionId(sessionId)
       const target = sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      await shell.trashItem(target)
+      return { trashed: true }
+    }
+  )
+  /* 草稿态（会话尚未创建）：路径按工作区解析后移到废纸篓。 */
+  ipcMain.handle(
+    ipcChannels.filesTrashWorkspace,
+    async (event, workspaceId?: unknown, path?: unknown): Promise<{ trashed: true }> => {
+      assertTrustedSender(event)
+      const safeWorkspaceId = validateWorkspaceId(workspaceId)
+      const target = await sessions.workspaceFileSystemPathFromWorkspace(safeWorkspaceId, validateWorkspacePath(path))
       await shell.trashItem(target)
       return { trashed: true }
     }

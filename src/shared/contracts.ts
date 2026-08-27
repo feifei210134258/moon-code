@@ -51,20 +51,24 @@ export const ipcChannels = {
   attachmentsPick: 'attachments:pick',
   attachmentsPaste: 'attachments:paste',
   attachmentsAddWorkspaceFile: 'attachments:add-workspace-file',
+  attachmentsAddWorkspaceFileFromWorkspace: 'attachments:add-workspace-file-from-workspace',
   attachmentRead: 'attachment:read',
   attachmentReadSessionMedia: 'attachment:read-session-media',
   attachmentDiscard: 'attachment:discard',
   filesList: 'files:list',
   filesListWorkspace: 'files:list-workspace',
   filesRead: 'files:read',
+  filesReadWorkspace: 'files:read-workspace',
   filesSearch: 'files:search',
   filesGrep: 'files:grep',
   filesDownload: 'files:download',
   filesOpen: 'files:open',
   filesOpenIn: 'files:open-in',
   filesOpenSystem: 'files:open-system',
+  filesOpenSystemWorkspace: 'files:open-system-workspace',
   filesReveal: 'files:reveal',
   filesTrash: 'files:trash',
+  filesTrashWorkspace: 'files:trash-workspace',
   shellOpenExternal: 'shell:open-external',
   markdownImageRead: 'markdown:image:read',
   gitStatus: 'git:status',
@@ -1317,6 +1321,8 @@ export interface KimiAgentDesktopApi {
   pickAttachments(): Promise<KimiAttachmentPickResult>
   pasteAttachment(input: KimiAttachmentPasteInput): Promise<KimiUploadedFile>
   attachWorkspaceFile(sessionId: string, path: string): Promise<KimiUploadedFile>
+  /* 草稿态（会话尚未创建）：按工作区直接读本地文件并上传为附件。 */
+  attachWorkspaceFileFromWorkspace(workspaceId: string, path: string): Promise<KimiUploadedFile>
   readAttachment(fileId: string, mediaType: string): Promise<KimiAttachmentBlob>
   /** Prompt 附件媒体走 session media 端点（0.37.2+），需带 sessionId。 */
   readSessionMedia(sessionId: string, fileId: string, mediaType: string): Promise<KimiAttachmentBlob>
@@ -1324,6 +1330,8 @@ export interface KimiAgentDesktopApi {
   listFiles(sessionId: string, path?: string): Promise<WorkspaceFileList>
   /* 草稿态（会话尚未创建）按工作区列举目录；不经过 Kimi Session，由 main 直接读本地文件系统。 */
   listWorkspaceFiles(workspaceId: string, path?: string): Promise<WorkspaceFileList>
+  /* 草稿态按工作区读文件预览；同样由 main 直接读本地文件系统。 */
+  readWorkspaceFileFromWorkspace(workspaceId: string, path: string): Promise<WorkspaceFilePreview>
   readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview>
   searchFiles(sessionId: string, query: string): Promise<WorkspaceFileSearchResult>
   grepFiles(sessionId: string, pattern: string): Promise<WorkspaceGrepResult>
@@ -1331,8 +1339,12 @@ export interface KimiAgentDesktopApi {
   openWorkspaceFile(sessionId: string, path: string, line?: number): Promise<{ opened: true }>
   openWorkspaceFileIn(sessionId: string, appId: WorkspaceOpenApp, path: string, line?: number): Promise<{ opened: true }>
   openWorkspaceFileSystem(sessionId: string, path: string): Promise<{ opened: true }>
+  /* 草稿态（会话尚未创建）：按工作区解析本地路径，用系统默认应用打开。 */
+  openWorkspaceFileSystemFromWorkspace(workspaceId: string, path: string): Promise<{ opened: true }>
   revealWorkspaceFile(sessionId: string, path: string): Promise<{ revealed: true }>
   trashWorkspaceEntry(sessionId: string, path: string): Promise<{ trashed: true }>
+  /* 草稿态（会话尚未创建）：按工作区解析本地路径并移到废纸篓。 */
+  trashWorkspaceEntryFromWorkspace(workspaceId: string, path: string): Promise<{ trashed: true }>
   readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null>
   getGitStatus(sessionId: string): Promise<WorkspaceGitStatus>
   listGitBranches(sessionId: string): Promise<WorkspaceGitBranches>

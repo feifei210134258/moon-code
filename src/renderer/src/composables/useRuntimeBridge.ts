@@ -1024,7 +1024,8 @@ export function useRuntimeBridge() {
 
   const openFile = async (path: string): Promise<void> => {
     const sessionId = requestedSessionId
-    if (window.kimiAgent === undefined || sessionId === null) return
+    const draftWorkspaceId = sessionId === null ? requestedDraftWorkspaceId : null
+    if (window.kimiAgent === undefined || (sessionId === null && draftWorkspaceId === null)) return
     const generation = ++previewGeneration
     filePreviewPending.value = true
     filePreview.value = null
@@ -1032,11 +1033,13 @@ export function useRuntimeBridge() {
     fileActionError.value = null
     fileActionNotice.value = null
     try {
-      const preview = await window.kimiAgent.readFile(sessionId, path)
-      if (generation !== previewGeneration || sessionId !== requestedSessionId) return
+      const preview = draftWorkspaceId !== null
+        ? await window.kimiAgent.readWorkspaceFileFromWorkspace(draftWorkspaceId, path)
+        : await window.kimiAgent.readFile(sessionId!, path)
+      if (generation !== previewGeneration || !isWorkspaceContextCurrent(sessionId, draftWorkspaceId)) return
       filePreview.value = preview
     } catch (error) {
-      if (generation === previewGeneration && sessionId === requestedSessionId) {
+      if (generation === previewGeneration && isWorkspaceContextCurrent(sessionId, draftWorkspaceId)) {
         filePreview.value = null
         filePreviewError.value = errorMessage(error)
       }
@@ -1107,19 +1110,26 @@ export function useRuntimeBridge() {
     }
   }
 
+  /* 文件操作的 staleness 判定：会话态看 requestedSessionId，草稿态看
+     requestedDraftWorkspaceId 且仍在草稿（会话一旦建立，旧草稿操作全部作废）。 */
+  const isWorkspaceContextCurrent = (sessionId: string | null, draftWorkspaceId: string | null): boolean => (
+    sessionId !== null ? sessionId === requestedSessionId : requestedSessionId === null && draftWorkspaceId === requestedDraftWorkspaceId
+  )
+
   const runFileAction = async (
     key: string,
-    action: (sessionId: string) => Promise<boolean | void>
+    action: (sessionId: string, draftWorkspaceId: string | null) => Promise<boolean | void>
   ): Promise<boolean> => {
     const sessionId = requestedSessionId
-    if (window.kimiAgent === undefined || sessionId === null || fileActionPending.value !== null) return false
+    const draftWorkspaceId = sessionId === null ? requestedDraftWorkspaceId : null
+    if (window.kimiAgent === undefined || (sessionId === null && draftWorkspaceId === null) || fileActionPending.value !== null) return false
     const generation = ++fileActionGeneration
     fileActionPending.value = key
     fileActionError.value = null
     fileActionNotice.value = null
     try {
-      const completed = await action(sessionId)
-      if (generation !== fileActionGeneration || sessionId !== requestedSessionId || completed === false) return false
+      const completed = await action(sessionId ?? draftWorkspaceId!, draftWorkspaceId)
+      if (generation !== fileActionGeneration || !isWorkspaceContextCurrent(sessionId, draftWorkspaceId) || completed === false) return false
       if (key.startsWith('download:')) fileActionNotice.value = '文件已保存到所选位置。'
       else if (key.startsWith('reveal:')) fileActionNotice.value = '已在 Finder 中显示文件。'
       else if (key.startsWith('system-open:')) fileActionNotice.value = '已使用系统默认应用打开。'
@@ -1128,7 +1138,7 @@ export function useRuntimeBridge() {
       else fileActionNotice.value = '已交给 Kimi 打开文件。'
       return true
     } catch (error) {
-      if (generation === fileActionGeneration && sessionId === requestedSessionId) {
+      if (generation === fileActionGeneration && isWorkspaceContextCurrent(sessionId, draftWorkspaceId)) {
         fileActionError.value = errorMessage(error)
       }
       return false
@@ -1157,7 +1167,11 @@ export function useRuntimeBridge() {
   }
 
   const openWorkspaceFileSystem = async (path: string): Promise<void> => {
-    await runFileAction(`system-open:${path}`, async (sessionId) => {
+    await runFileAction(`system-open:${path}`, async (sessionId, draftWorkspaceId) => {
+      if (draftWorkspaceId !== null) {
+        await window.kimiAgent!.openWorkspaceFileSystemFromWorkspace(draftWorkspaceId, path)
+        return
+      }
       await window.kimiAgent!.openWorkspaceFileSystem(sessionId, path)
     })
   }
@@ -1170,17 +1184,27 @@ export function useRuntimeBridge() {
 
   const trashWorkspaceEntry = async (path: string): Promise<void> => {
     const sessionId = requestedSessionId
-    const trashed = await runFileAction(`trash:${path}`, async (activeSessionId) => {
+    const draftWorkspaceId = sessionId === null ? requestedDraftWorkspaceId : null
+    const trashed = await runFileAction(`trash:${path}`, async (activeSessionId, activeDraftWorkspaceId) => {
+      if (activeDraftWorkspaceId !== null) {
+        await window.kimiAgent!.trashWorkspaceEntryFromWorkspace(activeDraftWorkspaceId, path)
+        return
+      }
       await window.kimiAgent!.trashWorkspaceEntry(activeSessionId, path)
     })
-    if (!trashed || sessionId === null || sessionId !== requestedSessionId) return
+    if (!trashed || !isWorkspaceContextCurrent(sessionId, draftWorkspaceId)) return
     if (filePreview.value?.path === path || filePreview.value?.path.startsWith(`${path}/`)) closeFilePreview()
-    await refreshWorkspaceContext(sessionId)
+    if (sessionId !== null) await refreshWorkspaceContext(sessionId)
+    else await refreshDraftWorkspaceContext(draftWorkspaceId!)
   }
 
   const attachWorkspaceFile = async (path: string): Promise<KimiUploadedFile | null> => {
     let uploaded: KimiUploadedFile | null = null
-    const completed = await runFileAction(`attach:${path}`, async (sessionId) => {
+    const completed = await runFileAction(`attach:${path}`, async (sessionId, draftWorkspaceId) => {
+      if (draftWorkspaceId !== null) {
+        uploaded = await window.kimiAgent!.attachWorkspaceFileFromWorkspace(draftWorkspaceId, path)
+        return
+      }
       uploaded = await window.kimiAgent!.attachWorkspaceFile(sessionId, path)
     })
     return completed ? uploaded : null
@@ -1231,6 +1255,16 @@ export function useRuntimeBridge() {
       })
     /* Diff 面板只在用户主动点击变更文件时打开，不再默认展开首个文件。 */
     await Promise.all([directoryPromise, gitPromise])
+  }
+
+  /* 草稿态刷新：目录按工作区本地列举重载；git 状态留空（会话建立后由 runtime 口径覆盖）。 */
+  const refreshDraftWorkspaceContext = async (workspaceId: string): Promise<void> => {
+    if (window.kimiAgent === undefined || requestedSessionId !== null || workspaceId !== requestedDraftWorkspaceId) return
+    const generation = ++workspaceGeneration
+    const paths = [fileTree.root, ...Object.keys(fileTree.expanded)]
+    await Promise.all(
+      paths.map((path) => loadDraftDirectory(workspaceId, path, generation))
+    )
   }
 
   const loadGitBranches = async (sessionId: string): Promise<void> => {
@@ -1323,10 +1357,16 @@ export function useRuntimeBridge() {
     )
   }
 
-  /* 草稿态入口：新建任务后、首条消息前，先把工作区根目录装进文件树。 */
+  /* 草稿态入口：新建任务后、首条消息前，先把工作区根目录装进文件树。
+     已处于同一草稿工作区时（如点刷新），连已展开目录一起重载。 */
   const openDraftWorkspaceTree = (workspaceId: string): void => {
     if (window.kimiAgent === undefined || workspaceId.length === 0) return
+    const reentry = workspaceId === requestedDraftWorkspaceId && requestedSessionId === null
     requestedDraftWorkspaceId = workspaceId
+    if (reentry) {
+      void refreshDraftWorkspaceContext(workspaceId)
+      return
+    }
     void loadDraftDirectory(workspaceId, '.', workspaceGeneration)
   }
 

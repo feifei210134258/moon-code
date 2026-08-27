@@ -1298,4 +1298,98 @@ describe('useRuntimeBridge draft workspace tree', () => {
     expect(listWorkspaceFiles).toHaveBeenCalledTimes(2)
     wrapper.unmount()
   })
+
+  it('refreshes the draft workspace tree, previews files, and runs context-menu actions in draft mode', async () => {
+    const listWorkspaceFiles = vi.fn(async (_workspaceId: string, path = '.') => ({
+      path,
+      items: path === '.'
+        ? [{
+            path: 'src', name: 'src', kind: 'directory' as const, size: null,
+            modifiedAt: null, mime: null, languageId: null, isBinary: false,
+            gitStatus: null, childCount: null
+          }]
+        : [{
+            path: 'src/main.ts', name: 'main.ts', kind: 'file' as const, size: null,
+            modifiedAt: null, mime: null, languageId: null, isBinary: false,
+            gitStatus: null, childCount: null
+          }],
+      truncated: false
+    }))
+    const readWorkspaceFileFromWorkspace = vi.fn(async () => ({
+      path: 'src/main.ts', content: 'const x = 1', encoding: 'utf-8' as const, size: 12,
+      truncated: false, mime: null, languageId: null, lineCount: 1, isBinary: false
+    }))
+    const openWorkspaceFileSystemFromWorkspace = vi.fn(async () => ({ opened: true as const }))
+    const trashWorkspaceEntryFromWorkspace = vi.fn(async () => ({ trashed: true as const }))
+    const attachWorkspaceFileFromWorkspace = vi.fn(async () => ({
+      fileId: 'file-1', name: 'main.ts', mediaType: 'text/plain', size: 12
+    }))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      listWorkspaceFiles,
+      readWorkspaceFileFromWorkspace,
+      openWorkspaceFileSystemFromWorkspace,
+      trashWorkspaceEntryFromWorkspace,
+      attachWorkspaceFileFromWorkspace
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+
+    bridge.openDraftWorkspaceTree('workspace-1')
+    await flushPromises()
+    await bridge.toggleDirectory('src')
+    expect(bridge.fileTree.children['src']?.[0]?.path).toBe('src/main.ts')
+    expect(listWorkspaceFiles).toHaveBeenCalledTimes(2)
+
+    /* 再次进入同一草稿工作区（如点刷新按钮）：根目录与已展开目录一起重载。 */
+    bridge.openDraftWorkspaceTree('workspace-1')
+    await flushPromises()
+    expect(listWorkspaceFiles).toHaveBeenCalledTimes(4)
+    expect(listWorkspaceFiles).toHaveBeenNthCalledWith(3, 'workspace-1', '.')
+    expect(listWorkspaceFiles).toHaveBeenNthCalledWith(4, 'workspace-1', 'src')
+
+    /* 草稿态文件预览走工作区口径。 */
+    await bridge.openFile('src/main.ts')
+    expect(readWorkspaceFileFromWorkspace).toHaveBeenCalledWith('workspace-1', 'src/main.ts')
+    expect(bridge.filePreview.value?.content).toBe('const x = 1')
+
+    /* 右键菜单操作：系统打开 / 删除 / 添加附件全部走工作区口径。 */
+    await bridge.openWorkspaceFileSystem('src/main.ts')
+    expect(openWorkspaceFileSystemFromWorkspace).toHaveBeenCalledWith('workspace-1', 'src/main.ts')
+    expect(bridge.fileActionNotice.value).toBe('已使用系统默认应用打开。')
+
+    const attached = await bridge.attachWorkspaceFile('src/main.ts')
+    expect(attachWorkspaceFileFromWorkspace).toHaveBeenCalledWith('workspace-1', 'src/main.ts')
+    expect(attached?.fileId).toBe('file-1')
+
+    await bridge.trashWorkspaceEntry('src/main.ts')
+    expect(trashWorkspaceEntryFromWorkspace).toHaveBeenCalledWith('workspace-1', 'src/main.ts')
+    /* 预览正开着被删的文件时会先关闭预览（清空操作提示），这是既有行为。 */
+    expect(bridge.filePreview.value).toBeNull()
+    /* 删除后目录按草稿工作区重载。 */
+    expect(listWorkspaceFiles).toHaveBeenCalledTimes(6)
+
+    wrapper.unmount()
+  })
 })

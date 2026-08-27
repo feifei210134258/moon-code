@@ -70,6 +70,8 @@ const api: KimiAgentDesktopApi = {
   pasteAttachment: (input) => ipcRenderer.invoke(ipcChannels.attachmentsPaste, input),
   attachWorkspaceFile: (sessionId, path) =>
     ipcRenderer.invoke(ipcChannels.attachmentsAddWorkspaceFile, sessionId, path),
+  attachWorkspaceFileFromWorkspace: (workspaceId, path) =>
+    ipcRenderer.invoke(ipcChannels.attachmentsAddWorkspaceFileFromWorkspace, workspaceId, path),
   readAttachment: (fileId, mediaType) => ipcRenderer.invoke(ipcChannels.attachmentRead, fileId, mediaType),
   readSessionMedia: (sessionId, fileId, mediaType) =>
     ipcRenderer.invoke(ipcChannels.attachmentReadSessionMedia, sessionId, fileId, mediaType),
@@ -77,6 +79,8 @@ const api: KimiAgentDesktopApi = {
   listFiles: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesList, sessionId, path),
   listWorkspaceFiles: (workspaceId, path) =>
     ipcRenderer.invoke(ipcChannels.filesListWorkspace, workspaceId, path),
+  readWorkspaceFileFromWorkspace: (workspaceId, path) =>
+    ipcRenderer.invoke(ipcChannels.filesReadWorkspace, workspaceId, path),
   readFile: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesRead, sessionId, path),
   searchFiles: (sessionId, query) => ipcRenderer.invoke(ipcChannels.filesSearch, sessionId, query),
   grepFiles: (sessionId, pattern) => ipcRenderer.invoke(ipcChannels.filesGrep, sessionId, pattern),
@@ -86,8 +90,12 @@ const api: KimiAgentDesktopApi = {
     ipcRenderer.invoke(ipcChannels.filesOpenIn, sessionId, appId, path, line),
   openWorkspaceFileSystem: (sessionId, path) =>
     ipcRenderer.invoke(ipcChannels.filesOpenSystem, sessionId, path),
+  openWorkspaceFileSystemFromWorkspace: (workspaceId, path) =>
+    ipcRenderer.invoke(ipcChannels.filesOpenSystemWorkspace, workspaceId, path),
   revealWorkspaceFile: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesReveal, sessionId, path),
   trashWorkspaceEntry: (sessionId, path) => ipcRenderer.invoke(ipcChannels.filesTrash, sessionId, path),
+  trashWorkspaceEntryFromWorkspace: (workspaceId, path) =>
+    ipcRenderer.invoke(ipcChannels.filesTrashWorkspace, workspaceId, path),
   readMarkdownImage: (sessionId, source) =>
     ipcRenderer.invoke(ipcChannels.markdownImageRead, sessionId, source),
   getGitStatus: (sessionId) => ipcRenderer.invoke(ipcChannels.gitStatus, sessionId),

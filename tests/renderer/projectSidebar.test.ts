@@ -48,6 +48,14 @@ async function clickSessionMenuAction(label: string): Promise<void> {
   await nextTick()
 }
 
+/* 会话行的完整菜单只能从右键打开（hover 托盘仅保留归档）。 */
+async function openSessionMenu(wrapper: ReturnType<typeof mountSidebar>, rowIndex: number): Promise<void> {
+  wrapper.findAll('.session-row')[rowIndex]!.element.dispatchEvent(
+    new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 })
+  )
+  await nextTick()
+}
+
 describe('ProjectSidebar', () => {
   it('shows a loading indicator for running sessions and a completed dot for finished sessions', () => {
     const wrapper = mountSidebar()
@@ -77,7 +85,7 @@ describe('ProjectSidebar', () => {
   it('keeps the project visually inactive when one of its sessions is selected and closes tree menus with Escape', async () => {
     const wrapper = mountSidebar()
     expect(wrapper.find('.project-row-wrap.is-active').exists()).toBe(false)
-    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    await openSessionMenu(wrapper, 0)
     expect(document.querySelector('.tree-menu-overlay.session-menu')).not.toBeNull()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await nextTick()
@@ -89,16 +97,16 @@ describe('ProjectSidebar', () => {
     const confirm = vi.fn(() => true)
     window.confirm = confirm
     const wrapper = mountSidebar()
-    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    await openSessionMenu(wrapper, 0)
     expect([...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)).not.toBeUndefined()
     await clickSessionMenuAction('创建分叉')
     expect(wrapper.emitted('forkSession')).toEqual([['session-a']])
 
-    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    await openSessionMenu(wrapper, 0)
     await clickSessionMenuAction('导出 ZIP')
     expect(wrapper.emitted('exportSession')).toEqual([['session-a']])
 
-    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    await openSessionMenu(wrapper, 0)
     await clickSessionMenuAction('归档')
     expect(confirm).toHaveBeenCalledOnce()
     expect(wrapper.emitted('archiveSession')).toEqual([['session-a']])
@@ -107,11 +115,11 @@ describe('ProjectSidebar', () => {
 
   it('offers BTW side chat only on the active session menu', async () => {
     const wrapper = mountSidebar()
-    await wrapper.get('[aria-label="完善浏览器批注 任务操作"]').trigger('click')
+    await openSessionMenu(wrapper, 1)
     let menu = [...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)!
     expect(menu.textContent).not.toContain('BTW 侧边会话')
 
-    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    await openSessionMenu(wrapper, 0)
     menu = [...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)!
     const btw = [...menu.querySelectorAll('button')].find((item) => item.textContent?.includes('BTW 侧边会话'))
     expect(btw).toBeDefined()
@@ -164,13 +172,13 @@ describe('ProjectSidebar', () => {
     })
     await wrapper.get('.session-load-more').trigger('click')
     expect(wrapper.emitted('loadMoreSessions')).toEqual([[]])
-    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
+    await openSessionMenu(wrapper, 0)
     await clickSessionMenuAction('查看子任务')
     expect(wrapper.emitted('loadSessionChildren')).toEqual([['session-a']])
     wrapper.unmount()
   })
 
-  it('opens the session menu on row right-click, positioned at the pointer, with the same items as the more button', async () => {
+  it('opens the session menu on row right-click at the pointer, and keeps only the archive trigger in the hover tray', async () => {
     const wrapper = mountSidebar()
     wrapper.findAll('.session-row')[0]!.element.dispatchEvent(
       new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 })
@@ -183,14 +191,19 @@ describe('ProjectSidebar', () => {
     expect((contextMenu as HTMLElement).style.top).toBe(`${Math.round(expectedTop)}px`)
     expect((contextMenu as HTMLElement).style.left).toBe(`${Math.round(expectedLeft)}px`)
     const contextItems = [...contextMenu.querySelectorAll('button')].map((item) => item.textContent)
+    expect(contextItems).toContain('重命名')
+    expect(contextItems).toContain('查看子任务')
+    expect(contextItems).toContain('创建分叉')
+    expect(contextItems).toContain('导出 ZIP')
+    expect(contextItems).toContain('归档')
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await nextTick()
-    await wrapper.get('[aria-label="实现 Session 生命周期 任务操作"]').trigger('click')
-    const dotsMenu = [...document.querySelectorAll('.tree-menu-overlay.session-menu')].at(-1)!
-    expect((dotsMenu as HTMLElement).style.top).toBe('8px')
-    const dotsItems = [...dotsMenu.querySelectorAll('button')].map((item) => item.textContent)
-    expect(contextItems).toEqual(dotsItems)
+    /* hover 托盘只有归档一枚按钮：三个点入口已删除，完整菜单走右键。 */
+    const wrap = wrapper.findAll('.session-row-wrap')[0]!
+    expect(wrap.findAll('.tree-more-button')).toHaveLength(1)
+    expect(wrap.find('.session-archive-trigger').exists()).toBe(true)
+    expect(wrap.find('[aria-label="实现 Session 生命周期 任务操作"]').exists()).toBe(false)
+    /* 项目行的三个点入口保留。 */
+    expect(wrapper.find('[aria-label="Kimi Agent 项目操作"]').exists()).toBe(true)
     wrapper.unmount()
   })
 
