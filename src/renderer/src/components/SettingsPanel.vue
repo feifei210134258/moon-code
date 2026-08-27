@@ -2245,8 +2245,8 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                   <PhSpinnerGap class="spin" :size="18" />正在读取 MCP 配置…
                 </div>
                 <div v-else class="mcp-list">
-                  <article v-for="server in managedMcpServers" :key="`${server.source}:${server.name}`" class="mcp-row">
-                    <div>
+                  <article v-for="server in managedMcpServers" :key="`${server.source}:${server.name}`" class="mcp-managed-row">
+                    <div class="mcp-managed-info">
                       <strong>{{ server.name }}</strong>
                       <small>
                         {{ server.config.transport }} · {{ server.source }}{{ server.plugin === null ? '' : ` · ${server.plugin.name}` }}

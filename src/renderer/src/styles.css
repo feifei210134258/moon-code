@@ -6925,6 +6925,11 @@ body.is-panel-resizing {
   flex: 0 0 auto;
 }
 
+.mcp-managed-actions button {
+  width: auto;
+  height: auto;
+}
+
 .mcp-test-output {
   margin: 0;
   padding: 9px 11px;
@@ -7058,10 +7063,44 @@ body.is-panel-resizing {
   border-bottom: 1px solid var(--border);
 }
 
-.mcp-row > div {
+/* 运行态行只有第一个 div 是文本块（其余列是状态点/文本/按钮）。 */
+.mcp-row > div:first-child {
   min-width: 0;
   display: grid;
   gap: 3px;
+}
+
+/* 管理面行：文本块 + 右侧操作组，两列 flex，不吃运行态的 4 列 grid。 */
+.mcp-managed-row {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mcp-managed-info {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.mcp-managed-info strong {
+  overflow: hidden;
+  font-size: var(--type-ui-small-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-managed-info small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--type-micro-size);
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mcp-row > span:nth-child(3) {
