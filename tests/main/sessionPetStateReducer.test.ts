@@ -153,6 +153,55 @@ describe('SessionPetStateReducer', () => {
     })
   })
 
+  it('shows completion instead of running when only a background lease keeps busy true', () => {
+    // 场景：主 turn 已完成（turn.ended 先到），但 dev server / 后台 Bash 让
+    // work_changed 的 busy 持续为 true（0.39 的 busy 覆盖后台 lease）。
+    // 宠物必须显示完成态，否则用户无从知道任务已经结束。
+    const reducer = new SessionPetStateReducer({ completedDurationMs: 60_000 })
+    reducer.reset('server-1')
+    reducer.seed([{ id: 'workspace-1', name: 'Project' }], [session({ id: 'task', busy: true, mainTurnActive: true })])
+    reducer.setConnected(true)
+
+    const turnEnded = {
+      type: 'turn.ended',
+      session_id: 'task',
+      seq: 2,
+      timestamp: '2026-07-23T08:01:00.000Z',
+      payload: { type: 'turn.ended', agentId: 'main', reason: 'completed' }
+    } as SessionEventFrame
+    expect(reducer.applyEvent(turnEnded)).toBe(true)
+
+    // 后台 lease 上线：busy=true、main_turn_active=false
+    const backgroundLease = {
+      type: 'event',
+      session_id: 'task',
+      seq: 3,
+      timestamp: '2026-07-23T08:01:05.000Z',
+      payload: {
+        type: 'event.session.work_changed',
+        busy: true,
+        main_turn_active: false,
+        pending_interaction: 'none'
+      }
+    } as SessionEventFrame
+    expect(reducer.applyEvent(backgroundLease)).toBe(true)
+
+    expect(reducer.getRoster().items[0]).toMatchObject({
+      sessionId: 'task',
+      status: 'completed',
+      backgroundActivity: true
+    })
+  })
+
+  it('stays running while the main turn is active even with background work', () => {
+    // 对照组：主 turn 仍在跑（main_turn_active=true）时 busy 依旧显示 running。
+    const reducer = new SessionPetStateReducer()
+    reducer.reset('server-1')
+    reducer.seed([{ id: 'workspace-1', name: 'Project' }], [session({ id: 'task', busy: true, mainTurnActive: true })])
+    reducer.setConnected(true)
+    expect(reducer.getRoster().items[0]).toMatchObject({ status: 'running' })
+  })
+
   it('shows tracked sessions as disconnected without fabricating new pets', () => {
     const reducer = new SessionPetStateReducer()
     reducer.reset('server-1')

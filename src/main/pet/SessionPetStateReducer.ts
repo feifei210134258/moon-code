@@ -294,8 +294,15 @@ export class SessionPetStateReducer {
   #statusFor(session: TrackedPetSession, now: number): PetVisualState {
     if (!this.#connected) return 'disconnected'
     if (session.pendingInteraction !== 'none') return 'waiting'
-    if (session.lastTurnReason === 'failed' && session.unread) return 'failed'
-    if (session.busy) return 'running'
+    // 0.39 的 busy 是“任意 agent 持有活动 turn 或后台 lease”：dev server、
+    // 后台 Bash 都会让它持续为 true。主 turn 已结束时（lastTurnReason 已
+    // 置为 completed/failed），完成/失败态必须优先于 running 展示，否则
+    // 任务明明完成了、宠物却因为一个挂着的服务一直保持动态，用户无从
+    // 察觉任务已结束。纯后台活动（主 turn 从未开始/已结束很久）由
+    // backgroundActivity 字段单独表达。
+    const mainTurnOver = !session.mainTurnActive && session.lastTurnReason !== null
+    if (!mainTurnOver && session.busy) return 'running'
+    if (session.lastTurnReason === 'failed' && (session.unread || !mainTurnOver)) return 'failed'
     if (session.completedUntil !== null && session.completedUntil > now) return 'completed'
     if (session.unread) return 'review'
     return 'idle'
