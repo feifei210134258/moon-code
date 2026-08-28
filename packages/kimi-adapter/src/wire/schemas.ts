@@ -621,15 +621,20 @@ export const terminalSchema = z.object({
 export const terminalListSchema = z.object({ items: z.array(terminalSchema) })
 export const terminalCloseResultSchema = z.object({ closed: z.literal(true) })
 
+/** /api/v1/auth 响应 data。
+ *  kimi 0.39.0：ready + default_model（nullable）；
+ *  kimi 0.39.1：ready 改名 models_ready，default_model 字段移除（默认模型只在 /config 出现）。
+ *  两种字段都做成 optional，由使用方做归一化（见 KimiSettingsBridge.getSnapshot）。 */
 export const authSummarySchema = z.object({
-  ready: z.boolean(),
+  ready: z.boolean().optional(),
+  models_ready: z.boolean().optional(),
   providers_count: z.number().int().nonnegative(),
-  default_model: z.string().nullable(),
+  default_model: z.string().nullable().optional(),
   managed_provider: z.object({
     name: z.string().min(1),
     status: z.enum(['authenticated', 'expired', 'revoked', 'unauthenticated'])
   }).nullable()
-})
+}).passthrough()
 
 export const modelCatalogItemSchema = z.object({
   provider: z.string().min(1),

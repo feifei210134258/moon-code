@@ -93,6 +93,46 @@ describe('KimiRestClient', () => {
     )
   })
 
+  it('accepts the 0.39.1 auth shape where ready was renamed to models_ready and default_model was dropped', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      msg: 'success',
+      data: {
+        models_ready: true,
+        providers_count: 3,
+        managed_provider: { name: 'managed:kimi-code', status: 'authenticated' }
+      },
+      request_id: 'req-1'
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.getAuth()).resolves.toEqual(expect.objectContaining({
+      models_ready: true,
+      providers_count: 3,
+      managed_provider: { name: 'managed:kimi-code', status: 'authenticated' }
+    }))
+  })
+
+  it('keeps accepting the pre-0.39.1 auth shape with ready and default_model', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      code: 0,
+      msg: 'success',
+      data: {
+        ready: true,
+        providers_count: 1,
+        default_model: 'kimi-for-coding',
+        managed_provider: { name: 'managed:kimi-code', status: 'authenticated' }
+      },
+      request_id: 'req-1'
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new KimiRestClient({ origin: 'http://127.0.0.1:1234', token: 'secret', fetchImpl })
+
+    await expect(client.getAuth()).resolves.toEqual(expect.objectContaining({
+      ready: true,
+      default_model: 'kimi-for-coding'
+    }))
+  })
+
   it('passes the login region through the OAuth login body (0.38.0)', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
       code: 0,

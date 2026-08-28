@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { KimiSettingsBridge } from '../../src/main/kimi/KimiSettingsBridge.js'
 import type { KimiRuntimeManager } from '../../src/main/runtime/KimiRuntimeManager.js'
-import type { ProviderDirectoryItem } from '../../packages/kimi-adapter/src/wire/schemas.js'
+import type { ProviderDirectoryItem, AuthSummary } from '../../packages/kimi-adapter/src/wire/schemas.js'
 
 const deepseekDirectory: ProviderDirectoryItem = {
   id: 'deepseek', name: 'DeepSeek', wire_type: 'openai', guessed: false,
@@ -30,7 +30,7 @@ function createClient() {
     telemetry: false
   }
   return {
-    getAuth: vi.fn(async () => ({
+    getAuth: vi.fn(async (): Promise<AuthSummary> => ({
       ready: true,
       providers_count: 1,
       default_model: 'kimi-for-coding',
@@ -114,6 +114,31 @@ function createClient() {
 }
 
 describe('KimiSettingsBridge', () => {
+  it('normalizes the 0.39.1 auth shape (models_ready, no default_model) into the snapshot contract', async () => {
+    const client = createClient()
+    client.getAuth.mockResolvedValue({
+      models_ready: true,
+      providers_count: 3,
+      managed_provider: { name: 'managed:kimi-code', status: 'authenticated' as const }
+    })
+    const runtime = {
+      state: {
+        status: 'running', mode: 'managed', version: '0.39.1', serverId: 'server-1',
+        origin: 'http://127.0.0.1:1234', error: null
+      },
+      createRestClient: () => client
+    } as unknown as KimiRuntimeManager
+    const snapshot = await new KimiSettingsBridge(runtime).getSnapshot()
+
+    /* ready 归一化自 models_ready；default_model 回落到 /config 的值。 */
+    expect(snapshot.auth).toEqual({
+      ready: true,
+      providersCount: 3,
+      defaultModel: 'kimi-for-coding',
+      managedProvider: { name: 'managed:kimi-code', status: 'authenticated' }
+    })
+  })
+
   it('projects only redacted catalog/config data and uses Kimi for mutations', async () => {
     const client = createClient()
     const runtime = {

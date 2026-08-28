@@ -2410,7 +2410,6 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
               <div class="settings-title">
                 <div><h2>实验室</h2><p>Kimi 官方实验特性的开关集中在这里；变更后需要重启 Kimi Runtime 才生效。</p></div>
               </div>
-
               <article v-if="towerState" class="remote-control-card" :class="{ 'is-active': towerState.appliedEnabled === true }">
                 <div class="remote-control-head">
                   <div>
@@ -2442,7 +2441,7 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 <div class="remote-control-head">
                   <div>
                     <strong>远程控制 <small class="remote-control-tag">Kimi 官方实验特性</small></strong>
-                    <small>{{ remoteControlState.active ? '已通过 Moonshot 中继上线，扫码或在其他设备打开链接即可继续本机会话。' : '把本机 Kimi 会话经 Moonshot 官方中继暴露给手机或其他电脑的浏览器；需要已登录 Kimi 账号。' }}</small>
+                    <small>{{ remoteControlState.active ? '已通过 Moonshot 中继上线，扫码或在其他设备打开链接即可继续本机会话。' : '把本机 Kimi 会话经 Moonshot 官方中继暴露给手机或其他电脑的浏览器；需要已登录 Kimi 账号。侧栏底部的手机图标是同一开关的快捷入口。' }}</small>
                   </div>
                   <input type="checkbox" :checked="remoteControlState.preference.enabled" :disabled="remoteControlPending" @change="toggleRemoteControl" />
                 </div>

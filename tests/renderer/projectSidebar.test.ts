@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { PhFolderSimple } from '@phosphor-icons/vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import type { KimiAgentDesktopApi } from '../../src/shared/contracts.js'
 import FolderSimpleOpenIcon from '../../src/renderer/src/components/icons/FolderSimpleOpenIcon.vue'
 import ProjectSidebar from '../../src/renderer/src/components/ProjectSidebar.vue'
 
@@ -65,6 +66,10 @@ describe('ProjectSidebar', () => {
     expect(wrapper.get('.session-status.is-completed').attributes('title')).toBe('已结束')
     expect(wrapper.findAll('.session-status')).toHaveLength(2)
     expect(wrapper.findAll('.session-row')[2]?.find('.session-status').exists()).toBe(false)
+    /* 圆点悬浮在行左缘留白里：是 session-row 的直接子元素，不进入标题排版。 */
+    const runningRow = wrapper.findAll('.session-row')[0]!
+    expect(runningRow.find('.session-row > .session-status').exists()).toBe(true)
+    expect(runningRow.find('.session-title .session-status').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -302,5 +307,69 @@ describe('ProjectSidebar', () => {
     const wrapper = mountSidebar()
     expect(wrapper.find('.sidebar-archived-notice').exists()).toBe(false)
     wrapper.unmount()
+  })
+
+  it('opens settings from the footer identity and gear, and shows the runtime version badge', async () => {
+    const wrapper = mount(ProjectSidebar, {
+      attachTo: document.body,
+      props: {
+        projects,
+        activeWorkspaceId: 'workspace-a',
+        activeSessionId: 'session-a',
+        lifecyclePending: null,
+        lifecycleError: null,
+        runtimeVersion: '0.39'
+      }
+    })
+    expect(wrapper.get('.footer-name').text()).toBe('Moon Code')
+    expect(wrapper.get('.footer-badge').text()).toBe('0.39')
+    await wrapper.get('.footer-identity').trigger('click')
+    expect(wrapper.emitted('openSettings')).toEqual([[]])
+    await wrapper.get('.footer-icon-button[aria-label="设置"]').trigger('click')
+    expect(wrapper.emitted('openSettings')).toEqual([[], []])
+    wrapper.unmount()
+  })
+
+  it('opens the remote control popover from the footer phone icon and closes it again', async () => {
+    window.kimiAgent = {
+      getRemoteControlState: vi.fn(async () => ({
+        preference: { enabled: false },
+        runtimeMode: 'managed' as const,
+        appliedEnabled: false,
+        requiresRestart: false,
+        active: false,
+        url: null,
+        deviceId: null,
+        startedAt: null,
+        qrCodeDataUrl: null
+      })),
+      onRemoteControlStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mountSidebar()
+
+    const trigger = wrapper.get('.sidebar-remote-trigger')
+    expect(trigger.attributes('aria-label')).toBe('远程控制')
+    expect(trigger.classes()).not.toContain('is-live')
+    await trigger.trigger('click')
+    await flushPromises()
+    const popover = document.querySelector<HTMLElement>('.remote-popover')
+    expect(popover).not.toBeNull()
+    expect(popover!.textContent).toContain('远程控制')
+    expect(popover!.textContent).toContain('已关闭')
+
+    await trigger.trigger('click')
+    await nextTick()
+    expect(document.querySelector('.remote-popover')).toBeNull()
+
+    await trigger.trigger('click')
+    await flushPromises()
+    ;(document.querySelector<HTMLElement>('.remote-popover-close') as HTMLElement).click()
+    await nextTick()
+    expect(document.querySelector('.remote-popover')).toBeNull()
+    wrapper.unmount()
+  })
+
+  afterEach(() => {
+    delete window.kimiAgent
   })
 })

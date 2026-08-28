@@ -81,9 +81,11 @@ export class KimiSettingsBridge {
     ])
     return {
       auth: {
-        ready: auth.ready,
+        // kimi 0.39.1 把 /auth 的 ready 改名 models_ready、移除 default_model；
+        // 默认模型统一从 /config 读取（下游本来就只认 preferences.defaultModel）。
+        ready: auth.ready ?? auth.models_ready ?? false,
         providersCount: auth.providers_count,
-        defaultModel: auth.default_model,
+        defaultModel: auth.default_model ?? config.default_model ?? null,
         managedProvider: auth.managed_provider === null ? null : {
           name: auth.managed_provider.name,
           status: auth.managed_provider.status

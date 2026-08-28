@@ -4,11 +4,13 @@ import {
   PhChatCircleText,
   PhCopy,
   PhDotsThree,
+  PhDeviceMobile,
   PhDownloadSimple,
   PhFolderSimple,
   PhGearSix,
   PhGitFork,
   PhMagnifyingGlass,
+  PhMoonStars,
   PhNotePencil,
   PhPencilSimple,
   PhPlus,
@@ -18,8 +20,10 @@ import {
   PhX
 } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import type { RemoteControlState } from '@shared/contracts'
 import type { ProjectItem, SessionItem } from '../types'
 import FolderSimpleOpenIcon from './icons/FolderSimpleOpenIcon.vue'
+import RemoteControlPopover from './RemoteControlPopover.vue'
 import SessionManagerPanel from './SessionManagerPanel.vue'
 
 const props = defineProps<{
@@ -35,6 +39,8 @@ const props = defineProps<{
   childrenError?: string | null
   /* 其他客户端归档了当前打开的会话时的非阻塞提示（保留视图不强制跳出）。 */
   archivedNotice?: { sessionId: string; title: string } | null
+  /* Kimi Runtime 版本短号（如 0.39），用于底栏品牌徽标；未连接时为 null。 */
+  runtimeVersion?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -65,6 +71,27 @@ const editInput = ref<HTMLInputElement | null>(null)
    点确认才执行归档（无弹窗），点击他处或移出则滑回。 */
 const swipeSessionId = ref<string | null>(null)
 const sessionManagerOpen = ref(false)
+
+/* 底栏手机图标：远程控制快捷入口（设置「实验室」页保留完整卡片，两处共用同一状态）。
+   侧栏自身只维护一份轻量状态用于点亮图标，弹层内部自行读写完整状态。 */
+const remoteControlState = ref<RemoteControlState | null>(null)
+const remotePopoverOpen = ref(false)
+const remoteTriggerRef = ref<HTMLButtonElement | null>(null)
+const remotePopoverAnchor = ref({ top: 0, left: 0, bottom: 0 })
+const remoteControlLive = computed(() => remoteControlState.value?.active === true)
+let disposeRemoteControlSubscription: (() => void) | null = null
+
+function toggleRemotePopover(): void {
+  if (remotePopoverOpen.value) {
+    remotePopoverOpen.value = false
+    return
+  }
+  const rect = remoteTriggerRef.value?.getBoundingClientRect()
+  if (rect !== undefined) {
+    remotePopoverAnchor.value = { top: rect.top, left: rect.left, bottom: rect.bottom }
+  }
+  remotePopoverOpen.value = true
+}
 
 const filteredProjects = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase()
@@ -206,10 +233,23 @@ function onWindowKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   document.addEventListener('click', closeMenuOnOutsideClick)
   window.addEventListener('keydown', onWindowKeydown)
+  const api = window.kimiAgent
+  if (api !== undefined) {
+    void api.getRemoteControlState?.().then((state) => {
+      remoteControlState.value = state
+    }).catch(() => undefined)
+    if (typeof api.onRemoteControlStateChanged === 'function') {
+      disposeRemoteControlSubscription = api.onRemoteControlStateChanged((state) => {
+        remoteControlState.value = state
+      })
+    }
+  }
 })
 onBeforeUnmount(() => {
   document.removeEventListener('click', closeMenuOnOutsideClick)
   window.removeEventListener('keydown', onWindowKeydown)
+  disposeRemoteControlSubscription?.()
+  disposeRemoteControlSubscription = null
 })
 </script>
 
@@ -296,17 +336,18 @@ onBeforeUnmount(() => {
                   @click="$emit('selectSession', session.id)"
                   @contextmenu.prevent.stop="toggleMenu(`session:${session.id}`, $event, true)"
                 >
+                  <!-- 状态圆点绝对定位在行左缘留白里，不参与标题排版：文本始终保持同一对齐。 -->
+                  <span
+                    v-if="session.tone !== undefined && session.tone !== 'neutral'"
+                    class="session-status"
+                    :class="`is-${session.tone ?? 'neutral'}`"
+                    :title="sessionStatusLabel(session)"
+                    :aria-label="sessionStatusLabel(session)"
+                  >
+                    <PhSpinnerGap v-if="session.tone === 'running'" class="spin" :size="13" />
+                    <i v-else aria-hidden="true" />
+                  </span>
                   <span class="session-title">
-                    <span
-                      v-if="session.tone !== undefined && session.tone !== 'neutral'"
-                      class="session-status"
-                      :class="`is-${session.tone ?? 'neutral'}`"
-                      :title="sessionStatusLabel(session)"
-                      :aria-label="sessionStatusLabel(session)"
-                    >
-                      <PhSpinnerGap v-if="session.tone === 'running'" class="spin" :size="13" />
-                      <i v-else aria-hidden="true" />
-                    </span>
                     <PhGitFork v-if="session.parentSessionId" :size="12" />
                     <span class="session-title-text">{{ session.title }}</span>
                   </span>
@@ -334,11 +375,40 @@ onBeforeUnmount(() => {
 
     <div v-if="sessionPageError || childrenError" class="sidebar-error" role="alert">{{ sessionPageError || childrenError }}</div>
     <div v-if="lifecycleError" class="sidebar-error" role="alert">{{ lifecycleError }}</div>
-    <button class="sidebar-settings" type="button" @click="$emit('openSettings')">
-      <PhGearSix :size="18" />
-      <span>设置</span>
-    </button>
+
+    <!-- 底栏：zcode 风格的品牌/账号区 —— 头像 + 名称 + 徽标在左，远程控制与设置入口在右。 -->
+    <div class="sidebar-footer">
+      <button class="footer-identity" type="button" title="设置" @click="$emit('openSettings')">
+        <span class="footer-avatar" aria-hidden="true"><PhMoonStars :size="15" weight="fill" /></span>
+        <span class="footer-name">Moon Code</span>
+        <span v-if="runtimeVersion" class="footer-badge">{{ runtimeVersion }}</span>
+      </button>
+      <div class="footer-actions">
+        <button
+          ref="remoteTriggerRef"
+          class="footer-icon-button sidebar-remote-trigger"
+          :class="{ 'is-live': remoteControlLive }"
+          type="button"
+          :aria-label="remoteControlLive ? '远程控制已上线' : '远程控制'"
+          :title="remoteControlLive ? '远程控制已上线' : '远程控制'"
+          @click="toggleRemotePopover"
+        >
+          <PhDeviceMobile :size="16" />
+        </button>
+        <button class="footer-icon-button" type="button" aria-label="设置" title="设置" @click="$emit('openSettings')">
+          <PhGearSix :size="16" />
+        </button>
+      </div>
+    </div>
   </aside>
+
+  <Teleport to="body">
+    <RemoteControlPopover
+      v-if="remotePopoverOpen"
+      :anchor="remotePopoverAnchor"
+      @close="remotePopoverOpen = false"
+    />
+  </Teleport>
 
   <Teleport to="body">
     <div v-if="menuProject" class="tree-menu tree-menu-overlay" :style="menuPosition" @click.stop>

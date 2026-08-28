@@ -266,6 +266,13 @@ function openSettings(): void {
   settingsOpen.value = true
 }
 
+/* 侧栏底栏徽标：Runtime 运行中显示 Kimi 版本短号（0.39），其余情况不显示。 */
+const runtimeVersionBadge = computed<string | null>(() => {
+  const runtime = runtimeBridge.runtime.value
+  if (runtime.status !== 'running' || runtime.version === null) return null
+  return /^(\d+\.\d+)/.exec(runtime.version)?.[1] ?? runtime.version
+})
+
 function toggleBranches(): void {
   branchesOpen.value = !branchesOpen.value
   usageOpen.value = false
@@ -803,6 +810,7 @@ onBeforeUnmount(() => {
         :children-pending-session-id="runtimeBridge.childrenPendingSessionId.value"
         :children-error="runtimeBridge.childrenError.value"
         :archived-notice="sessionArchivedNotice"
+        :runtime-version="runtimeVersionBadge"
         @toggle-project="store.toggleProject"
         @select-session="store.selectSession"
         @create-session="startDraftSession"

@@ -28,10 +28,10 @@ describe.skipIf(!runIntegration)('managed Kimi Markdown image integration', () =
       }))
       expect(image?.dataUrl).toMatch(/^data:image\/png;base64,/)
       const auth = await rest.getAuth()
-      expect(auth.ready).toBe(true)
-      expect(auth.default_model).not.toBeNull()
-      const model = auth.default_model
-      if (model === null) throw new Error('Kimi Runtime has no default model for the P0 conversation smoke')
+      expect(auth.ready ?? auth.models_ready).toBe(true)
+      /* 0.39.1 移除了 /auth 的 default_model；默认模型统一从 /config 读取。 */
+      const model = auth.default_model ?? (await rest.getConfig()).default_model
+      if (model === null || model === undefined) throw new Error('Kimi Runtime has no default model for the P0 conversation smoke')
       await rest.submitPrompt(session.id, {
         content: [{ type: 'text', text: 'Reply only with: P0 smoke.' }],
         model,

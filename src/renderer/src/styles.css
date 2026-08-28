@@ -845,7 +845,7 @@ select:focus-visible {
 .shortcut-row,
 .project-row,
 .session-row,
-.sidebar-settings {
+.footer-identity {
   width: 100%;
   border: 0;
   background: transparent;
@@ -867,7 +867,8 @@ select:focus-visible {
 .shortcut-row:hover,
 .project-row:hover,
 .session-row:hover,
-.sidebar-settings:hover {
+.footer-identity:hover,
+.footer-icon-button:hover {
   background: rgba(0, 0, 0, 0.04);
 }
 
@@ -936,12 +937,15 @@ select:focus-visible {
 }
 
 .session-row {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   min-height: 38px;
   align-items: center;
-  padding: 7px 9px 7px 34px;
+  /* 左内边距与项目行文本起点一致（8px 边距 + 12px 图标列 + 7px 间隙 = 27px），
+     会话标题与项目名称左对齐。 */
+  padding: 7px 9px 7px 27px;
   border-radius: 7px;
   font-size: var(--type-ui-small-size);
 }
@@ -1197,9 +1201,14 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+/* 状态圆点/悬浮加载图标占位与项目行的文件夹图标同一列（left 8px、17px 视觉宽，
+   中心 16.5px 对齐），悬浮在标题前，不占标题排版空间。 */
 .session-status {
-  flex: none;
-  width: 14px;
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  transform: translateY(-50%);
+  width: 17px;
   height: 14px;
   display: grid;
   place-items: center;
@@ -1217,7 +1226,6 @@ select:focus-visible {
 .session-status.is-completed { color: var(--green); }
 .session-status.is-attention { color: var(--amber); }
 .session-status.is-unread { color: var(--accent); }
-}
 
 .session-row.is-child {
   margin-left: 13px;
@@ -1251,17 +1259,216 @@ select:focus-visible {
   font-size: var(--type-caption-size);
 }
 
-.sidebar-settings {
+/* 底栏：品牌/账号区（头像 + 名称 + 徽标）与远程控制、设置两枚图标，
+   对齐 zcode 的侧栏底栏形态；点名称或齿轮都进设置。 */
+.sidebar-footer {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 38px;
-  padding: 0 10px;
-  border-radius: 7px;
+  gap: 4px;
   flex: none;
   margin-top: auto;
-  margin-bottom: 10px;
+  padding: 4px 2px 6px;
+}
+
+.footer-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  padding: 0 8px;
+  border-radius: 9px;
+}
+
+.footer-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, #3a4045, #6a7278);
+  color: #f4f1e8;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.footer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
   font-size: var(--type-ui-small-size);
+  font-weight: 600;
+}
+
+.footer-badge {
+  flex: none;
+  padding: 1px 7px;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.footer-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.footer-icon-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* 远程控制中继已上线时手机图标点亮为琥珀色。 */
+.footer-icon-button.is-live {
+  color: var(--amber);
+}
+
+/* 远程控制弹层：从底栏手机图标上方展开的浮动面板。 */
+.remote-popover {
+  position: fixed;
+  z-index: 230;
+  display: grid;
+  gap: 10px;
+  padding: 13px 14px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.18);
+}
+
+.remote-popover-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.remote-popover-head strong {
+  font-size: var(--type-ui-small-size);
+}
+
+.remote-popover-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted);
+}
+
+.remote-popover-state {
+  margin-left: auto;
+  padding: 1px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.remote-popover-state.is-live {
+  border-color: rgba(46, 160, 67, 0.35);
+  background: rgba(46, 160, 67, 0.08);
+  color: var(--green);
+}
+
+.remote-popover-close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.remote-popover-close:hover {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.remote-popover-desc,
+.remote-popover-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--type-caption-size);
+  line-height: 1.5;
+}
+
+.remote-popover-note {
+  color: var(--faint);
+}
+
+.remote-popover-note code {
+  padding: 0 3px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 0.92em;
+}
+
+.remote-popover-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.02);
+  font-size: var(--type-ui-small-size);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.remote-popover-restart {
+  flex-wrap: wrap;
+}
+
+/* 弹层空间有限，二维码比设置页卡片里的更紧凑。 */
+.remote-popover .remote-control-qr {
+  width: 96px;
+  height: 96px;
+  border-radius: 8px;
+}
+
+.remote-popover-active {
+  align-items: flex-start;
+}
+
+.remote-popover-message {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: rgba(46, 160, 67, 0.08);
+  color: var(--green);
+  font-size: var(--type-caption-size);
+  line-height: 1.45;
+}
+
+.remote-popover-message.is-error {
+  background: rgba(229, 72, 77, 0.08);
+  color: var(--red);
 }
 
 /* 会话管理面板（跨 workspace 会话列表 + 批量归档/恢复）。 */
@@ -6772,7 +6979,7 @@ body.is-panel-resizing {
 
 .cli-update-note code { font-family: var(--mono); }
 
-/* 远程控制卡片：偏好开关 + 设备二维码/链接。 */
+/* 实验室实验特性卡片（Tower 复用）+ 设备二维码/链接（弹层复用）。 */
 .remote-control-card {
   display: grid;
   gap: 10px;
