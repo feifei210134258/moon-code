@@ -142,6 +142,26 @@ describe('WorkspacePreviewServer', () => {
     await expect(server.open(root, join(outside, 'secret.html'))).rejects.toThrow('escapes the workspace')
   })
 
+  it('falls back to the unique same-name entry when the path misses the cwd root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kimi-preview-bare-'))
+    await mkdir(join(root, '运行监控_原型'))
+    await writeFile(join(root, '运行监控_原型', 'index.html'), '<h1>Bare fallback</h1>')
+    const server = new WorkspacePreviewServer()
+    servers.push(server)
+
+    /* 助手只写裸 index.html（真实文件在子目录）——由 KimiBrowserManager 折回
+       唯一同名相对路径后再进预览服；这里直接验证折回产物可开。 */
+    const { resolveEntryByName } = await import('../../src/main/browser/workspaceNameLookup.js')
+    await expect(resolveEntryByName(root, 'index.html')).resolves.toBe('运行监控_原型/index.html')
+    const pageUrl = await server.open(root, '运行监控_原型/index.html')
+    await expect((await fetchPreview(server, pageUrl)).text()).resolves.toContain('Bare fallback')
+
+    /* 歧义/未命中返回 null，不猜路径 */
+    await writeFile(join(root, 'index.html'), '<h1>ambiguous root copy</h1>')
+    await expect(resolveEntryByName(root, 'index.html')).resolves.toBeNull()
+    await expect(resolveEntryByName(root, 'missing.html')).resolves.toBeNull()
+  })
+
   it.skipIf(process.platform === 'win32')('rejects publishable FIFOs without blocking for a writer', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kimi-preview-fifo-'))
     await writeFile(join(root, 'index.html'), '<h1>FIFO guard</h1>')

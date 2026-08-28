@@ -604,7 +604,7 @@ export function registerIpc(
     async (event, sessionId?: unknown, path?: unknown): Promise<KimiUploadedFile> => {
       assertTrustedSender(event)
       assertSessionId(sessionId)
-      const target = sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      const target = await sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
       const targetStat = await stat(target)
       if (!targetStat.isFile()) throw new Error('只能将文件添加为会话附件，文件夹请以路径形式引用。')
       const mediaType = lookupMediaType(target) || 'application/octet-stream'
@@ -789,7 +789,7 @@ export function registerIpc(
     async (event, sessionId?: unknown, path?: unknown): Promise<{ opened: true }> => {
       assertTrustedSender(event)
       assertSessionId(sessionId)
-      const target = sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      const target = await sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
       const reason = await shell.openPath(target)
       if (reason.length > 0) throw new Error(`系统无法打开该文件：${reason}`)
       return { opened: true }
@@ -812,7 +812,7 @@ export function registerIpc(
     async (event, sessionId?: unknown, path?: unknown): Promise<{ trashed: true }> => {
       assertTrustedSender(event)
       assertSessionId(sessionId)
-      const target = sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      const target = await sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
       await shell.trashItem(target)
       return { trashed: true }
     }

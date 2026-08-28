@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import {
   shell,
   WebContentsView,
@@ -77,7 +78,10 @@ export class KimiBrowserManager extends EventEmitter {
     return await this.#serialize(async () => {
       if (!/\.html?$/i.test(path)) throw new TypeError('Only HTML files can open in Browser preview')
       const snapshot = await this.#runtime.createRestClient().getSessionSnapshot(sessionId)
-      const url = await this.#preview.open(snapshot.session.metadata.cwd, path)
+      /* 助手常只写裸文件名（index.html），先按 cwd 直解，落空时在工作区内
+         唯一同名回退（KimiSessionBridge 同款有界查找）。 */
+      const entryPath = await resolvePreviewEntry(snapshot.session.metadata.cwd, path)
+      const url = await this.#preview.open(snapshot.session.metadata.cwd, entryPath)
       if (generation !== this.#guestGeneration) throw new Error('Browser workspace changed while preview was opening')
       smokeTrace('preview-ready')
       this.#previewSanitizer.register(new URL(url).origin, snapshot.session.workspace_id)
@@ -804,4 +808,16 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, message:
 
 function smokeTrace(message: string): void {
   if (process.argv.includes('--smoke-browser')) process.stderr.write(`browser-manager:${message}\n`)
+}
+
+/* 预览入口解析：cwd 直解存在即用；否则对裸文件名做工作区内唯一同名回退。 */
+async function resolvePreviewEntry(workspaceRoot: string, path: string): Promise<string> {
+  const { stat } = await import('node:fs/promises')
+  try {
+    if ((await stat(join(workspaceRoot, path))).isFile()) return path
+  } catch {
+    // fall through to the unique-name fallback
+  }
+  const { resolveEntryByName } = await import('./workspaceNameLookup.js')
+  return (await resolveEntryByName(workspaceRoot, path)) ?? path
 }

@@ -50,6 +50,7 @@ import type {
   WorkspaceGitBranches
 } from '../../shared/contracts.js'
 import { sanitizePickedElements } from '../browser/elementPickSanitize.js'
+import { fileExists, resolveEntryByName } from '../browser/workspaceNameLookup.js'
 
 const KIMI_FS_GIT_UNAVAILABLE = 40908
 const execFileAsync = promisify(execFile)
@@ -460,7 +461,7 @@ export class KimiSessionBridge extends EventEmitter {
 
   async readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview> {
     this.#assertActiveSession(sessionId)
-    const result = await this.#runtime.createRestClient().readFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
+    const result = await this.#runtime.createRestClient().readFile(sessionId, await this.#toWorkspaceRelativePathResolved(sessionId, path))
     const textFallback = decodeTextFallback(result.path, result.encoding, result.content, result.is_binary)
     return {
       path: result.path,
@@ -556,12 +557,12 @@ export class KimiSessionBridge extends EventEmitter {
 
   async downloadWorkspaceFile(sessionId: string, path: string): Promise<Uint8Array> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().downloadWorkspaceFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
+    return await this.#runtime.createRestClient().downloadWorkspaceFile(sessionId, await this.#toWorkspaceRelativePathResolved(sessionId, path))
   }
 
   async openWorkspaceFile(sessionId: string, path: string, line?: number): Promise<{ opened: true }> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().openFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path), line)
+    return await this.#runtime.createRestClient().openFile(sessionId, await this.#toWorkspaceRelativePathResolved(sessionId, path), line)
   }
 
   async openWorkspaceFileIn(
@@ -571,19 +572,31 @@ export class KimiSessionBridge extends EventEmitter {
     line?: number
   ): Promise<{ opened: true }> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().openFileIn(sessionId, appId, this.#toWorkspaceRelativePath(sessionId, path), line)
+    return await this.#runtime.createRestClient().openFileIn(sessionId, appId, await this.#toWorkspaceRelativePathResolved(sessionId, path), line)
   }
 
   async revealWorkspaceFile(sessionId: string, path: string): Promise<{ revealed: true }> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().revealFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
+    return await this.#runtime.createRestClient().revealFile(sessionId, await this.#toWorkspaceRelativePathResolved(sessionId, path))
   }
 
-  workspaceFileSystemPath(sessionId: string, path: string): string {
+  /* 会话文本里的文件引用按工作区解析。kimi 0.39 助手常只写裸文件名
+     （如 `index.html:159`），实际文件在子目录里，直接 join 会落空；
+     落空时在工作区内做有界同名查找，唯一命中才算数，歧义/未命中保持原路径
+     （由调用方按不存在报错）。 */
+  async workspaceFileSystemPath(sessionId: string, path: string): Promise<string> {
     this.#assertActiveSession(sessionId)
     const state = this.#getController().getState(sessionId)
     if (state === null || state.workspaceRoot.length === 0) throw new Error('Kimi Workspace path is unavailable')
-    return this.#resolveInsideWorkspace(state.workspaceRoot, path)
+    const root = resolve(state.workspaceRoot)
+    const target = this.#resolveInsideWorkspace(root, path)
+    if (await fileExists(target)) return target
+    const fallback = await resolveEntryByName(root, path)
+    if (fallback !== null) {
+      const resolved = this.#resolveInsideWorkspace(root, fallback)
+      if (await fileExists(resolved)) return resolved
+    }
+    return target
   }
 
   /* 草稿态（会话尚未创建）与 workspaceFileSystemPath 同一套越界校验，
@@ -592,7 +605,14 @@ export class KimiSessionBridge extends EventEmitter {
     const workspaces = await this.#runtime.createRestClient().listWorkspaces()
     const root = workspaces.find((workspace) => workspace.id === workspaceId)?.root ?? ''
     if (root.length === 0) throw new Error('Kimi Workspace path is unavailable')
-    return this.#resolveInsideWorkspace(root, path)
+    const target = this.#resolveInsideWorkspace(root, path)
+    if (await fileExists(target)) return target
+    const fallback = await resolveEntryByName(resolve(root), path)
+    if (fallback !== null) {
+      const resolved = this.#resolveInsideWorkspace(root, fallback)
+      if (await fileExists(resolved)) return resolved
+    }
+    return target
   }
 
   #resolveInsideWorkspace(workspaceRoot: string, path: string): string {
@@ -615,13 +635,15 @@ export class KimiSessionBridge extends EventEmitter {
   }
 
   /* runtime 的 REST fs 接口（fs:read / fs:open …）以工作区相对路径为准；
-     会话文本里的绝对路径在转发前折回相对，工作区外的绝对路径照旧拒绝。 */
-  #toWorkspaceRelativePath(sessionId: string, path: string): string {
+     会话文本里的绝对路径在转发前折回相对；裸文件名走 workspaceFileSystemPath
+     的同名回退查找，工作区外的绝对路径照旧拒绝。 */
+  async #toWorkspaceRelativePathResolved(sessionId: string, path: string): Promise<string> {
     this.#assertActiveSession(sessionId)
     const state = this.#getController().getState(sessionId)
     if (state === null || state.workspaceRoot.length === 0) throw new Error('Kimi Workspace path is unavailable')
-    const target = this.#resolveInsideWorkspace(state.workspaceRoot, path)
-    return relative(resolve(state.workspaceRoot), target).split(sep).join('/')
+    const root = resolve(state.workspaceRoot)
+    const target = await this.workspaceFileSystemPath(sessionId, path)
+    return relative(root, target).split(sep).join('/')
   }
 
   async readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null> {
@@ -705,7 +727,7 @@ export class KimiSessionBridge extends EventEmitter {
 
   async getFileDiff(sessionId: string, path: string): Promise<WorkspaceFileDiff> {
     this.#assertActiveSession(sessionId)
-    const result = await this.#runtime.createRestClient().getFileDiff(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
+    const result = await this.#runtime.createRestClient().getFileDiff(sessionId, await this.#toWorkspaceRelativePathResolved(sessionId, path))
     return { path: result.path, diff: result.diff, truncated: result.truncated }
   }
 
@@ -1112,3 +1134,5 @@ function markdownImagePath(workspaceRoot: string, source: string): string | null
   ) return null
   return normalized
 }
+
+

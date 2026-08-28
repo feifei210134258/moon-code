@@ -87,6 +87,7 @@ class FakeRuntime extends EventEmitter {
   readonly revealFile = vi.fn(async () => ({ revealed: true as const }))
   snapshotMessages: Array<Record<string, unknown>> = []
   snapshotSubagents: Array<Record<string, unknown>> = []
+  snapshotCwd: string | null = null
 
   constructor(readonly socket: FakeSocket) {
     super()
@@ -165,7 +166,7 @@ class FakeRuntime extends EventEmitter {
           busy: false,
           main_turn_active: false,
           pending_interaction: 'none',
-          metadata: { cwd: process.cwd() },
+          metadata: { cwd: this.snapshotCwd ?? process.cwd() },
           agent_config: {},
           usage: {},
           permission_rules: [],
@@ -375,12 +376,14 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.openWorkspaceFile('session-1', 'src/App.vue', 8)
     await bridge.openWorkspaceFileIn('session-1', 'vscode', 'src/App.vue', 8)
     await bridge.revealWorkspaceFile('session-1', 'src/App.vue')
-    expect(bridge.workspaceFileSystemPath('session-1', 'src/App.vue')).toBe(resolve(process.cwd(), 'src/App.vue'))
-    expect(() => bridge.workspaceFileSystemPath('session-1', '../outside.txt')).toThrow('escapes')
+    /* cwd 下没有 src/App.vue；REST/本地解析都回退唯一命中仓库里的 renderer 副本 */
+    await expect(bridge.workspaceFileSystemPath('session-1', 'src/App.vue'))
+      .resolves.toBe(resolve(process.cwd(), 'src/renderer/src/App.vue'))
+    await expect(bridge.workspaceFileSystemPath('session-1', '../outside.txt')).rejects.toThrow('escapes')
 
-    expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/App.vue', 8)
-    expect(runtime.openFileIn).toHaveBeenCalledWith('session-1', 'vscode', 'src/App.vue', 8)
-    expect(runtime.revealFile).toHaveBeenCalledWith('session-1', 'src/App.vue')
+    expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/renderer/src/App.vue', 8)
+    expect(runtime.openFileIn).toHaveBeenCalledWith('session-1', 'vscode', 'src/renderer/src/App.vue', 8)
+    expect(runtime.revealFile).toHaveBeenCalledWith('session-1', 'src/renderer/src/App.vue')
     await bridge.close()
   })
 
@@ -389,22 +392,46 @@ describe('KimiSessionBridge terminals', () => {
     const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
     await bridge.openSession('session-1')
 
-    /* kimi 0.39 的 file_io/diff display.path 是工作区绝对路径 */
-    expect(bridge.workspaceFileSystemPath('session-1', resolve(process.cwd(), 'src/App.vue')))
-      .toBe(resolve(process.cwd(), 'src/App.vue'))
-    expect(() => bridge.workspaceFileSystemPath('session-1', '/definitely/outside/app.vue')).toThrow('escapes')
-    expect(() => bridge.workspaceFileSystemPath('session-1', `${resolve(process.cwd(), 'src')}/../escape.ts`)).toThrow('escapes')
+    /* kimi 0.39 的 file_io/diff display.path 是工作区绝对路径（绝对路径存在，不走回退） */
+    const absoluteVue = resolve(process.cwd(), 'src/renderer/src/App.vue')
+    await expect(bridge.workspaceFileSystemPath('session-1', absoluteVue)).resolves.toBe(absoluteVue)
+    await expect(bridge.workspaceFileSystemPath('session-1', '/definitely/outside/app.vue')).rejects.toThrow('escapes')
+    await expect(bridge.workspaceFileSystemPath('session-1', `${resolve(process.cwd(), 'src')}/../escape.ts`)).rejects.toThrow('escapes')
 
-    /* REST 转发前折回工作区相对路径 */
-    await bridge.openWorkspaceFile('session-1', resolve(process.cwd(), 'src/App.vue'), 8)
-    expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/App.vue', 8)
-    await bridge.revealWorkspaceFile('session-1', resolve(process.cwd(), 'src/App.vue'))
-    expect(runtime.revealFile).toHaveBeenCalledWith('session-1', 'src/App.vue')
-    await expect(bridge.downloadWorkspaceFile('session-1', resolve(process.cwd(), 'src/App.vue')))
+    /* REST 转发前折回工作区相对路径（绝对路径存在，不走回退） */
+    await bridge.openWorkspaceFile('session-1', absoluteVue, 8)
+    expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/renderer/src/App.vue', 8)
+    await bridge.revealWorkspaceFile('session-1', absoluteVue)
+    expect(runtime.revealFile).toHaveBeenCalledWith('session-1', 'src/renderer/src/App.vue')
+    await expect(bridge.downloadWorkspaceFile('session-1', absoluteVue))
       .resolves.toEqual(new Uint8Array([1, 2]))
-    expect(runtime.downloadWorkspaceFile).toHaveBeenCalledWith('session-1', 'src/App.vue')
+    expect(runtime.downloadWorkspaceFile).toHaveBeenCalledWith('session-1', 'src/renderer/src/App.vue')
     await expect(bridge.openWorkspaceFile('session-1', '/definitely/outside/app.vue')).rejects.toThrow('escapes')
     await bridge.close()
+  })
+
+  it('resolves bare conversation filenames to their unique in-workspace location', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    /* 覆盖 cwd 指向临时目录的场景：session state 的 workspaceRoot 来自快照 */
+    const root = await mkdtemp(join(tmpdir(), 'kimi-bridge-bare-'))
+    await mkdir(join(root, '运行监控_原型'), { recursive: true })
+    await writeFile(join(root, '运行监控_原型', 'index.html'), '<h1>k</h1>')
+    runtime.snapshotCwd = root
+    await bridge.openSession('session-1')
+
+    /* 裸文件名（助手常写 `index.html:159`，行号在渲染端已剥）→ 子目录唯一命中 */
+    await expect(bridge.workspaceFileSystemPath('session-1', 'index.html'))
+      .resolves.toBe(join(root, '运行监控_原型', 'index.html'))
+    /* REST 转发同样走回退：折回相对路径 */
+    await bridge.openWorkspaceFile('session-1', 'index.html')
+    expect(runtime.openFile).toHaveBeenCalledWith('session-1', '运行监控_原型/index.html', undefined)
+    /* 歧义（两处同名）与未命中保持原样：相对路径原样转发、绝对路径原样返回 */
+    await writeFile(join(root, 'index.html'), '<h1>root copy</h1>')
+    await bridge.openWorkspaceFile('session-1', 'index.html')
+    expect(runtime.openFile).toHaveBeenLastCalledWith('session-1', 'index.html', undefined)
+    await bridge.close()
+    await rm(root, { recursive: true, force: true })
   })
 
   it('projects missing Git as an available=false state while preserving unexpected failures', async () => {
