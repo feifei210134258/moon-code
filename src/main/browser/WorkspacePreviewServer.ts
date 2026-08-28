@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { constants, watch, type FSWatcher } from 'node:fs'
 import { open, realpath, stat, type FileHandle } from 'node:fs/promises'
 import { createServer, type Server, type ServerResponse } from 'node:http'
-import { dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { validateWorkspacePath } from '../security/workspaceInputs.js'
 
 const MAX_PREVIEW_PATH = 4_096
@@ -36,15 +36,13 @@ export class WorkspacePreviewServer {
   }
 
   async open(workspaceRoot: string, workspacePath: string): Promise<string> {
-    const safePath = validateWorkspacePath(workspacePath)
     const canonicalRoot = await realpath(workspaceRoot)
     if (!(await stat(canonicalRoot)).isDirectory()) throw new Error('Workspace preview root is not a directory')
-    if (!isPublishablePath(safePath, false)) throw new Error('Workspace preview entry is not publishable')
-    const canonicalEntry = await realpath(join(canonicalRoot, ...safePath.split('/')))
+    const canonicalEntry = await this.#canonicalEntry(canonicalRoot, workspacePath)
     if (!isInside(canonicalRoot, canonicalEntry) || !(await stat(canonicalEntry)).isFile()) {
       throw new Error('Workspace preview entry escapes the workspace')
     }
-    const publishRoot = await realpath(selectPublishRoot(canonicalRoot, safePath, canonicalEntry))
+    const publishRoot = await realpath(selectPublishRoot(canonicalRoot, this.#relativeEntry(canonicalRoot, canonicalEntry), canonicalEntry))
     if (!isInside(canonicalRoot, publishRoot) || !(await stat(publishRoot)).isDirectory()) {
       throw new Error('Workspace preview publication root is invalid')
     }
@@ -58,6 +56,23 @@ export class WorkspacePreviewServer {
     this.#roots.set(rootId, publishRoot)
     await this.#ensureStarted()
     return `http://${rootId}.localhost:${this.#port}/${encodePath(publishedEntry)}`
+  }
+
+  /* 相对输入沿用 validateWorkspacePath + join 的老口径；绝对输入（kimi 0.39
+     工具事件的 display.path）按真实路径解析，必须落在工作区内才接受，
+     随后折回工作区相对路径参与发布根判定。 */
+  async #canonicalEntry(canonicalRoot: string, workspacePath: string): Promise<string> {
+    if (isAbsolute(workspacePath) || /^[A-Za-z]:\//.test(workspacePath)) {
+      const canonical = await realpath(resolve(workspacePath))
+      if (!isInside(canonicalRoot, canonical)) throw new Error('Workspace preview entry escapes the workspace')
+      return canonical
+    }
+    const safePath = validateWorkspacePath(workspacePath)
+    return await realpath(join(canonicalRoot, ...safePath.split('/')))
+  }
+
+  #relativeEntry(canonicalRoot: string, canonicalEntry: string): string {
+    return toWorkspacePath(relative(canonicalRoot, canonicalEntry))
   }
 
   authorizationHeadersFor(url: string): Record<string, string> | null {

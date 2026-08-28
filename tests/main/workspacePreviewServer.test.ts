@@ -126,6 +126,22 @@ describe('WorkspacePreviewServer', () => {
     await expect(server.open(root, 'site/index.html')).rejects.toThrow('publication root is sensitive')
   })
 
+  it('opens absolute in-workspace entry paths (kimi 0.39 display.path) and rejects outside ones', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kimi-preview-absolute-'))
+    const outside = await mkdtemp(join(tmpdir(), 'kimi-preview-absolute-out-'))
+    await mkdir(join(root, 'dist'))
+    await writeFile(join(root, 'dist', 'index.html'), '<h1>Absolute</h1>')
+    await writeFile(join(outside, 'secret.html'), '<h1>Outside</h1>')
+    const server = new WorkspacePreviewServer()
+    servers.push(server)
+
+    const pageUrl = await server.open(root, join(root, 'dist', 'index.html'))
+    expect(new URL(pageUrl).pathname).toBe('/index.html')
+    await expect((await fetchPreview(server, pageUrl)).text()).resolves.toContain('Absolute')
+
+    await expect(server.open(root, join(outside, 'secret.html'))).rejects.toThrow('escapes the workspace')
+  })
+
   it.skipIf(process.platform === 'win32')('rejects publishable FIFOs without blocking for a writer', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kimi-preview-fifo-'))
     await writeFile(join(root, 'index.html'), '<h1>FIFO guard</h1>')

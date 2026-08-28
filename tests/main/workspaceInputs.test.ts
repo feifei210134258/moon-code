@@ -21,4 +21,14 @@ describe('workspace IPC path validation', () => {
   ])('rejects paths outside the active Kimi workspace: %s', (path) => {
     expect(() => validateWorkspacePath(path)).toThrow('Invalid Kimi workspace path')
   })
+
+  it('keeps rejecting absolute paths unless the caller opts in', () => {
+    expect(() => validateWorkspacePath('/Users/feili/repo/index.html')).toThrow('Invalid Kimi workspace path')
+    expect(validateWorkspacePath('/Users/feili/repo/index.html', { allowAbsolute: true })).toBe('/Users/feili/repo/index.html')
+  })
+
+  it('still rejects traversal and null bytes on the absolute opt-in path', () => {
+    expect(() => validateWorkspacePath('/repo/../etc/passwd', { allowAbsolute: true })).toThrow('Invalid Kimi workspace path')
+    expect(() => validateWorkspacePath('/repo/\0secret', { allowAbsolute: true })).toThrow('Invalid Kimi workspace path')
+  })
 })

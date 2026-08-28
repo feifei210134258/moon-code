@@ -1199,7 +1199,7 @@ export function registerIpc(
     async (event, sessionId?: unknown, path?: unknown): Promise<BrowserViewState> => {
       assertTrustedSender(event)
       assertSessionId(sessionId)
-      return await browser.openHtml(sessionId, validateWorkspacePath(path))
+      return await browser.openHtml(sessionId, validateWorkspacePath(path, { allowAbsolute: true }))
     }
   )
   ipcMain.handle(

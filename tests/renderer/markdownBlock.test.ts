@@ -91,6 +91,47 @@ describe('MarkdownBlock', () => {
     expect(wrapper.emitted('openFile')).toEqual([['./app/index.html']])
   })
 
+  it('makes absolute paths from kimi 0.39 replies clickable and openable', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: {
+        text: [
+          '已更新 /Users/feili/codes/原型稿件/学生评价/运行监控_原型/index.html ，',
+          '行内定位 `/Users/feili/repo/src/app.ts:42`，相对引用 dist/校看板.html 不受影响。'
+        ].join('\n')
+      }
+    })
+
+    const links = wrapper.findAll('a.markdown-file-link')
+    expect(links.map((link) => link.attributes('data-workspace-path'))).toEqual([
+      '/Users/feili/codes/原型稿件/学生评价/运行监控_原型/index.html',
+      'dist/校看板.html'
+    ])
+    const inlineFile = wrapper.get('code.markdown-file-inline')
+    expect(inlineFile.attributes('data-workspace-path')).toBe('/Users/feili/repo/src/app.ts:42')
+    await links[0]!.trigger('click')
+    expect(wrapper.emitted('openFile')).toEqual([['/Users/feili/codes/原型稿件/学生评价/运行监控_原型/index.html']])
+    await inlineFile.trigger('contextmenu', { clientX: 100, clientY: 60 })
+    expect(wrapper.emitted('fileContext')?.[0]?.[0]).toBe('/Users/feili/repo/src/app.ts:42')
+  })
+
+  it('routes absolute artifact mentions as bright blue against writtenPath artifact sets', async () => {
+    const wrapper = mount(MarkdownBlock, {
+      props: {
+        text: '/Users/feili/repo/dist/index.html 已写入；/Users/feili/repo/docs/plan.md 仅提及。',
+        artifactPaths: new Set(['/Users/feili/repo/dist/index.html'])
+      }
+    })
+    await flushPromises()
+
+    const links = wrapper.findAll('a.markdown-file-link')
+    expect(links.map((link) => link.attributes('data-workspace-path'))).toEqual([
+      '/Users/feili/repo/dist/index.html',
+      '/Users/feili/repo/docs/plan.md'
+    ])
+    expect(links[0]!.classes()).not.toContain('is-mention')
+    expect(links[1]!.classes()).toContain('is-mention')
+  })
+
   it('loads local Markdown images through the bounded Kimi Session FS bridge', async () => {
     const readMarkdownImage = vi.fn(async () => ({
       path: 'assets/preview.png',

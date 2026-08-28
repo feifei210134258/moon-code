@@ -384,6 +384,29 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.close()
   })
 
+  it('accepts absolute workspace paths from tool events while keeping escapes rejected', async () => {
+    const runtime = new FakeRuntime(new FakeSocket())
+    const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+    await bridge.openSession('session-1')
+
+    /* kimi 0.39 的 file_io/diff display.path 是工作区绝对路径 */
+    expect(bridge.workspaceFileSystemPath('session-1', resolve(process.cwd(), 'src/App.vue')))
+      .toBe(resolve(process.cwd(), 'src/App.vue'))
+    expect(() => bridge.workspaceFileSystemPath('session-1', '/definitely/outside/app.vue')).toThrow('escapes')
+    expect(() => bridge.workspaceFileSystemPath('session-1', `${resolve(process.cwd(), 'src')}/../escape.ts`)).toThrow('escapes')
+
+    /* REST 转发前折回工作区相对路径 */
+    await bridge.openWorkspaceFile('session-1', resolve(process.cwd(), 'src/App.vue'), 8)
+    expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/App.vue', 8)
+    await bridge.revealWorkspaceFile('session-1', resolve(process.cwd(), 'src/App.vue'))
+    expect(runtime.revealFile).toHaveBeenCalledWith('session-1', 'src/App.vue')
+    await expect(bridge.downloadWorkspaceFile('session-1', resolve(process.cwd(), 'src/App.vue')))
+      .resolves.toEqual(new Uint8Array([1, 2]))
+    expect(runtime.downloadWorkspaceFile).toHaveBeenCalledWith('session-1', 'src/App.vue')
+    await expect(bridge.openWorkspaceFile('session-1', '/definitely/outside/app.vue')).rejects.toThrow('escapes')
+    await bridge.close()
+  })
+
   it('projects missing Git as an available=false state while preserving unexpected failures', async () => {
     const runtime = new FakeRuntime(new FakeSocket())
     const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)

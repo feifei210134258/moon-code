@@ -1,6 +1,9 @@
 const MAX_WORKSPACE_PATH_LENGTH = 4_096
 
-export function validateWorkspacePath(value: unknown, options: { allowRoot?: boolean } = {}): string {
+export function validateWorkspacePath(
+  value: unknown,
+  options: { allowRoot?: boolean; allowAbsolute?: boolean } = {}
+): string {
   if (
     typeof value !== 'string' ||
     value.length < 1 ||
@@ -10,10 +13,12 @@ export function validateWorkspacePath(value: unknown, options: { allowRoot?: boo
 
   const path = value.replace(/\\/g, '/')
   const normalized = path.replace(/^\.\//, '') || '.'
+  /* kimi 0.39 工具事件（file_io/diff display.path）携带工作区绝对路径；
+     允许它通过输入校验，是否真的落在工作区内由 KimiSessionBridge /
+     WorkspacePreviewServer 的越界检查把关。 */
+  const absolute = path.startsWith('/') || /^[A-Za-z]:\//.test(path)
   if (
-    path.startsWith('/') ||
-    path.startsWith('//') ||
-    /^[A-Za-z]:\//.test(path) ||
+    (absolute && options.allowAbsolute !== true) ||
     path.split('/').some((segment) => segment === '..') ||
     (!options.allowRoot && normalized === '.')
   ) throw new TypeError('Invalid Kimi workspace path')

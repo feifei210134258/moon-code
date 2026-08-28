@@ -460,7 +460,7 @@ export class KimiSessionBridge extends EventEmitter {
 
   async readFile(sessionId: string, path: string): Promise<WorkspaceFilePreview> {
     this.#assertActiveSession(sessionId)
-    const result = await this.#runtime.createRestClient().readFile(sessionId, path)
+    const result = await this.#runtime.createRestClient().readFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
     const textFallback = decodeTextFallback(result.path, result.encoding, result.content, result.is_binary)
     return {
       path: result.path,
@@ -556,12 +556,12 @@ export class KimiSessionBridge extends EventEmitter {
 
   async downloadWorkspaceFile(sessionId: string, path: string): Promise<Uint8Array> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().downloadWorkspaceFile(sessionId, path)
+    return await this.#runtime.createRestClient().downloadWorkspaceFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
   }
 
   async openWorkspaceFile(sessionId: string, path: string, line?: number): Promise<{ opened: true }> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().openFile(sessionId, path, line)
+    return await this.#runtime.createRestClient().openFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path), line)
   }
 
   async openWorkspaceFileIn(
@@ -571,12 +571,12 @@ export class KimiSessionBridge extends EventEmitter {
     line?: number
   ): Promise<{ opened: true }> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().openFileIn(sessionId, appId, path, line)
+    return await this.#runtime.createRestClient().openFileIn(sessionId, appId, this.#toWorkspaceRelativePath(sessionId, path), line)
   }
 
   async revealWorkspaceFile(sessionId: string, path: string): Promise<{ revealed: true }> {
     this.#assertActiveSession(sessionId)
-    return await this.#runtime.createRestClient().revealFile(sessionId, path)
+    return await this.#runtime.createRestClient().revealFile(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
   }
 
   workspaceFileSystemPath(sessionId: string, path: string): string {
@@ -597,20 +597,31 @@ export class KimiSessionBridge extends EventEmitter {
 
   #resolveInsideWorkspace(workspaceRoot: string, path: string): string {
     const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '')
+    const absolute = normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized)
     if (
       normalized.length === 0 ||
       normalized === '.' ||
-      normalized.startsWith('/') ||
-      /^[A-Za-z]:\//.test(normalized) ||
       normalized.split('/').some((segment) => segment === '..')
     ) throw new Error('Workspace file path escapes the active Kimi Workspace')
     const root = resolve(workspaceRoot)
-    const target = resolve(root, ...normalized.split('/'))
+    /* kimi 0.39 的工具事件与助手文本引用文件时用绝对路径（display.path）；
+       绝对输入按「必须落在工作区内」校验后直接采用。 */
+    const target = absolute ? resolve(normalized) : resolve(root, ...normalized.split('/'))
     const inside = relative(root, target)
     if (inside.length === 0 || inside === '..' || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
       throw new Error('Workspace file path escapes the active Kimi Workspace')
     }
     return target
+  }
+
+  /* runtime 的 REST fs 接口（fs:read / fs:open …）以工作区相对路径为准；
+     会话文本里的绝对路径在转发前折回相对，工作区外的绝对路径照旧拒绝。 */
+  #toWorkspaceRelativePath(sessionId: string, path: string): string {
+    this.#assertActiveSession(sessionId)
+    const state = this.#getController().getState(sessionId)
+    if (state === null || state.workspaceRoot.length === 0) throw new Error('Kimi Workspace path is unavailable')
+    const target = this.#resolveInsideWorkspace(state.workspaceRoot, path)
+    return relative(resolve(state.workspaceRoot), target).split(sep).join('/')
   }
 
   async readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null> {
@@ -694,7 +705,7 @@ export class KimiSessionBridge extends EventEmitter {
 
   async getFileDiff(sessionId: string, path: string): Promise<WorkspaceFileDiff> {
     this.#assertActiveSession(sessionId)
-    const result = await this.#runtime.createRestClient().getFileDiff(sessionId, path)
+    const result = await this.#runtime.createRestClient().getFileDiff(sessionId, this.#toWorkspaceRelativePath(sessionId, path))
     return { path: result.path, diff: result.diff, truncated: result.truncated }
   }
 

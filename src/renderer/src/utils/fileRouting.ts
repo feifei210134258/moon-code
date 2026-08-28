@@ -17,7 +17,6 @@ export function workspaceFilePathFromHref(href: string): string | null {
   if (
     value.length === 0 ||
     value.startsWith('#') ||
-    value.startsWith('/') ||
     /^[a-z][a-z\d+.-]*:/i.test(value)
   ) return null
 

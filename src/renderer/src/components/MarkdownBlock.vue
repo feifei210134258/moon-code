@@ -223,8 +223,11 @@ function installFilePathLinks(markdownRenderer: MarkdownIt): void {
   const extensions = '(?:html?|css|s[ac]ss|less|m?[jt]sx?|c[jt]sx?|vue|svelte|astro|py|go|rs|java|kt|kts|swift|c|cc|cpp|cxx|h|hpp|cs|php|rb|lua|r|sh|bash|zsh|fish|ps1|sql|graphql|gql|md|mdx|markdown|txt|log|csv|tsv|jsonc?|ya?ml|toml|ini|cfg|conf|xml|xsd|xsl|svg|png|jpe?g|gif|webp|avif|ico|pdf|docx?|xlsx?|pptx?|zip|tar|gz|tgz|lock)'
   /* Unicode letters/numbers keep generated files with Chinese names clickable too. */
   const fileSegment = '[\\p{L}\\p{N}._@+~-]+'
-  const pattern = new RegExp(`((?:\\.{0,2}\\/)?(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?`, 'giu')
-  const inlineFilePattern = new RegExp(`(?:^|\\s)((?:\\.{0,2}\\/)?(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?(?=$|\\s)`, 'iu')
+  /* kimi 0.39 助手文本引用文件多用绝对路径（/Users/...），链接正则兼容之；
+     Windows 盘符路径（C:/...）同理。 */
+  const absolutePrefix = '(?:\\/[\\p{L}\\p{N}._@+~-]+|[A-Za-z]:\\/)?'
+  const pattern = new RegExp(`(${absolutePrefix}(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?`, 'giu')
+  const inlineFilePattern = new RegExp(`(?:^|\\s)(${absolutePrefix}(?:${fileSegment}\\/)*${fileSegment}\\.${extensions})(?::\\d+(?::\\d+)?)?(?=$|\\s)`, 'iu')
   markdownRenderer.core.ruler.after('inline', 'kimi_file_paths', (state) => {
     /* 每个 MarkdownBlock 实例渲染时经 env 传入自己的 artifactPaths，多实例互不干扰 */
     const artifactPaths = state.env?.artifactPaths as ReadonlySet<string> | undefined
