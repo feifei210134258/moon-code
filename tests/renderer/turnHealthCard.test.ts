@@ -11,7 +11,7 @@ const promptControls: KimiPromptControls = {
   thinking: 'high',
   permissionMode: 'manual',
   planMode: false,
-  swarmMode: false
+  swarmMode: false, towerMode: false
 }
 
 const turns: ChatTurn[] = [

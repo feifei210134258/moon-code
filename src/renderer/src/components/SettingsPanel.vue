@@ -9,6 +9,7 @@ import {
   PhCpu,
   PhChartDonut,
   PhDownloadSimple,
+  PhFlask,
   PhGearSix,
   PhMagicWand,
   PhPencilSimple,
@@ -38,7 +39,8 @@ import type {
   KimiUsagePreferences,
   KimiUsageState,
   RemoteControlState,
-  SessionNavigationItem
+  SessionNavigationItem,
+  TowerPreferenceState
 } from '@shared/contracts'
 
 const props = defineProps<{
@@ -52,7 +54,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: []; sessionRestored: [sessionId: string] }>()
 
-type SettingsTab = 'general' | 'models' | 'skills' | 'tools' | 'usage' | 'archives'
+type SettingsTab = 'general' | 'models' | 'skills' | 'tools' | 'usage' | 'archives' | 'labs'
 type ModelSettingsView = 'providers' | 'agents'
 const activeTab = ref<SettingsTab>('general')
 const modelSettingsView = ref<ModelSettingsView>('providers')
@@ -74,6 +76,8 @@ const cliUpdate = ref<KimiCliUpdateState | null>(null)
 const cliUpdateAction = ref<'check' | 'download' | null>(null)
 const remoteControlState = ref<RemoteControlState | null>(null)
 const remoteControlPending = ref(false)
+const towerState = ref<TowerPreferenceState | null>(null)
+const towerPending = ref(false)
 const secondaryMaxOutputInput = ref('')
 const showSecondaryProviderForm = ref(false)
 const secondaryProviderDraft = ref<{
@@ -394,6 +398,41 @@ async function loadRemoteControlState(): Promise<void> {
   }
 }
 
+async function loadTowerState(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined) return
+  try {
+    towerState.value = await api.getTowerPreference()
+  } catch {
+    towerState.value = null
+  }
+}
+
+async function toggleTowerPreference(event: Event): Promise<void> {
+  const api = window.kimiAgent
+  const enabled = (event.target as HTMLInputElement).checked
+  if (api === undefined || towerPending.value) return
+  if (enabled && !window.confirm(
+    'Tower 模式是 Kimi 官方实验特性：主 Agent 将转为纯协调者（不写产品代码），通过 Tower 工具族编排多个并行 worker（独立 git worktree + 评审合并）。开启后需重启 Kimi Runtime 生效。确定开启吗？'
+  )) {
+    ;(event.target as HTMLInputElement).checked = !enabled
+    return
+  }
+  towerPending.value = true
+  error.value = null
+  notice.value = null
+  try {
+    towerState.value = await api.setTowerPreference(enabled)
+    showNotice(towerState.value.requiresRestart
+      ? `Tower 实验特性已${enabled ? '开启' : '关闭'}，重启 Kimi Runtime 后生效。`
+      : `Tower 实验特性已${enabled ? '开启' : '关闭'}。`)
+  } catch (reason) {
+    error.value = errorMessage(reason)
+  } finally {
+    towerPending.value = false
+  }
+}
+
 async function toggleRemoteControl(event: Event): Promise<void> {
   const api = window.kimiAgent
   const enabled = (event.target as HTMLInputElement).checked
@@ -431,6 +470,25 @@ async function restartRuntimeForRemoteControl(): Promise<void> {
     if (state.status !== 'running') throw new Error(state.error ?? 'Kimi Runtime 重启失败')
     await loadRemoteControlState()
     showNotice('Kimi Runtime 已重启，远程控制设置已生效。')
+  } catch (reason) {
+    error.value = errorMessage(reason)
+  } finally {
+    actionPending.value = null
+  }
+}
+
+async function restartRuntimeForTower(): Promise<void> {
+  const api = window.kimiAgent
+  if (api === undefined || actionPending.value !== null) return
+  if (!window.confirm('重启 Kimi Runtime 会中断当前正在执行的任务，并关闭当前 Session 连接。确定继续吗？')) return
+  actionPending.value = 'tower:restart'
+  error.value = null
+  notice.value = null
+  try {
+    const state = await api.restartRuntime()
+    if (state.status !== 'running') throw new Error(state.error ?? 'Kimi Runtime 重启失败')
+    await loadTowerState()
+    showNotice('Kimi Runtime 已重启，Tower 实验特性设置已生效。')
   } catch (reason) {
     error.value = errorMessage(reason)
   } finally {
@@ -1536,6 +1594,7 @@ watch(
       void loadArchivedSessions()
     }
     void loadRemoteControlState()
+    void loadTowerState()
   },
   { immediate: true }
 )
@@ -1680,6 +1739,9 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
       <button class="settings-tab" :class="{ 'is-active': activeTab === 'archives' }" type="button" @click="activeTab = 'archives'">
         <PhArchive :size="17" />已归档任务
       </button>
+      <button class="settings-tab" :class="{ 'is-active': activeTab === 'labs' }" type="button" @click="activeTab = 'labs'">
+        <PhFlask :size="17" />实验室
+      </button>
     </nav>
 
     <div class="settings-content">
@@ -1725,47 +1787,6 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
                 </label>
               </template>
               <p v-if="snapshot === null" class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
-              <article v-if="remoteControlState" class="remote-control-card" :class="{ 'is-active': remoteControlState.active }">
-                <div class="remote-control-head">
-                  <div>
-                    <strong>远程控制 <small class="remote-control-tag">Kimi 官方实验特性</small></strong>
-                    <small>{{ remoteControlState.active ? '已通过 Moonshot 中继上线，扫码或在其他设备打开链接即可继续本机会话。' : '把本机 Kimi 会话经 Moonshot 官方中继暴露给手机或其他电脑的浏览器；需要已登录 Kimi 账号。' }}</small>
-                  </div>
-                  <input type="checkbox" :checked="remoteControlState.preference.enabled" :disabled="remoteControlPending" @change="toggleRemoteControl" />
-                </div>
-                <div v-if="remoteControlState.preference.enabled" class="remote-control-body">
-                  <p v-if="remoteControlState.runtimeMode === 'external' || remoteControlState.runtimeMode === 'shared'" class="compatibility-note">
-                    当前 Runtime 不是由 Moon Code 启动，开关只作为偏好保存；请用 <code>kimi web --remote-control</code> 手动启动。
-                  </p>
-                  <template v-else>
-                    <div v-if="remoteControlState.requiresRestart" class="secondary-restart-notice">
-                      <span>远程控制设置已变更，重启 Kimi Runtime 后生效。</span>
-                      <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForRemoteControl">立即重启</button>
-                    </div>
-                    <div v-if="remoteControlState.active" class="remote-control-active">
-                      <img v-if="remoteControlState.qrCodeDataUrl" class="remote-control-qr" :src="remoteControlState.qrCodeDataUrl" alt="远程控制二维码" />
-                      <div class="remote-control-link">
-                        <code>{{ remoteControlState.url }}</code>
-                        <div class="remote-control-actions">
-                          <button class="secondary-button" type="button" @click="copyRemoteControlUrl">复制链接</button>
-                          <button class="secondary-button" type="button" @click="openRemoteControlUrl">在浏览器打开</button>
-                        </div>
-                      </div>
-                    </div>
-                    <p v-else class="compatibility-note">
-                      {{ remoteControlState.appliedEnabled === true ? '中继尚未上线：确认已登录 Kimi 账号（kimi login），Runtime 启动时会自动注册。' : '开启并重启 Kimi Runtime 后，这里会显示设备二维码与链接。' }}
-                    </p>
-                  </template>
-                </div>
-                <div
-                  v-else-if="remoteControlState.requiresRestart && remoteControlState.runtimeMode !== 'external' && remoteControlState.runtimeMode !== 'shared'"
-                  class="secondary-restart-notice"
-                >
-                  <span>远程控制已关闭，重启 Kimi Runtime 后生效。</span>
-                  <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForRemoteControl">立即重启</button>
-                </div>
-              </article>
-              <p v-else class="compatibility-note">Kimi Runtime 未连接时，Kimi 自身的默认权限、Plan、Skills 与 Telemetry 设置暂不可用。</p>
             </section>
 
             <div v-else-if="!runtimeRunning" class="settings-empty">
@@ -2383,6 +2404,82 @@ function cliUpdateError(reason: unknown): KimiCliUpdateState {
               </section>
 
             </template>
+
+            <!-- 实验室不依赖 runtime snapshot（偏好可独立读写），故挂在 else 链之外。 -->
+            <section v-if="activeTab === 'labs'" class="settings-section">
+              <div class="settings-title">
+                <div><h2>实验室</h2><p>Kimi 官方实验特性的开关集中在这里；变更后需要重启 Kimi Runtime 才生效。</p></div>
+              </div>
+
+              <article v-if="towerState" class="remote-control-card" :class="{ 'is-active': towerState.appliedEnabled === true }">
+                <div class="remote-control-head">
+                  <div>
+                    <strong>Tower 模式 <small class="remote-control-tag">Kimi 官方实验特性</small></strong>
+                    <small>多 Agent 编排：主 Agent 转为纯协调者，通过 Tower 工具族（Plan/Spawn/Merge/Teardown 等）指挥多个并行 worker 在独立 git worktree 中工作，评审门禁合并。开启后可在输入框的模式区进入 Tower。</small>
+                  </div>
+                  <input type="checkbox" :checked="towerState.preference.enabled" :disabled="towerPending" @change="toggleTowerPreference" />
+                </div>
+                <div v-if="towerState.preference.enabled" class="remote-control-body">
+                  <div v-if="towerState.requiresRestart" class="secondary-restart-notice">
+                    <span>Tower 实验特性设置已变更，重启 Kimi Runtime 后生效。</span>
+                    <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForTower">立即重启</button>
+                  </div>
+                  <p v-else class="compatibility-note">
+                    {{ towerState.appliedEnabled === true ? '已生效：会话输入框的模型/模式区可以进入 Tower 模式。' : '开启并重启 Kimi Runtime 后生效。' }}
+                  </p>
+                </div>
+                <div
+                  v-else-if="towerState.requiresRestart"
+                  class="secondary-restart-notice"
+                >
+                  <span>Tower 实验特性已关闭，重启 Kimi Runtime 后生效。</span>
+                  <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForTower">立即重启</button>
+                </div>
+              </article>
+              <p v-else class="compatibility-note">Tower 实验特性状态暂不可用（Kimi Runtime 未连接）。</p>
+
+              <article v-if="remoteControlState" class="remote-control-card" :class="{ 'is-active': remoteControlState.active }">
+                <div class="remote-control-head">
+                  <div>
+                    <strong>远程控制 <small class="remote-control-tag">Kimi 官方实验特性</small></strong>
+                    <small>{{ remoteControlState.active ? '已通过 Moonshot 中继上线，扫码或在其他设备打开链接即可继续本机会话。' : '把本机 Kimi 会话经 Moonshot 官方中继暴露给手机或其他电脑的浏览器；需要已登录 Kimi 账号。' }}</small>
+                  </div>
+                  <input type="checkbox" :checked="remoteControlState.preference.enabled" :disabled="remoteControlPending" @change="toggleRemoteControl" />
+                </div>
+                <div v-if="remoteControlState.preference.enabled" class="remote-control-body">
+                  <p v-if="remoteControlState.runtimeMode === 'external' || remoteControlState.runtimeMode === 'shared'" class="compatibility-note">
+                    当前 Runtime 不是由 Moon Code 启动，开关只作为偏好保存；请用 <code>kimi web --remote-control</code> 手动启动。
+                  </p>
+                  <template v-else>
+                    <div v-if="remoteControlState.requiresRestart" class="secondary-restart-notice">
+                      <span>远程控制设置已变更，重启 Kimi Runtime 后生效。</span>
+                      <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForRemoteControl">立即重启</button>
+                    </div>
+                    <div v-if="remoteControlState.active" class="remote-control-active">
+                      <img v-if="remoteControlState.qrCodeDataUrl" class="remote-control-qr" :src="remoteControlState.qrCodeDataUrl" alt="远程控制二维码" />
+                      <div class="remote-control-link">
+                        <code>{{ remoteControlState.url }}</code>
+                        <div class="remote-control-actions">
+                          <button class="secondary-button" type="button" @click="copyRemoteControlUrl">复制链接</button>
+                          <button class="secondary-button" type="button" @click="openRemoteControlUrl">在浏览器打开</button>
+                        </div>
+                      </div>
+                    </div>
+                    <p v-else class="compatibility-note">
+                      {{ remoteControlState.appliedEnabled === true ? '中继尚未上线：确认已登录 Kimi 账号（kimi login），Runtime 启动时会自动注册。' : '开启并重启 Kimi Runtime 后，这里会显示设备二维码与链接。' }}
+                    </p>
+                  </template>
+                </div>
+                <div
+                  v-else-if="remoteControlState.requiresRestart && remoteControlState.runtimeMode !== 'external' && remoteControlState.runtimeMode !== 'shared'"
+                  class="secondary-restart-notice"
+                >
+                  <span>远程控制已关闭，重启 Kimi Runtime 后生效。</span>
+                  <button class="primary-button" type="button" :disabled="actionPending !== null" @click="restartRuntimeForRemoteControl">立即重启</button>
+                </div>
+              </article>
+              <p v-else class="compatibility-note">远程控制状态暂不可用（Kimi Runtime 未连接）。</p>
+            </section>
     </div>
     <Transition name="settings-toast">
       <div v-if="error" class="settings-message is-error" role="alert">{{ error }}</div>

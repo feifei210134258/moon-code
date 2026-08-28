@@ -6,7 +6,8 @@ export const operationalControlsFixture: KimiPromptControls = {
   thinking: 'high',
   permissionMode: 'manual',
   planMode: true,
-  swarmMode: false
+  swarmMode: false,
+  towerMode: false
 }
 
 export const operationalModelsFixture: KimiModelCatalogItem[] = [{

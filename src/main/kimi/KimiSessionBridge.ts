@@ -113,6 +113,7 @@ export class KimiSessionBridge extends EventEmitter {
       permissionMode,
       planMode: status.plan_mode,
       swarmMode: status.swarm_mode,
+      towerMode: status.tower_mode,
       contextTokens: status.context_tokens,
       maxContextTokens: status.max_context_tokens,
       contextUsage: status.context_usage
@@ -131,6 +132,13 @@ export class KimiSessionBridge extends EventEmitter {
     // Same as plan mode: per-prompt swarm_mode is ignored by recent runtimes;
     // apply it as session-level config through the profile endpoint.
     await this.#runtime.createRestClient().setSessionSwarmMode(sessionId, enabled)
+  }
+
+  async setSessionTowerMode(sessionId: string, enabled: boolean): Promise<void> {
+    this.#assertActiveSession(sessionId)
+    // Tower 与 swarm 同一 profile 通道；Runtime 未开实验开关时服务端返回
+    // session.tower_mode_invalid，由调用方转成用户可读提示。
+    await this.#runtime.createRestClient().setSessionTowerMode(sessionId, enabled)
   }
 
   async getOperationalState(sessionId: string): Promise<KimiSessionOperationalState> {
@@ -281,7 +289,8 @@ export class KimiSessionBridge extends EventEmitter {
       thinking: input.controls.thinking,
       permissionMode: input.controls.permissionMode,
       planMode: input.controls.planMode,
-      swarmMode: input.controls.swarmMode
+      swarmMode: input.controls.swarmMode,
+      towerMode: input.controls.towerMode
     })
     controller.acceptSideChatPrompt(sessionId, agentId, result)
     return {
@@ -327,6 +336,7 @@ export class KimiSessionBridge extends EventEmitter {
       permissionMode: controls.permissionMode,
       planMode: controls.planMode,
       swarmMode: controls.swarmMode,
+      towerMode: controls.towerMode,
       ...(skills === undefined || skills.length === 0 ? {} : { skills })
     })
     controller.acceptSubmittedPrompt(sessionId, result)

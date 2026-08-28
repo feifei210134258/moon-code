@@ -22,6 +22,8 @@ export interface AgentRosterItem {
   parentAgentId: string | null
   parentToolCallId: string | null
   swarmIndex: number | null
+  /** kimi 0.39 Tower：主 agent 为 true 时处于协调者角色；worker（tower-worker profile）为 false。 */
+  towerMode: boolean | null
   runInBackground: boolean
   model: string | null
   thinkingEffort: string | null
@@ -69,6 +71,7 @@ export class AgentProjector {
           parentAgentId: stringValue(payload.parentAgentId) ?? stringValue(payload.callerAgentId),
           parentToolCallId: stringValue(payload.parentToolCallId),
           swarmIndex: numberValue(payload.swarmIndex),
+          towerMode: null,
           runInBackground: false,
           model: stringValue(payload.model),
           thinkingEffort: stringValue(payload.thinkingEffort),
@@ -152,7 +155,9 @@ export class AgentProjector {
         const contextTokens = numberValue(payload.contextTokens) ?? numberValue(payload.context_tokens)
         const model = stringValue(payload.model)
         const thinkingEffort = stringValue(payload.thinkingEffort)
-        if (contextTokens === null && model === null && thinkingEffort === null) return false
+        // kimi 0.39：tower_mode.enter/exit 事件会附带 towerMode 状态更新。
+        const towerMode = typeof payload.towerMode === 'boolean' ? payload.towerMode : null
+        if (contextTokens === null && model === null && thinkingEffort === null && towerMode === null) return false
         if (contextTokens !== null) {
           agent.usage = {
             inputTokens: agent.usage?.inputTokens ?? 0,
@@ -164,6 +169,7 @@ export class AgentProjector {
         }
         if (model !== null) agent.model = model
         if (thinkingEffort !== null) agent.thinkingEffort = thinkingEffort
+        if (towerMode !== null) agent.towerMode = towerMode
         return true
       }
       case 'agent.created':
@@ -205,6 +211,7 @@ function mainAgent(status: AgentRosterItem['status']): AgentRosterItem {
     parentAgentId: null,
     parentToolCallId: null,
     swarmIndex: null,
+    towerMode: null,
     runInBackground: false,
     model: null,
     thinkingEffort: null,
@@ -230,6 +237,7 @@ function mapSnapshotSubagent(task: SnapshotSubagent): AgentRosterItem {
     parentAgentId: null,
     parentToolCallId: task.parent_tool_call_id ?? null,
     swarmIndex: task.swarm_index ?? null,
+    towerMode: null,
     runInBackground: task.run_in_background === true,
     model: task.model ?? null,
     thinkingEffort: task.thinking_effort ?? null,

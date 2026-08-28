@@ -297,7 +297,7 @@ describe('useRuntimeBridge session races', () => {
       openSession: vi.fn(async (sessionId: string) => sessionState(sessionId)),
       listSessionSkills: vi.fn(async () => []),
       getSessionRuntimeStatus: vi.fn(async () => ({
-        busy: false, model: 'model-1', thinking: 'off', permissionMode: 'manual', planMode: false, swarmMode: false,
+        busy: false, model: 'model-1', thinking: 'off', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false,
         contextTokens: 0, maxContextTokens: 0, contextUsage: 0
       })),
       getKimiSettings: vi.fn(async () => ({
@@ -384,7 +384,7 @@ describe('useRuntimeBridge session races', () => {
       })),
       getSessionRuntimeStatus: vi.fn(async () => ({
         busy: false, model: model.id, thinking: runtimeThinking, permissionMode: 'manual' as const,
-        planMode: false, swarmMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
+        planMode: false, swarmMode: false, towerMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
       })),
       getKimiSettings: vi.fn(async () => ({
         models: [model],
@@ -476,7 +476,7 @@ describe('useRuntimeBridge session races', () => {
       })),
       getSessionRuntimeStatus: vi.fn(async () => ({
         busy: false, model: model.id, thinking: 'off', permissionMode: 'manual' as const,
-        planMode: false, swarmMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
+        planMode: false, swarmMode: false, towerMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
       })),
       setSessionPlanMode,
       getKimiSettings: vi.fn(async () => ({
@@ -542,7 +542,7 @@ describe('useRuntimeBridge session races', () => {
       })),
       getSessionRuntimeStatus: vi.fn(async () => ({
         busy: false, model: model.id, thinking: 'off', permissionMode: 'manual' as const,
-        planMode: false, swarmMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
+        planMode: false, swarmMode: false, towerMode: false, contextTokens: 0, maxContextTokens: 262_144, contextUsage: 0
       })),
       setSessionSwarmMode,
       getKimiSettings: vi.fn(async () => ({
@@ -564,13 +564,13 @@ describe('useRuntimeBridge session races', () => {
     await flushPromises()
     expect(bridge.promptControls.value?.swarmMode).toBe(false)
 
-    bridge.setPromptControls({ ...bridge.promptControls.value!, swarmMode: true })
+    bridge.setPromptControls({ ...bridge.promptControls.value!, swarmMode: true, towerMode: false })
     await flushPromises()
     expect(setSessionSwarmMode).toHaveBeenCalledWith('session-1', true)
     expect(bridge.promptControls.value?.swarmMode).toBe(true)
 
     setSessionSwarmMode.mockRejectedValueOnce(new Error('runtime offline'))
-    bridge.setPromptControls({ ...bridge.promptControls.value!, swarmMode: false })
+    bridge.setPromptControls({ ...bridge.promptControls.value!, swarmMode: false, towerMode: false })
     await flushPromises()
     expect(bridge.promptControls.value?.swarmMode).toBe(true)
     expect(bridge.sessionControlsError.value).toBe('runtime offline')
@@ -625,7 +625,7 @@ describe('useRuntimeBridge session races', () => {
 
     const controls = reactive({
       model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
-      planMode: false, swarmMode: false
+      planMode: false, swarmMode: false, towerMode: false
     })
     await bridge.submitPrompt('session-queue', reactive({
       text: '先不要收尾，补充检查边界情况', controls, deliveryMode: 'steer' as const
@@ -1182,7 +1182,7 @@ describe('useRuntimeBridge draft controls', () => {
       thinking: 'low',
       permissionMode: 'auto',
       planMode: true,
-      swarmMode: false
+      swarmMode: false, towerMode: false
     })
     expect(bridge.sessionModels.value).toHaveLength(1)
     expect(bridge.sessionControlsError.value).toBeNull()

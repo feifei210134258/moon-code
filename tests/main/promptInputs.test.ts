@@ -6,7 +6,7 @@ import {
 } from '../../src/main/security/promptInputs.js'
 
 const controls = {
-  model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false
+  model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false, towerMode: false
 }
 
 describe('prompt inputs', () => {

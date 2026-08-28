@@ -23,6 +23,10 @@ import {
   DEFAULT_REMOTE_CONTROL_PREFERENCE,
   type RemoteControlPreferencesStore
 } from './RemoteControlPreferencesStore.js'
+import {
+  DEFAULT_TOWER_PREFERENCE,
+  type TowerPreferencesStore
+} from './TowerPreferencesStore.js'
 
 interface RuntimeConnection {
   origin: string
@@ -41,6 +45,7 @@ interface RuntimeManagerOptions {
   clientVersion?: string
   secondaryModelPreferencesStore?: Pick<SecondaryModelPreferencesStore, 'load'>
   remoteControlPreferencesStore?: Pick<RemoteControlPreferencesStore, 'load'>
+  towerPreferencesStore?: Pick<TowerPreferencesStore, 'load'>
 }
 
 type RuntimeChild = ChildProcessByStdio<null, Readable, Readable>
@@ -52,6 +57,7 @@ const EXPERIMENT_MASTER_ENV = 'KIMI_CODE_EXPERIMENTAL_FLAG'
 const SECONDARY_MODEL_ENV = 'KIMI_SECONDARY_MODEL'
 const SECONDARY_EFFORT_ENV = 'KIMI_SECONDARY_EFFORT'
 export const REMOTE_CONTROL_EXPERIMENT_ENV = 'KIMI_CODE_EXPERIMENTAL_REMOTE_CONTROL'
+export const TOWER_EXPERIMENT_ENV = 'KIMI_CODE_EXPERIMENTAL_TOWER'
 
 async function readSharedKimiWebToken(): Promise<string | null> {
   try {
@@ -71,11 +77,13 @@ export class KimiRuntimeManager extends EventEmitter {
   readonly #clientVersion: string
   readonly #secondaryModelPreferencesStore: Pick<SecondaryModelPreferencesStore, 'load'> | null
   readonly #remoteControlPreferencesStore: Pick<RemoteControlPreferencesStore, 'load'> | null
+  readonly #towerPreferencesStore: Pick<TowerPreferencesStore, 'load'> | null
   #process: RuntimeChild | null = null
   #connection: RuntimeConnection | null = null
   #appliedSecondaryModelPreference: KimiSecondaryModelPreference | null = null
   #appliedSecondaryModelSource: KimiSecondaryModelAppliedSource | null = null
   #appliedRemoteControlEnabled: boolean | null = null
+  #appliedTowerEnabled: boolean | null = null
   #state: RuntimePublicState = {
     status: 'stopped',
     mode: null,
@@ -95,6 +103,7 @@ export class KimiRuntimeManager extends EventEmitter {
     this.#clientVersion = options.clientVersion ?? '0.0.0-dev'
     this.#secondaryModelPreferencesStore = options.secondaryModelPreferencesStore ?? null
     this.#remoteControlPreferencesStore = options.remoteControlPreferencesStore ?? null
+    this.#towerPreferencesStore = options.towerPreferencesStore ?? null
   }
 
   get state(): RuntimePublicState {
@@ -118,6 +127,11 @@ export class KimiRuntimeManager extends EventEmitter {
   /** 本次 owned Runtime 启动时 Remote Control 的生效状态；null = 非 owned/未启动。 */
   get appliedRemoteControlEnabled(): boolean | null {
     return this.#appliedRemoteControlEnabled
+  }
+
+  /** 本次 owned Runtime 启动时 Tower 实验开关的生效状态；null = 非 owned/未启动。 */
+  get appliedTowerEnabled(): boolean | null {
+    return this.#appliedTowerEnabled
   }
 
   createRestClient(): KimiRestClient {
@@ -190,6 +204,7 @@ export class KimiRuntimeManager extends EventEmitter {
       }
 
       const managed = mode === 'managed'
+      const towerPreference = await this.#loadTowerPreference()
       const executable = managed ? process.execPath : candidate.executable
       const baseArgs = ['web', '--port', '58627', '--no-open', '--log-level', 'error']
       const args = managed
@@ -205,7 +220,11 @@ export class KimiRuntimeManager extends EventEmitter {
         ...(managed && process.versions.electron !== undefined ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
         ...(remoteControlPreference.enabled
           ? { [REMOTE_CONTROL_EXPERIMENT_ENV]: '1' }
-          : { [REMOTE_CONTROL_EXPERIMENT_ENV]: '0' })
+          : { [REMOTE_CONTROL_EXPERIMENT_ENV]: '0' }),
+        // Tower 实验开关（kimi 0.39 /tower 的前置 gate）；同样只在 owned 启动时生效。
+        ...(towerPreference.enabled
+          ? { [TOWER_EXPERIMENT_ENV]: '1' }
+          : { [TOWER_EXPERIMENT_ENV]: '0' })
       }
       const child = this.#spawn(executable, args, {
         cwd: process.cwd(),
@@ -222,6 +241,7 @@ export class KimiRuntimeManager extends EventEmitter {
         secondaryPreference
       )
       this.#appliedRemoteControlEnabled = remoteControlPreference.enabled
+      this.#appliedTowerEnabled = towerPreference.enabled
       this.#setState({
         status: 'running',
         mode,
@@ -238,6 +258,7 @@ export class KimiRuntimeManager extends EventEmitter {
         this.#appliedSecondaryModelPreference = null
         this.#appliedSecondaryModelSource = null
         this.#appliedRemoteControlEnabled = null
+        this.#appliedTowerEnabled = null
         const expected = this.#state.status === 'stopping'
         this.#setState({
           status: expected ? 'stopped' : 'error',
@@ -257,6 +278,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
       this.#appliedRemoteControlEnabled = null
+      this.#appliedTowerEnabled = null
       this.#setState({
         status: 'error',
         mode,
@@ -286,6 +308,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
       this.#appliedRemoteControlEnabled = null
+      this.#appliedTowerEnabled = null
       this.#setState({
         status: 'running', mode: 'external', version: connection.version,
         serverId: connection.serverId, origin, error: null
@@ -295,6 +318,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
       this.#appliedRemoteControlEnabled = null
+      this.#appliedTowerEnabled = null
       this.#setState({
         status: 'error', mode: 'external', version: null, serverId: null, origin: null,
         error: 'Unable to connect to the protected Kimi Runtime.'
@@ -311,6 +335,7 @@ export class KimiRuntimeManager extends EventEmitter {
       this.#appliedSecondaryModelPreference = null
       this.#appliedSecondaryModelSource = null
       this.#appliedRemoteControlEnabled = null
+      this.#appliedTowerEnabled = null
       this.#setState({
         status: 'stopped',
         mode: null,
@@ -348,6 +373,7 @@ export class KimiRuntimeManager extends EventEmitter {
     this.#appliedSecondaryModelPreference = null
     this.#appliedSecondaryModelSource = null
     this.#appliedRemoteControlEnabled = null
+    this.#appliedTowerEnabled = null
     this.#setState({
       status: 'stopped',
       mode: null,
@@ -380,6 +406,13 @@ export class KimiRuntimeManager extends EventEmitter {
       return { ...DEFAULT_REMOTE_CONTROL_PREFERENCE }
     }
     return await this.#remoteControlPreferencesStore.load()
+  }
+
+  async #loadTowerPreference(): Promise<{ enabled: boolean }> {
+    if (this.#towerPreferencesStore === null) {
+      return { ...DEFAULT_TOWER_PREFERENCE }
+    }
+    return await this.#towerPreferencesStore.load()
   }
 
   async #tryConnectSharedRuntime(): Promise<RuntimeConnection | null> {

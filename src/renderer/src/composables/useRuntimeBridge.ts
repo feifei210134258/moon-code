@@ -1468,7 +1468,8 @@ export function useRuntimeBridge() {
         thinking,
         permissionMode: status.permissionMode,
         planMode: status.planMode,
-        swarmMode: status.swarmMode
+        swarmMode: status.swarmMode,
+        towerMode: status.towerMode
       }
     } catch (error) {
       if (generation === controlsGeneration && sessionId === requestedSessionId) {
@@ -1502,7 +1503,8 @@ export function useRuntimeBridge() {
         thinking,
         permissionMode: settings.preferences.defaultPermissionMode ?? 'manual',
         planMode: settings.preferences.defaultPlanMode ?? false,
-        swarmMode: false
+        swarmMode: false,
+        towerMode: false
       }
     } catch (error) {
       if (generation === controlsGeneration && requestedSessionId === null) {
@@ -1549,6 +1551,23 @@ export function useRuntimeBridge() {
       void window.kimiAgent.setSessionSwarmMode(sessionId, enabled).catch((error: unknown) => {
         if (promptControls.value !== null && promptControls.value.swarmMode === enabled) {
           promptControls.value = { ...promptControls.value, swarmMode: !enabled }
+        }
+        sessionControlsError.value = errorMessage(error)
+      })
+    }
+    // Tower mode同款：profile 通道写入；未开实验开关时服务端返回
+    // tower_mode_invalid，回滚开关并把错误展示在会话控制区。
+    if (
+      previous !== null &&
+      previous.towerMode !== controls.towerMode &&
+      requestedSessionId !== null &&
+      window.kimiAgent !== undefined
+    ) {
+      const sessionId = requestedSessionId
+      const enabled = controls.towerMode
+      void window.kimiAgent.setSessionTowerMode(sessionId, enabled).catch((error: unknown) => {
+        if (promptControls.value !== null && promptControls.value.towerMode === enabled) {
+          promptControls.value = { ...promptControls.value, towerMode: !enabled }
         }
         sessionControlsError.value = errorMessage(error)
       })

@@ -242,12 +242,12 @@ function cancelPermissionMode(): void {
   pendingPermissionMode.value = null
 }
 
-function setBoolean(key: 'planMode' | 'swarmMode', enabled: boolean): void {
+function setBoolean(key: 'planMode' | 'swarmMode' | 'towerMode', enabled: boolean): void {
   if (props.controls === null) return
   emit('updateControls', { ...props.controls, [key]: enabled })
 }
 
-function disableBooleanMode(key: 'planMode' | 'swarmMode'): void {
+function disableBooleanMode(key: 'planMode' | 'swarmMode' | 'towerMode'): void {
   if (props.controls === null) return
   emit('updateControls', { ...props.controls, [key]: false })
 }
@@ -877,7 +877,7 @@ watch(() => props.running, (running) => {
         ref="input"
         v-model="value"
         rows="1"
-        :placeholder="disabled ? disabledReason : selectedSkills.length > 0 ? '输入技能参数（可选）…' : goalMode ? '描述需要持续完成的目标…' : '描述你的任务或问题…'"
+        :placeholder="disabled ? disabledReason : selectedSkills.length > 0 ? '输入技能参数（可选）…' : goalMode ? '描述需要持续完成的目标…' : controls?.towerMode ? '描述 Tower 目标：主 Agent 会拆分任务并编排并行 worker…' : '描述你的任务或问题…'"
         :disabled="disabled"
         :aria-label="selectedSkills.length === 0 ? '输入任务' : `${skillDisplayName(selectedSkills.at(-1)!.skill.name)} 技能参数`"
         aria-autocomplete="list"
@@ -916,7 +916,7 @@ watch(() => props.running, (running) => {
         >/</button>
       </div>
       <div class="composer-settings">
-        <div v-if="controls?.planMode || goalMode || controls?.swarmMode" class="composer-mode-chips" aria-label="已启用模式">
+        <div v-if="controls?.planMode || goalMode || controls?.swarmMode || controls?.towerMode" class="composer-mode-chips" aria-label="已启用模式">
           <button v-if="controls?.planMode" type="button" aria-label="关闭规划模式" @click="disableBooleanMode('planMode')">
             <span>规划</span><PhX :size="11" />
           </button>
@@ -925,6 +925,9 @@ watch(() => props.running, (running) => {
           </button>
           <button v-if="controls?.swarmMode" type="button" aria-label="关闭 Swarm 模式" @click="disableBooleanMode('swarmMode')">
             <span>协作</span><PhX :size="11" />
+          </button>
+          <button v-if="controls?.towerMode" type="button" aria-label="关闭 Tower 模式" @click="disableBooleanMode('towerMode')">
+            <span>Tower</span><PhX :size="11" />
           </button>
         </div>
         <button
@@ -1094,6 +1097,10 @@ watch(() => props.running, (running) => {
         </button>
         <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': controls?.swarmMode }" :aria-checked="controls?.swarmMode" :disabled="disabled || controls === null" @click="setBoolean('swarmMode', !controls?.swarmMode)">
           <span><strong>协作模式</strong><small>让多个 Agent 在当前任务中协作</small></span>
+          <i aria-hidden="true"><b /></i>
+        </button>
+        <button class="composer-toggle-row" type="button" role="switch" :class="{ 'is-selected': controls?.towerMode }" :aria-checked="controls?.towerMode" :disabled="disabled || controls === null" @click="setBoolean('towerMode', !controls?.towerMode)">
+          <span><strong>Tower 编排</strong><small>主 Agent 转为协调者，指挥并行 worker（实验特性）</small></span>
           <i aria-hidden="true"><b /></i>
         </button>
       </div>

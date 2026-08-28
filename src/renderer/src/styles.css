@@ -4794,6 +4794,15 @@ select:focus-visible {
   background: rgba(0, 0, 0, 0.25);
 }
 
+/* Tower 协调者徽标：主 agent 处于 tower 模式时的身份标记。 */
+.agent-tower-badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(46, 160, 67, 0.35);
+  color: #1a7f37;
+  font-size: var(--type-micro-size);
+}
+
 .agent-state {
   flex: none;
 }

@@ -840,6 +840,15 @@ export class KimiRestClient {
     )
   }
 
+  /** kimi 0.39：进入/退出 Tower 模式（主 agent 变为纯协调者，需要实验开关）。 */
+  setSessionTowerMode(sessionId: string, towerMode: boolean): Promise<SessionSummary> {
+    return this.request(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/profile`,
+      { method: 'POST', body: JSON.stringify({ agent_config: { tower_mode: towerMode } }) },
+      sessionSummarySchema
+    )
+  }
+
   archiveSession(sessionId: string): Promise<SessionArchiveResult> {
     return this.request(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}:archive`,
@@ -1072,6 +1081,7 @@ export class KimiRestClient {
       permissionMode?: 'manual' | 'auto' | 'yolo'
       planMode?: boolean
       swarmMode?: boolean
+      towerMode?: boolean
       skills?: PromptSkill[]
       promptId?: string
     }
@@ -1089,6 +1099,7 @@ export class KimiRestClient {
           ...(input.permissionMode === undefined ? {} : { permission_mode: input.permissionMode }),
           ...(input.planMode === undefined ? {} : { plan_mode: input.planMode }),
           ...(input.swarmMode === undefined ? {} : { swarm_mode: input.swarmMode }),
+          ...(input.towerMode === undefined ? {} : { tower_mode: input.towerMode }),
           ...(input.skills === undefined || input.skills.length === 0 ? {} : { skills: input.skills }),
           ...(input.promptId === undefined ? {} : { prompt_id: input.promptId })
         })

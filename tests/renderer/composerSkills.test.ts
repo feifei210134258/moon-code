@@ -7,7 +7,7 @@ import ComposerBar from '../../src/renderer/src/components/ComposerBar.vue'
 
 const controls = {
   model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
-  planMode: false, swarmMode: false
+  planMode: false, swarmMode: false, towerMode: false
 }
 const models = [{
   id: 'kimi-for-coding', providerId: 'kimi', displayName: 'Kimi for Coding',
@@ -252,7 +252,7 @@ describe('ComposerBar Skills menu', () => {
     await toggles[2]!.trigger('click')
     expect(wrapper.emitted('updateControls')).toEqual([
       [{ ...controls, planMode: true }],
-      [{ ...controls, swarmMode: true }]
+      [{ ...controls, swarmMode: true, towerMode: false }]
     ])
     await toggles[1]!.trigger('click')
     expect(wrapper.emitted('updateGoalMode')).toEqual([[true]])
@@ -272,7 +272,7 @@ describe('ComposerBar Skills menu', () => {
   })
 
   it('shows active Plan, Goal, and Swarm modes before the model and closes each from its chip', async () => {
-    const activeControls = { ...controls, planMode: true, swarmMode: true }
+    const activeControls = { ...controls, planMode: true, swarmMode: true, towerMode: false }
     const wrapper = mount(ComposerBar, {
       props: { skills: [], models, controls: activeControls, goalMode: true }
     })
@@ -291,7 +291,7 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('[aria-label="关闭 Swarm 模式"]').trigger('click')
     expect(wrapper.emitted('updateControls')).toEqual([
       [{ ...activeControls, planMode: false }],
-      [{ ...activeControls, swarmMode: false }]
+      [{ ...activeControls, swarmMode: false, towerMode: false }]
     ])
     expect(wrapper.emitted('updateGoalMode')).toEqual([[false]])
   })

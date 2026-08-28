@@ -392,6 +392,8 @@ export const sessionRuntimeStatusSchema = z.object({
   permission: z.string(),
   plan_mode: z.boolean(),
   swarm_mode: z.boolean(),
+  // kimi 0.39：Tower 模式标记（可选以兼容 <0.39 的 Runtime，缺省视为关闭）。
+  tower_mode: z.boolean().optional().default(false),
   context_tokens: z.number().int().nonnegative(),
   // 0.38.0：max_context_tokens 与 context_usage 均不在 required 内；default(0) 让下游
   // （Main 的 runtime status 映射）保持 number 类型，服务端省略时按 0 处理。

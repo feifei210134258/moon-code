@@ -11,23 +11,23 @@ describe('AgentRoster', () => {
         agents: [
           {
             id: 'main', role: 'main', name: 'Kimi', description: 'Main', status: 'working',
-            subagentType: null, parentAgentId: null, parentToolCallId: null, swarmIndex: null,
-            runInBackground: false, model: null, thinkingEffort: null,
+            subagentType: null, parentAgentId: null, parentToolCallId: null, swarmIndex: null, towerMode: null,
+              runInBackground: false, model: null, thinkingEffort: null,
             createdAt: null, startedAt: null, completedAt: null,
             suspendedReason: null, outputPreview: null, usage: null
           },
           {
             id: 'agent-1', role: 'subagent', name: 'explore', description: 'Inspect auth', status: 'completed',
-            subagentType: 'explore', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0,
-            runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'high',
+            subagentType: 'explore', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0, towerMode: null,
+              runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'high',
             createdAt: null, startedAt: null, completedAt: null,
             suspendedReason: null, outputPreview: 'No credential leak found',
             usage: { inputTokens: 100, outputTokens: 25, cacheReadTokens: 20, cacheCreationTokens: 5, contextTokens: 256 }
           },
           {
             id: 'agent-2', role: 'subagent', name: 'coder', description: 'Fix the bug', status: 'working',
-            subagentType: 'coder', parentAgentId: 'main', parentToolCallId: 'tool-2', swarmIndex: 1,
-            runInBackground: false, model: null, thinkingEffort: null,
+            subagentType: 'coder', parentAgentId: 'main', parentToolCallId: 'tool-2', swarmIndex: 1, towerMode: null,
+              runInBackground: false, model: null, thinkingEffort: null,
             createdAt: null, startedAt: null, completedAt: null,
             suspendedReason: null, outputPreview: 'Patching store.ts', usage: null
           }
@@ -81,10 +81,10 @@ describe('AgentRoster', () => {
     const wrapper = mount(AgentRoster, {
       props: {
         agents: [
-          { ...base, id: 'agent-1', name: 'root-1', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0 },
-          { ...base, id: 'agent-2', name: 'child-1', parentAgentId: 'agent-1', parentToolCallId: 'tool-2', swarmIndex: 0 },
-          { ...base, id: 'agent-3', name: 'grandchild', parentAgentId: 'agent-2', parentToolCallId: 'tool-3', swarmIndex: 0 },
-          { ...base, id: 'agent-4', name: 'orphan', parentAgentId: null, parentToolCallId: null, swarmIndex: 1 }
+          { ...base, id: 'agent-1', name: 'root-1', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0, towerMode: null },
+          { ...base, id: 'agent-2', name: 'child-1', parentAgentId: 'agent-1', parentToolCallId: 'tool-2', swarmIndex: 0, towerMode: null },
+          { ...base, id: 'agent-3', name: 'grandchild', parentAgentId: 'agent-2', parentToolCallId: 'tool-3', swarmIndex: 0, towerMode: null },
+          { ...base, id: 'agent-4', name: 'orphan', parentAgentId: null, parentToolCallId: null, swarmIndex: 1, towerMode: null }
         ]
       }
     })
@@ -114,8 +114,8 @@ describe('AgentRoster', () => {
     const wrapper = mount(AgentRoster, {
       props: {
         agents: [
-          { ...base, id: 'agent-1', name: 'self-ref', parentAgentId: 'agent-1', parentToolCallId: 'tool-1', swarmIndex: null },
-          { ...base, id: 'agent-2', name: 'missing-parent', parentAgentId: 'no-such-agent', parentToolCallId: 'tool-2', swarmIndex: null }
+          { ...base, id: 'agent-1', name: 'self-ref', parentAgentId: 'agent-1', parentToolCallId: 'tool-1', swarmIndex: null, towerMode: null },
+          { ...base, id: 'agent-2', name: 'missing-parent', parentAgentId: 'no-such-agent', parentToolCallId: 'tool-2', swarmIndex: null, towerMode: null }
         ]
       }
     })

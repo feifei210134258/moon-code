@@ -145,7 +145,7 @@ export function installSettingsApiFixture(): void {
     getSessionWarnings: async () => [],
     getSessionRuntimeStatus: async () => ({
       busy: false, model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
-      planMode: false, swarmMode: false, contextTokens: 4200, maxContextTokens: 262_144, contextUsage: 0.02
+      planMode: false, swarmMode: false, towerMode: false, contextTokens: 4200, maxContextTokens: 262_144, contextUsage: 0.02
     }),
     getSessionOperationalState: async () => ({ goal: null, tasks: [], prompts: { active: null, queued: [] } }),
     listFiles: async () => ({ path: '.', items: [], truncated: false }),

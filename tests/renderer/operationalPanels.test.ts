@@ -61,7 +61,7 @@ describe('operational panels', () => {
   it('keeps official-style local drafts editable and reorderable before Kimi submission', async () => {
     const controls = {
       model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
-      planMode: false, swarmMode: false
+      planMode: false, swarmMode: false, towerMode: false
     }
     const wrapper = mount(PromptQueueDock, {
       props: {

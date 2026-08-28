@@ -16,7 +16,7 @@ function draft(id: string): LocalPromptDraft {
       text: `Prompt ${id}`,
       controls: {
         model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual',
-        planMode: false, swarmMode: false
+        planMode: false, swarmMode: false, towerMode: false
       }
     }
   }

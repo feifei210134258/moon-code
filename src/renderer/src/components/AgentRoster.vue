@@ -115,6 +115,7 @@ function usageLabel(agent: SessionAgentView): string | null {
         </header>
         <p>{{ row.agent.description }}</p>
         <footer>
+          <span v-if="row.agent.towerMode === true" class="agent-tower-badge">Tower 协调者</span>
           <span v-if="row.agent.subagentType">{{ row.agent.subagentType }}</span>
           <span v-if="row.agent.swarmIndex !== null">#{{ row.agent.swarmIndex + 1 }}</span>
           <span v-if="row.agent.model">{{ row.agent.model }}<template v-if="row.agent.thinkingEffort"> · {{ row.agent.thinkingEffort }}</template></span>

@@ -23,7 +23,11 @@ export function validatePromptControls(value: unknown): KimiPromptControls {
   if (permissionMode !== 'manual' && permissionMode !== 'auto' && permissionMode !== 'yolo') {
     throw new TypeError('Invalid Kimi permission mode')
   }
-  if (typeof value.planMode !== 'boolean' || typeof value.swarmMode !== 'boolean') {
+  if (
+    typeof value.planMode !== 'boolean' ||
+    typeof value.swarmMode !== 'boolean' ||
+    typeof value.towerMode !== 'boolean'
+  ) {
     throw new TypeError('Invalid Kimi prompt modes')
   }
   return {
@@ -31,7 +35,8 @@ export function validatePromptControls(value: unknown): KimiPromptControls {
     thinking,
     permissionMode,
     planMode: value.planMode,
-    swarmMode: value.swarmMode
+    swarmMode: value.swarmMode,
+    towerMode: value.towerMode
   }
 }
 

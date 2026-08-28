@@ -7,7 +7,7 @@ import ComposerBar from '../../src/renderer/src/components/ComposerBar.vue'
 
 const controls = {
   model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
-  planMode: false, swarmMode: false
+  planMode: false, swarmMode: false, towerMode: false
 }
 const models = [{
   id: 'kimi-for-coding', providerId: 'kimi', displayName: 'Kimi for Coding',

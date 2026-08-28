@@ -122,6 +122,7 @@ class FakeRuntime extends EventEmitter {
         permission: 'manual',
         plan_mode: true,
         swarm_mode: false,
+        tower_mode: false,
         context_tokens: 1200,
         max_context_tokens: 262_144,
         context_usage: 1200 / 262_144
@@ -273,14 +274,14 @@ describe('KimiSessionBridge terminals', () => {
     await expect(bridge.submitSideChatPrompt('session-1', 'agent-invented', {
       text: '不应发送',
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })).rejects.toThrow('Kimi Side Chat is not active')
     expect(runtime.submitPrompt).not.toHaveBeenCalled()
     await bridge.submitSideChatPrompt('session-1', 'agent-btw-1', {
       text: '只检查当前测试',
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })
     bridge.closeSideChat('session-1', 'agent-btw-1')
@@ -416,7 +417,7 @@ describe('KimiSessionBridge terminals', () => {
       text: '完成所有 P0',
       goalObjective: '完成所有 P0',
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false, towerMode: false
       }
     })
     expect(runtime.updateSessionGoalObjective).toHaveBeenCalledWith('session-1', '完成所有 P0')
@@ -441,7 +442,7 @@ describe('KimiSessionBridge terminals', () => {
       text: '先别收尾，补充检查错误状态',
       deliveryMode: 'steer',
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })
     expect(runtime.steerPrompts).toHaveBeenCalledWith('session-1', ['prompt-guidance'])
@@ -468,7 +469,7 @@ describe('KimiSessionBridge terminals', () => {
       ],
       attachments: [{ fileId: 'file-1', name: 'notes.md', mediaType: 'text/markdown', size: 60 }],
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: true, swarmMode: false, towerMode: false
       }
     })
     expect(runtime.submitPrompt).toHaveBeenCalledWith('session-1', expect.objectContaining({
@@ -476,7 +477,7 @@ describe('KimiSessionBridge terminals', () => {
       thinking: 'high',
       permissionMode: 'manual',
       planMode: true,
-      swarmMode: false,
+      swarmMode: false, towerMode: false,
       content: [
         {
           type: 'text',
@@ -503,7 +504,7 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.submitPrompt('session-1', {
       text: '提交并生成 PDF',
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       },
       skills: [
         { name: 'commit', args: '-m "feat: skills"' },
@@ -527,7 +528,7 @@ describe('KimiSessionBridge terminals', () => {
     await bridge.submitPrompt('session-1', {
       text: '普通继续',
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })
     const submitted = runtime.submitPrompt.mock.calls[0] as unknown as [string, Record<string, unknown>]
@@ -568,7 +569,7 @@ describe('KimiSessionBridge terminals', () => {
         }
       ],
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })
     const submitted = (runtime.submitPrompt.mock.calls[0] as unknown as [string, {
@@ -602,7 +603,7 @@ describe('KimiSessionBridge terminals', () => {
         }
       ],
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })
     const submitted = (runtime.submitPrompt.mock.calls[0] as unknown as [string, {
@@ -635,7 +636,7 @@ describe('KimiSessionBridge terminals', () => {
         rect: { x: number; y: number; width: number; height: number }; pageUrl: string; pageTitle: string
       }>,
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })
     const submitted = (runtime.submitPrompt.mock.calls[0] as unknown as [string, {
@@ -661,7 +662,7 @@ describe('KimiSessionBridge terminals', () => {
         { fileId: 'file-1', name: 'notes.md', mediaType: 'text/markdown', size: 60 }
       ],
       controls: {
-        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false
+        model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual', planMode: false, swarmMode: false, towerMode: false
       }
     })
 
@@ -686,7 +687,7 @@ describe('KimiSessionBridge terminals', () => {
       thinking: 'high',
       permissionMode: 'manual',
       planMode: true,
-      swarmMode: false,
+      swarmMode: false, towerMode: false,
       contextTokens: 1200,
       maxContextTokens: 262_144,
       contextUsage: 1200 / 262_144

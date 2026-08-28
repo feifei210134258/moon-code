@@ -20,7 +20,8 @@ export function toCloneablePromptControls(controls: KimiPromptControls): KimiPro
     thinking: controls.thinking,
     permissionMode: controls.permissionMode,
     planMode: controls.planMode,
-    swarmMode: controls.swarmMode
+    swarmMode: controls.swarmMode,
+    towerMode: controls.towerMode
   }
 }
 

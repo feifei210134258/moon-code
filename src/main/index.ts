@@ -5,6 +5,7 @@ import { KimiSessionBridge } from './kimi/KimiSessionBridge.js'
 import { KimiConfigFileWatcher } from './kimi/KimiConfigFileWatcher.js'
 import { KimiSettingsBridge } from './kimi/KimiSettingsBridge.js'
 import { KimiRemoteControlBridge } from './kimi/KimiRemoteControlBridge.js'
+import { KimiTowerBridge } from './kimi/KimiTowerBridge.js'
 import { KimiCapabilitiesBridge } from './kimi/KimiCapabilitiesBridge.js'
 import { KimiBrowserManager } from './browser/KimiBrowserManager.js'
 import { KimiUsageService } from './kimi/KimiUsageService.js'
@@ -17,6 +18,7 @@ import { EMPTY_WINDOW_STATE, WindowStateStore, resolveWindowState, type StoredWi
 import { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
 import { SecondaryModelPreferencesStore } from './runtime/SecondaryModelPreferencesStore.js'
 import { RemoteControlPreferencesStore } from './runtime/RemoteControlPreferencesStore.js'
+import { TowerPreferencesStore } from './runtime/TowerPreferencesStore.js'
 import { KimiCliUpdateService } from './runtime/KimiCliUpdateService.js'
 import { isTrustedRendererUrl, rendererEntryUrl } from './security/trustedRenderer.js'
 import { PACKAGED_PTY_SMOKE_MARKER, runPackagedPtySmoke } from './packagedPtySmoke.js'
@@ -31,15 +33,20 @@ const secondaryModelPreferences = new SecondaryModelPreferencesStore(
 const remoteControlPreferences = new RemoteControlPreferencesStore(
   () => join(app.getPath('userData'), 'remote-control-preferences.json')
 )
+const towerPreferences = new TowerPreferencesStore(
+  () => join(app.getPath('userData'), 'tower-preferences.json')
+)
 const runtime = new KimiRuntimeManager({
   clientVersion: app.getVersion(),
   secondaryModelPreferencesStore: secondaryModelPreferences,
-  remoteControlPreferencesStore: remoteControlPreferences
+  remoteControlPreferencesStore: remoteControlPreferences,
+  towerPreferencesStore: towerPreferences
 })
 const cliUpdates = new KimiCliUpdateService()
 const sessions = new KimiSessionBridge(runtime, new KimiConfigFileWatcher())
 const settings = new KimiSettingsBridge(runtime, secondaryModelPreferences)
 const remoteControl = new KimiRemoteControlBridge(runtime, remoteControlPreferences)
+const tower = new KimiTowerBridge(runtime, towerPreferences)
 const capabilities = new KimiCapabilitiesBridge(runtime)
 const browser = new KimiBrowserManager(runtime, () => mainWindow)
 const pets = new KimiPetService(runtime)
@@ -234,7 +241,7 @@ if (process.argv.includes('--smoke-node-pty')) {
     usage.start()
     pets.start()
     const trustedRendererUrl = getTrustedRendererUrl()
-    registerIpc(runtime, sessions, settings, remoteControl, capabilities, browser, usage, pets, cliUpdates, () => mainWindow, trustedRendererUrl)
+    registerIpc(runtime, sessions, settings, remoteControl, tower, capabilities, browser, usage, pets, cliUpdates, () => mainWindow, trustedRendererUrl)
     remoteControl.startWatching()
     petWindows = new KimiPetWindowManager(pets, {
       trustedRendererUrl,

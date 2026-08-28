@@ -1874,6 +1874,8 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await flushPromises()
 
     const card = wrapper.get('.remote-control-card')
     expect(card.classes()).toContain('is-active')
@@ -1914,6 +1916,8 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await flushPromises()
 
     const card = wrapper.get('.remote-control-card')
     const checkbox = card.get('input[type="checkbox"]')
@@ -1952,6 +1956,8 @@ describe('SettingsPanel', () => {
       global: { stubs: { Teleport: true } }
     })
     await flushPromises()
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await flushPromises()
 
     const checkbox = wrapper.get('.remote-control-card input[type="checkbox"]')
     ;(checkbox.element as HTMLInputElement).checked = true
@@ -1960,6 +1966,60 @@ describe('SettingsPanel', () => {
 
     expect(window.kimiAgent.setRemoteControlEnabled).not.toHaveBeenCalled()
     expect((checkbox.element as HTMLInputElement).checked).toBe(false)
+    wrapper.unmount()
+  })
+  it('manages the Tower experiment preference from the labs tab', async () => {
+    const enabledState = {
+      preference: { enabled: false },
+      appliedEnabled: false,
+      requiresRestart: false
+    }
+    const updatedState = {
+      preference: { enabled: true },
+      appliedEnabled: false,
+      requiresRestart: true
+    }
+    window.confirm = vi.fn(() => true)
+    window.kimiAgent = {
+      getKimiSettings: vi.fn(async () => snapshot),
+      getTowerPreference: vi.fn(async () => enabledState),
+      setTowerPreference: vi.fn(async () => updatedState),
+      getRemoteControlState: vi.fn(async () => ({
+        preference: { enabled: false },
+        runtimeMode: 'system' as const,
+        appliedEnabled: false,
+        requiresRestart: false,
+        active: false,
+        url: null,
+        deviceId: null,
+        startedAt: null,
+        qrCodeDataUrl: null
+      })),
+      onRemoteControlStateChanged: vi.fn(() => () => {})
+    } as unknown as KimiAgentDesktopApi
+    const wrapper = mount(SettingsPanel, {
+      props: { open: true, runtimeRunning: true, activeSessionId: 'session-1', activeWorkspaceId: 'workspace-1', usage },
+      global: { stubs: { Teleport: true } }
+    })
+    await flushPromises()
+    await wrapper.findAll('.settings-tab')[6]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('实验室')
+    expect(wrapper.text()).toContain('Tower 模式')
+    // 远程控制卡片已迁入实验室
+    expect(wrapper.text()).toContain('远程控制')
+
+    const towerCard = wrapper.findAll('.remote-control-card')[0]!
+    const checkbox = towerCard.get('input[type="checkbox"]')
+    ;(checkbox.element as HTMLInputElement).checked = true
+    await checkbox.trigger('change')
+    await flushPromises()
+
+    expect(window.kimiAgent.setTowerPreference).toHaveBeenCalledWith(true)
+    const notice = wrapper.find('.secondary-restart-notice')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toContain('重启')
     wrapper.unmount()
   })
 })

@@ -31,6 +31,9 @@ export const ipcChannels = {
   sessionRuntimeGet: 'session:runtime:get',
   sessionPlanModeSet: 'session:plan-mode:set',
   sessionSwarmModeSet: 'session:swarm-mode:set',
+  sessionTowerModeSet: 'session:tower-mode:set',
+  towerPreferencesGet: 'tower:preferences:get',
+  towerPreferencesSet: 'tower:preferences:set',
   sessionOperationalGet: 'session:operational:get',
   sessionCompact: 'session:compact',
   sessionUndo: 'session:undo',
@@ -177,6 +180,15 @@ export interface RuntimeExternalConnectionInput {
 
 export interface RemoteControlPreference {
   enabled: boolean
+}
+
+/** Tower 实验开关（KIMI_CODE_EXPERIMENTAL_TOWER）：偏好 + 本次 Runtime 实际生效态。 */
+export interface TowerPreferenceState {
+  preference: { enabled: boolean }
+  /** 本次 owned Runtime 启动时注入的实验开关；null = 非 owned/未启动。 */
+  appliedEnabled: boolean | null
+  /** 偏好与运行中 Runtime 不一致，重启后生效。 */
+  requiresRestart: boolean
 }
 
 /** 远程控制（Kimi Code 0.39 Remote Control）只读状态：偏好 + 实际生效 + 设备链接。 */
@@ -502,6 +514,8 @@ export interface SessionAgentView {
   parentAgentId: string | null
   parentToolCallId: string | null
   swarmIndex: number | null
+  /** kimi 0.39 Tower：主 agent 为 true 时处于协调者角色。 */
+  towerMode: boolean | null
   runInBackground: boolean
   model: string | null
   thinkingEffort: string | null
@@ -610,6 +624,8 @@ export interface KimiPromptControls {
   permissionMode: KimiPermissionMode
   planMode: boolean
   swarmMode: boolean
+  /** kimi 0.39 Tower 模式（需实验室开关 + Runtime ≥0.39）。 */
+  towerMode: boolean
 }
 
 export interface KimiUploadedFile {
@@ -676,6 +692,8 @@ export interface KimiSessionRuntimeStatus {
   permissionMode: KimiPermissionMode
   planMode: boolean
   swarmMode: boolean
+  /** kimi 0.39 Tower 模式（<0.39 Runtime 缺省 false）。 */
+  towerMode: boolean
   contextTokens: number
   maxContextTokens: number
   contextUsage: number
@@ -1405,6 +1423,10 @@ export interface KimiAgentDesktopApi {
   getSessionRuntimeStatus(sessionId: string): Promise<KimiSessionRuntimeStatus>
   setSessionPlanMode(sessionId: string, enabled: boolean): Promise<void>
   setSessionSwarmMode(sessionId: string, enabled: boolean): Promise<void>
+  /** kimi 0.39 Tower：需要设置「实验室」里开启实验开关后重启 Runtime 才可用。 */
+  setSessionTowerMode(sessionId: string, enabled: boolean): Promise<void>
+  getTowerPreference(): Promise<TowerPreferenceState>
+  setTowerPreference(enabled: boolean): Promise<TowerPreferenceState>
   getSessionOperationalState(sessionId: string): Promise<KimiSessionOperationalState>
   compactSession(sessionId: string, instruction?: string): Promise<void>
   undoSession(sessionId: string, count?: number): Promise<KimiUndoDraft | null>

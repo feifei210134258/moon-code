@@ -49,7 +49,7 @@ describe('renderer IPC payload DTOs', () => {
       thinking: 'high',
       permissionMode: 'auto',
       planMode: true,
-      swarmMode: false
+      swarmMode: false, towerMode: false
     })
     const input = reactive<KimiPromptInput>({
       text: '继续修复',
@@ -73,7 +73,7 @@ describe('renderer IPC payload DTOs', () => {
         thinking: 'high',
         permissionMode: 'auto',
         planMode: true,
-        swarmMode: false
+        swarmMode: false, towerMode: false
       },
       attachments: [{
         fileId: 'file-1',
@@ -91,7 +91,7 @@ describe('renderer IPC payload DTOs', () => {
   it('makes Side Chat, web elements, approvals, and all question answer variants cloneable', () => {
     const controls = reactive<KimiPromptControls>({
       model: 'kimi-for-coding', thinking: 'medium', permissionMode: 'manual',
-      planMode: false, swarmMode: true
+      planMode: false, swarmMode: true, towerMode: false
     })
     const sideChat = reactive<KimiSideChatPromptInput>({ text: '帮我检查', controls })
     const webElements = reactive<BrowserPickedElement[]>([webElementFixture])

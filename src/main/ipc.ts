@@ -41,6 +41,7 @@ import {
   type PromptSubmissionResult,
   type QuestionDismissResult,
   type RemoteControlState,
+  type TowerPreferenceState,
   type RuntimePublicState,
   type SessionTerminal,
   type SessionViewState,
@@ -74,6 +75,7 @@ import type { KimiRuntimeManager } from './runtime/KimiRuntimeManager.js'
 import type { KimiSessionBridge } from './kimi/KimiSessionBridge.js'
 import type { KimiSettingsBridge } from './kimi/KimiSettingsBridge.js'
 import type { KimiRemoteControlBridge } from './kimi/KimiRemoteControlBridge.js'
+import type { KimiTowerBridge } from './kimi/KimiTowerBridge.js'
 import type { KimiCapabilitiesBridge } from './kimi/KimiCapabilitiesBridge.js'
 import type { KimiBrowserManager } from './browser/KimiBrowserManager.js'
 import type { KimiUsageService } from './kimi/KimiUsageService.js'
@@ -149,6 +151,7 @@ export function registerIpc(
   sessions: KimiSessionBridge,
   settings: KimiSettingsBridge,
   remoteControl: KimiRemoteControlBridge,
+  tower: KimiTowerBridge,
   capabilities: KimiCapabilitiesBridge,
   browser: KimiBrowserManager,
   usage: KimiUsageService,
@@ -378,6 +381,27 @@ export function registerIpc(
       assertSessionId(sessionId)
       if (typeof enabled !== 'boolean') throw new Error('Invalid swarm mode value')
       await sessions.setSessionSwarmMode(sessionId, enabled)
+    }
+  )
+  ipcMain.handle(
+    ipcChannels.sessionTowerModeSet,
+    async (event, sessionId?: unknown, enabled?: unknown): Promise<void> => {
+      assertTrustedSender(event)
+      assertSessionId(sessionId)
+      if (typeof enabled !== 'boolean') throw new Error('Invalid tower mode value')
+      await sessions.setSessionTowerMode(sessionId, enabled)
+    }
+  )
+  ipcMain.handle(ipcChannels.towerPreferencesGet, async (event): Promise<TowerPreferenceState> => {
+    assertTrustedSender(event)
+    return await tower.getPreferenceState()
+  })
+  ipcMain.handle(
+    ipcChannels.towerPreferencesSet,
+    async (event, enabled?: unknown): Promise<TowerPreferenceState> => {
+      assertTrustedSender(event)
+      if (typeof enabled !== 'boolean') throw new TypeError('Invalid tower preference value')
+      return await tower.setPreference(enabled)
     }
   )
   ipcMain.handle(
