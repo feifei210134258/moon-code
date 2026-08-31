@@ -251,8 +251,9 @@ const tocTicks = computed(() => {
   return visible.map((tick, index) => ({
     ...tick,
     // 目录是一组紧凑导航，不应按全文高度把相邻回合拉到视口两端。
+    // 刻度等长，仅当前回合的刻度由 CSS 加长为最长条。
     top: Math.min(railHeight - 8, 10 + index * step),
-    length: Math.max(8, Math.min(14, 8 + tick.turnHeight / 70)),
+    length: 8,
     active: tick.id === activeId
   }))
 })
