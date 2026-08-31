@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { mount } from '@vue/test-utils'
-import { PhSparkle, PhTerminalWindow } from '@phosphor-icons/vue'
+import { PhCheck, PhSparkle, PhTerminalWindow } from '@phosphor-icons/vue'
 import { describe, expect, it } from 'vitest'
 import ActivityBlock from '../../src/renderer/src/components/ActivityBlock.vue'
 
@@ -65,13 +65,48 @@ describe('ActivityBlock', () => {
           kind: 'tool',
           label: 'Skill',
           description: '读取并使用技能',
-          status: 'done'
+          status: 'running'
         }
       }
     })
 
     expect(wrapper.findComponent(PhSparkle).exists()).toBe(true)
     expect(wrapper.findComponent(PhTerminalWindow).exists()).toBe(false)
+  })
+
+  it('shows a leading check for completed tools and no trailing status text', () => {
+    const wrapper = mount(ActivityBlock, {
+      props: {
+        activity: {
+          id: 'tool-done',
+          kind: 'tool',
+          label: 'Shell',
+          description: 'pnpm test',
+          status: 'done'
+        }
+      }
+    })
+
+    expect(wrapper.findComponent(PhCheck).exists()).toBe(true)
+    expect(wrapper.findComponent(PhTerminalWindow).exists()).toBe(false)
+    expect(wrapper.find('.activity-meta').exists()).toBe(false)
+  })
+
+  it('shows no status text for completed thinking', () => {
+    const wrapper = mount(ActivityBlock, {
+      props: {
+        activity: {
+          id: 'thinking-done',
+          kind: 'thinking',
+          label: 'Thinking',
+          description: '梳理结构',
+          status: 'done'
+        }
+      }
+    })
+
+    expect(wrapper.findComponent(PhCheck).exists()).toBe(false)
+    expect(wrapper.find('.activity-meta').exists()).toBe(false)
   })
 
   it('opens failed activity details immediately', () => {

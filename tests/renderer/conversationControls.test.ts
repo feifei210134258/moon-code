@@ -119,6 +119,17 @@ describe('Conversation controls', () => {
     wrapper.unmount()
   })
 
+  /* 新版 Kimi web 端布局：回合无头像，助手回合头只保留 muted 时间戳。 */
+  it('renders avatar-free turns with a time-only header for assistant replies', () => {
+    const wrapper = mountConversation()
+    expect(wrapper.find('.turn-avatar').exists()).toBe(false)
+    const assistantHeader = wrapper.get('.turn.is-assistant .turn-header')
+    expect(assistantHeader.find('strong').exists()).toBe(false)
+    expect(assistantHeader.text()).toContain('10:25')
+    expect(wrapper.get('.turn.is-user .turn-header strong').text()).toBe('You')
+    wrapper.unmount()
+  })
+
   it('labels a steered pending prompt as 已引导 instead of 已排队', async () => {
     const wrapper = mountConversation()
     await wrapper.setProps({

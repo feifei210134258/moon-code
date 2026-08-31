@@ -495,10 +495,10 @@ watch(
         </template>
       </div>
       <article :id="turnDomId(turn.id)" v-for="turn in turns" :key="turn.id" class="turn" :class="`is-${turn.role}`">
-        <div class="turn-avatar" :class="`is-${turn.role}`">{{ turn.role === 'assistant' ? 'K' : 'U' }}</div>
         <div class="turn-body">
+          <!-- 新版 Kimi web 端：无头像，助手回合头只留 muted 小字时间戳。 -->
           <header class="turn-header">
-            <strong>{{ turn.author }}</strong>
+            <strong v-if="turn.role === 'user'">{{ turn.author }}</strong>
             <span>{{ turn.time }}</span>
             <span v-if="turn.queued" class="queued-chip">{{ isSteeredTurn(turn) ? '已引导' : '已排队' }}</span>
             <span

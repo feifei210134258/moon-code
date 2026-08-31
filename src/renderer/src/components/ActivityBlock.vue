@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   PhCaretDown,
+  PhCheck,
   PhInfo,
   PhLightbulb,
   PhSparkle,
@@ -20,8 +21,13 @@ const hasDetails = computed(() =>
   (props.activity.outputPreview?.length ?? 0) > 0 ||
   props.activity.toolDiff !== undefined
 )
+/* 状态不再以右侧文字呈现：思考完成不显示任何状态（随后会有工具/正文接上），
+   工具完成改为句前 ✓；仅 running / error 保留紧跟句子的内联小字。 */
 const statusLabel = computed(() =>
-  props.activity.status === 'running' ? '运行中' : props.activity.status === 'error' ? '失败' : '完成'
+  props.activity.status === 'running' ? '运行中' : props.activity.status === 'error' ? '失败' : ''
+)
+const showDoneCheck = computed(() =>
+  props.activity.kind === 'tool' && props.activity.status === 'done'
 )
 const isSkillActivity = computed(() => {
   if (props.activity.kind !== 'tool') return false
@@ -49,15 +55,17 @@ function toggle(): void {
       :disabled="!hasDetails"
       @click="toggle"
     >
-      <PhLightbulb v-if="activity.kind === 'thinking'" :size="18" />
-      <PhSparkle v-else-if="isSkillActivity" :size="18" class="accent" />
-      <PhTerminalWindow v-else-if="activity.kind === 'tool'" :size="18" class="accent" />
-      <PhInfo v-else :size="18" />
+      <span class="activity-icon" aria-hidden="true">
+        <PhCheck v-if="showDoneCheck" class="activity-check" :size="14" />
+        <PhLightbulb v-else-if="activity.kind === 'thinking'" :size="16" />
+        <PhSparkle v-else-if="isSkillActivity" :size="16" />
+        <PhTerminalWindow v-else-if="activity.kind === 'tool'" :size="16" />
+        <PhInfo v-else :size="16" />
+      </span>
       <strong>{{ activity.label }}</strong>
-      <span>{{ activity.description }}</span>
-      <span class="activity-meta" :class="`is-${activity.status}`">{{ statusLabel }}</span>
-      <PhCaretDown v-if="hasDetails" class="activity-caret" :size="14" />
-      <span v-else />
+      <span class="activity-desc">{{ activity.description }}</span>
+      <span v-if="statusLabel" class="activity-meta" :class="`is-${activity.status}`">{{ statusLabel }}</span>
+      <PhCaretDown v-if="hasDetails" class="activity-caret" :size="13" />
     </button>
 
     <div
