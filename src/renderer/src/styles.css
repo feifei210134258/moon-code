@@ -2658,9 +2658,14 @@ select:focus-visible {
 .mermaid-placeholder.is-ready svg { max-width: 100%; height: auto; }
 .mermaid-placeholder.is-error { color: var(--red); white-space: pre-wrap; }
 
-/* 活动条（思考过程 / 工具调用）：新版 web 端风格——无框内联行，融入正文流。 */
+/* 活动条（思考过程 / 工具调用）：新版 web 端风格——无框内联行，融入正文流。
+   与正文保持约 14px 呼吸间距；连续活动行收紧回 6px，保持工具调用的节奏感。 */
 .activity-block {
-  margin-top: 4px;
+  margin: 14px 0;
+}
+
+.activity-block + .activity-block {
+  margin-top: -8px;
 }
 
 /* 活动行：图标 + 标签 + 描述 + 箭头依次紧跟，不再把状态/箭头推到最右侧。 */
@@ -2704,17 +2709,20 @@ select:focus-visible {
   color: var(--green);
 }
 
+/* 工具名（Bash / Read 等）只需「看得到」：与描述同为 faint 弱色，
+   仅保留一点点字重区分，整行退为次要信息，不与正文争抢视觉权重。 */
 .activity-row strong {
   flex-shrink: 0;
+  color: var(--faint);
   font-size: var(--type-ui-small-size);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 /* 描述允许截断，但不占满整行，让状态小字与箭头紧跟句子。 */
 .activity-desc {
   min-width: 0;
   overflow: hidden;
-  color: var(--muted);
+  color: var(--faint);
   font-size: var(--type-caption-size);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2728,7 +2736,7 @@ select:focus-visible {
 
 .activity-row .activity-meta.is-running {
   color: var(--green);
-  font-weight: 560;
+  font-weight: 500;
 }
 
 .activity-row .activity-meta.is-error {
