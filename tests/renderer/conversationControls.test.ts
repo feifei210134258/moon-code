@@ -248,7 +248,7 @@ describe('Conversation controls', () => {
     expect(ticks[1]!.attributes('aria-label')).toBe('跳转到：再补一个左侧目录')
     /* 相邻目录项固定紧凑排列，不再被 2000px 全文高度拉开。 */
     expect(ticks[0]!.attributes('style')).toContain('top: 10px')
-    expect(ticks[1]!.attributes('style')).toContain('top: 28px')
+    expect(ticks[1]!.attributes('style')).toContain('top: 24px')
     expect(ticks[0]!.get('.toc-preview-card').text()).toContain('实现 Compact、Undo 和会话目录')
     expect(ticks[0]!.get('.toc-preview-card').text()).toContain('用户消息· 10:24')
     expect(ticks[0]!.classes()).toContain('is-active')

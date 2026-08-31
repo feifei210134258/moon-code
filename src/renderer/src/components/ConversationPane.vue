@@ -238,13 +238,21 @@ const tocTicks = computed(() => {
   const { railHeight, scrollHeight, ticks } = tocMeasure.value
   if (railHeight < 1 || scrollHeight < 1) return []
   const activeId = activeTocId.value
+  /* 刻度命中区高 8px：回合太多轨道放不下时按间隔抽稀，避免相邻刻度
+     命中区互相重叠导致 hover/点击串位；当前所在回合的刻度始终保留。 */
+  const maxTicks = Math.max(2, Math.floor((railHeight - 12) / 9))
+  let visible = ticks
+  if (ticks.length > maxTicks) {
+    const stride = Math.ceil(ticks.length / maxTicks)
+    visible = ticks.filter((tick, index) => index % stride === 0 || tick.id === activeId)
+  }
   const availableHeight = Math.max(0, railHeight - 24)
-  const step = ticks.length <= 1 ? 0 : Math.min(18, availableHeight / (ticks.length - 1))
-  return ticks.map((tick, index) => ({
+  const step = visible.length <= 1 ? 0 : Math.min(14, availableHeight / (visible.length - 1))
+  return visible.map((tick, index) => ({
     ...tick,
     // 目录是一组紧凑导航，不应按全文高度把相邻回合拉到视口两端。
     top: Math.min(railHeight - 8, 10 + index * step),
-    length: Math.max(8, Math.min(18, 8 + tick.turnHeight / 70)),
+    length: Math.max(8, Math.min(14, 8 + tick.turnHeight / 70)),
     active: tick.id === activeId
   }))
 })
