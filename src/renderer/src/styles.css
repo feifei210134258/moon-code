@@ -884,8 +884,8 @@ select:focus-visible {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  /* 滚动条贴住卡片右缘：树用负外边距吃掉侧栏的 10px 内边距，
-     行文本因此多出约 12px 可用宽度（行自身的 9px 右内边距已是与滚动条的间距）。 */
+  /* 滚动条贴住卡片右缘：树用负外边距吃掉侧栏的 10px 内边距；
+     行的选中/hover 背景由行容器补回 10px 右外边距（见下方 wrap 规则）。 */
   margin-right: -10px;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
@@ -899,6 +899,9 @@ select:focus-visible {
 .session-row-wrap {
   position: relative;
   min-width: 0;
+  /* 抵消 .project-tree 的 -10px：让选中/hover 背景右缘与左侧留白对称（10px），
+     不再顶到卡片边缘；滚动条仍贴卡片右缘。 */
+  margin-right: 10px;
 }
 
 .project-row-wrap {
