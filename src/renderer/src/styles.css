@@ -4129,8 +4129,8 @@ select:focus-visible {
 
 .composer-skill-inline {
   border-radius: 4px;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--link-blue);
+  background: rgba(48, 133, 250, 0.07);
 }
 
 .composer-wrap.is-disabled .composer-input-area .composer-mirror {
