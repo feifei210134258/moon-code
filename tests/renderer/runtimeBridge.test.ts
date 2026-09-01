@@ -1392,4 +1392,56 @@ describe('useRuntimeBridge draft workspace tree', () => {
 
     wrapper.unmount()
   })
+
+  it('detects the draft workspace git status locally so the TopBar can show the branch', async () => {
+    const listWorkspaceFiles = vi.fn(async (_workspaceId: string, path = '.') => ({ path, items: [], truncated: false }))
+    const getWorkspaceGitStatus = vi.fn(async () => ({
+      available: true, branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+    }))
+    const api = {
+      getBootstrapState: vi.fn(async () => ({
+        appVersion: '0.1.0', platform: 'darwin',
+        runtime: {
+          status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1',
+          origin: 'http://127.0.0.1:1234', error: null
+        },
+        discovery: {
+          supportedRange: '^0.29.0',
+          managed: { kind: 'managed', version: '0.29.0', executable: '/kimi', compatible: true, reason: null },
+          system: { kind: 'system', version: null, executable: null, compatible: false, reason: 'missing' }
+        }
+      })),
+      getWorkspaceTree: vi.fn(async () => []),
+      onRuntimeStateChanged: vi.fn(() => () => {}),
+      onSessionStateChanged: vi.fn(() => () => {}),
+      listWorkspaceFiles,
+      getWorkspaceGitStatus
+    } as unknown as KimiAgentDesktopApi
+    window.kimiAgent = api
+    let bridge!: ReturnType<typeof useRuntimeBridge>
+    const wrapper = mount(defineComponent({
+      setup() {
+        bridge = useRuntimeBridge()
+        return () => null
+      }
+    }))
+    await flushPromises()
+
+    /* 进入草稿态即检测：gitStatus 不再是 null，TopBar 得以显示分支。 */
+    bridge.openDraftWorkspaceTree('workspace-1')
+    await flushPromises()
+    expect(getWorkspaceGitStatus).toHaveBeenCalledWith('workspace-1')
+    expect(bridge.gitStatus.value?.available).toBe(true)
+    expect(bridge.gitStatus.value?.branch).toBe('main')
+
+    /* 同一工作区刷新（reentry）同样重测。 */
+    bridge.openDraftWorkspaceTree('workspace-1')
+    await flushPromises()
+    expect(getWorkspaceGitStatus).toHaveBeenCalledTimes(2)
+
+    /* 退出草稿态后 gitStatus 清空，TopBar 回到「未知」不渲染。 */
+    bridge.clearActiveSession()
+    expect(bridge.gitStatus.value).toBeNull()
+    wrapper.unmount()
+  })
 })

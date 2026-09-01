@@ -19,6 +19,8 @@ const props = defineProps<{
   runtimePending: boolean
   workspaceName: string
   gitBranch: string | null
+  /* null = 未检测/未知/出错：此时分支按钮与「非 Git 项目」都不渲染。 */
+  gitAvailable?: boolean | null
   gitBranches: WorkspaceGitBranches | null
   branchesOpen: boolean
   branchesPending?: boolean
@@ -243,7 +245,7 @@ function resetDurationLabel(totalSeconds: number): string {
       </button>
       <span class="topbar-divider" />
       <button
-        v-if="gitBranch !== null"
+        v-if="gitBranch"
         class="topbar-item"
         type="button"
         title="查看分支"
@@ -255,11 +257,11 @@ function resetDurationLabel(totalSeconds: number): string {
         <span>{{ gitBranch }}</span>
         <PhCaretDown :size="12" />
       </button>
-      <span v-else class="topbar-item topbar-readout" title="非 Git 项目">
+      <span v-else-if="gitAvailable === false" class="topbar-item topbar-readout" title="非 Git 项目">
         <PhGitBranch :size="17" />
         <span>非 Git 项目</span>
       </span>
-      <span class="topbar-divider" />
+      <span v-if="gitBranch || gitAvailable === false" class="topbar-divider" />
       <button
         class="runtime-status topbar-item"
         :class="`is-${runtimeStatus}`"

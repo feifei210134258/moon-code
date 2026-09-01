@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { execFileSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -904,6 +905,40 @@ describe('KimiSessionBridge draft workspace listing', () => {
       await expect(bridge.readWorkspaceFileFromWorkspace('workspace-1', 'missing.ts')).rejects.toThrow()
     } finally {
       await rm(root, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('KimiSessionBridge draft workspace git status', () => {
+  it('detects the current branch with local git and reports non-repos as unavailable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'moon-code-git-'))
+    const plain = await mkdtemp(join(tmpdir(), 'moon-code-plain-'))
+    try {
+      execFileSync('git', ['init', '-b', 'main'], { cwd: root })
+      const runtime = new EventEmitter() as EventEmitter & { createRestClient: () => unknown }
+      Object.assign(runtime, {
+        state: { status: 'running', mode: 'managed', version: '0.29.0', serverId: 'server-1', origin: 'http://127.0.0.1:54959', error: null },
+        createRestClient: () => ({
+          listWorkspaces: vi.fn(async () => [
+            { id: 'workspace-1', name: 'demo', root },
+            { id: 'workspace-2', name: 'plain', root: plain }
+          ])
+        })
+      })
+      const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
+
+      await expect(bridge.getWorkspaceGitStatus('workspace-1')).resolves.toEqual({
+        available: true,
+        branch: 'main', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })
+      await expect(bridge.getWorkspaceGitStatus('workspace-2')).resolves.toEqual({
+        available: false,
+        branch: '', ahead: 0, behind: 0, entries: {}, additions: 0, deletions: 0, pullRequest: null
+      })
+      await expect(bridge.getWorkspaceGitStatus('workspace-missing')).resolves.toMatchObject({ available: false })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+      await rm(plain, { recursive: true, force: true })
     }
   })
 })

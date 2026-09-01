@@ -207,6 +207,160 @@ describe('TranscriptProjector', () => {
     expect(rendered).not.toContain('/private/live')
   })
 
+  it('strips bundled skill injections from persisted user messages (origin.kind=user)', () => {
+    const injected = [
+      'User activated the skill design-taste-frontend',
+      '<skill-loaded name="design-taste-frontend" dir="/Users/feili/.agents/skills/design-taste-frontend/SKILL.md" args="1.样式太丑">',
+      '# design-taste-frontend\nSECRET SKILL BODY /Users/feili/.agents/skills/design-taste-frontend'
+    ].join('\n')
+    const skillSnapshot = snapshot()
+    skillSnapshot.messages.items = [{
+      id: 'v2-skill-user-1',
+      session_id: 'session-1',
+      role: 'user',
+      content: [
+        { type: 'text', text: injected },
+        { type: 'text', text: '/design-taste-frontend 1.样式太丑' }
+      ],
+      created_at: '2026-07-23T00:00:00.000Z',
+      metadata: {
+        origin: {
+          kind: 'user',
+          skillActivations: [{
+            activationId: 'activation-v2-1',
+            skillName: 'design-taste-frontend',
+            skillArgs: '1.样式太丑',
+            skillPath: '/Users/feili/.agents/skills/design-taste-frontend/SKILL.md',
+            skillSource: 'user'
+          }]
+        }
+      }
+    }]
+
+    const rendered = JSON.stringify(new TranscriptProjector().seedSnapshot('session-1', skillSnapshot))
+    expect(rendered).toContain('/design-taste-frontend 1.样式太丑')
+    expect(rendered).not.toContain('User activated')
+    expect(rendered).not.toContain('skill-loaded')
+    expect(rendered).not.toContain('SECRET SKILL BODY')
+    expect(rendered).not.toContain('/Users/feili/.agents/skills')
+  })
+
+  it('sanitizes a live bundled-skill user message and ignores raw content updates', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+
+    expect(projector.project(frame('event.message.created', {
+      message: {
+        id: 'v2-skill-live',
+        session_id: 'session-1',
+        role: 'user',
+        content: [
+          { type: 'text', text: 'User activated the skill review\n<skill-loaded dir="/private/live">LIVE SECRET</skill-loaded>' },
+          { type: 'text', text: '/review --strict' }
+        ],
+        created_at: '2026-07-23T00:02:00.000Z',
+        metadata: {
+          origin: {
+            kind: 'user',
+            skillActivations: [{
+              activationId: 'activation-live-1', skillName: 'review',
+              skillArgs: '--strict', skillPath: '/private/live/SKILL.md'
+            }]
+          }
+        }
+      }
+    }))).toEqual({ changed: true, resyncRequired: false })
+    projector.project(frame('event.message.updated', {
+      message_id: 'v2-skill-live',
+      content: [{ type: 'text', text: 'UPDATED LIVE SECRET /private/live' }],
+      status: 'completed'
+    }))
+
+    const rendered = JSON.stringify(projector.getProjection('session-1'))
+    expect(rendered).toContain('/review --strict')
+    expect(rendered).not.toContain('LIVE SECRET')
+    expect(rendered).not.toContain('/private/live')
+  })
+
+  it('strips two bundled injection parts when two skills are activated', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+
+    expect(projector.project(frame('event.message.created', {
+      message: {
+        id: 'v2-skill-multi',
+        session_id: 'session-1',
+        role: 'user',
+        content: [
+          { type: 'text', text: 'User activated the skill alpha\n<skill-loaded dir="/p/a">ALPHA SECRET</skill-loaded>' },
+          { type: 'text', text: 'User activated the skill beta\n<skill-loaded dir="/p/b">BETA SECRET</skill-loaded>' },
+          { type: 'text', text: 'combine alpha and beta' },
+          { type: 'image', source: { kind: 'file', file_id: 'img-1', media_type: 'image/png' } }
+        ],
+        created_at: '2026-07-23T00:02:00.000Z',
+        metadata: {
+          origin: {
+            kind: 'user',
+            skillActivations: [
+              { activationId: 'a-1', skillName: 'alpha', skillArgs: '--a', skillPath: '/p/a/SKILL.md' },
+              { activationId: 'b-1', skillName: 'beta', skillArgs: '--b', skillPath: '/p/b/SKILL.md' }
+            ]
+          }
+        }
+      }
+    }))).toEqual({ changed: true, resyncRequired: false })
+
+    const message = projector.getProjection('session-1').messages.find((item) => item.id === 'v2-skill-multi')
+    expect(message?.content).toEqual([
+      { type: 'text', text: 'combine alpha and beta' },
+      expect.objectContaining({ type: 'media', mediaType: 'image', sourceKind: 'file', fileId: 'img-1' })
+    ])
+  })
+
+  it('falls back to slash commands when bundled injections cover the whole content', () => {
+    const projector = new TranscriptProjector()
+    projector.seedSnapshot('session-1', snapshot())
+
+    expect(projector.project(frame('event.message.created', {
+      message: {
+        id: 'v2-skill-fallback',
+        session_id: 'session-1',
+        role: 'user',
+        content: [{ type: 'text', text: '<skill-loaded dir="/p/a">ALPHA SECRET</skill-loaded>' }],
+        created_at: '2026-07-23T00:02:00.000Z',
+        metadata: {
+          origin: {
+            kind: 'user',
+            skillActivations: [
+              { activationId: 'a-1', skillName: 'alpha', skillArgs: '--a' },
+              { activationId: 'b-1', skillName: 'beta' }
+            ]
+          }
+        }
+      }
+    }))).toEqual({ changed: true, resyncRequired: false })
+
+    const message = projector.getProjection('session-1').messages.find((item) => item.id === 'v2-skill-fallback')
+    expect(message?.content).toEqual([
+      { type: 'text', text: '/alpha --a' },
+      { type: 'text', text: '/beta' }
+    ])
+  })
+
+  it('passes through plain user messages without skillActivations verbatim', () => {
+    const plainSnapshot = snapshot()
+    plainSnapshot.messages.items = [{
+      id: 'plain-user-1',
+      session_id: 'session-1',
+      role: 'user',
+      content: [{ type: 'text', text: 'Just a question' }],
+      created_at: '2026-07-23T00:00:00.000Z',
+      metadata: { origin: { kind: 'user' } }
+    }]
+    const projection = new TranscriptProjector().seedSnapshot('session-1', plainSnapshot)
+    expect(projection.messages[0]?.content).toEqual([{ type: 'text', text: 'Just a question' }])
+  })
+
   it('preserves the plugin namespace while sanitizing plugin commands', () => {
     const pluginSnapshot = snapshot()
     pluginSnapshot.messages.items = [{

@@ -53,6 +53,7 @@ export const ipcChannels = {
   questionDismiss: 'question:dismiss',
   attachmentsPick: 'attachments:pick',
   attachmentsPaste: 'attachments:paste',
+  attachmentsDrop: 'attachments:drop',
   attachmentsAddWorkspaceFile: 'attachments:add-workspace-file',
   attachmentsAddWorkspaceFileFromWorkspace: 'attachments:add-workspace-file-from-workspace',
   attachmentRead: 'attachment:read',
@@ -77,6 +78,7 @@ export const ipcChannels = {
   markdownImageRead: 'markdown:image:read',
   gitStatus: 'git:status',
   gitBranches: 'git:branches',
+  workspaceGitStatus: 'workspace:git-status',
   fileDiff: 'file:diff',
   terminalsList: 'terminals:list',
   terminalCreate: 'terminal:create',
@@ -641,6 +643,13 @@ export interface KimiAttachmentPickResult {
 }
 
 export interface KimiAttachmentPasteInput {
+  name: string
+  mediaType: string
+  bytes: Uint8Array
+}
+
+/* 拖拽上传与粘贴同一形态，只是不限图片、体积上限更宽。 */
+export interface KimiAttachmentDropInput {
   name: string
   mediaType: string
   bytes: Uint8Array
@@ -1464,6 +1473,7 @@ export interface KimiAgentDesktopApi {
   dismissQuestion(sessionId: string, questionId: string): Promise<QuestionDismissResult>
   pickAttachments(): Promise<KimiAttachmentPickResult>
   pasteAttachment(input: KimiAttachmentPasteInput): Promise<KimiUploadedFile>
+  dropAttachment(input: KimiAttachmentDropInput): Promise<KimiUploadedFile>
   attachWorkspaceFile(sessionId: string, path: string): Promise<KimiUploadedFile>
   /* 草稿态（会话尚未创建）：按工作区直接读本地文件并上传为附件。 */
   attachWorkspaceFileFromWorkspace(workspaceId: string, path: string): Promise<KimiUploadedFile>
@@ -1494,6 +1504,8 @@ export interface KimiAgentDesktopApi {
   readMarkdownImage(sessionId: string, source: string): Promise<WorkspaceMarkdownImage | null>
   getGitStatus(sessionId: string): Promise<WorkspaceGitStatus>
   listGitBranches(sessionId: string): Promise<WorkspaceGitBranches>
+  /* 草稿态（会话尚未创建）：按工作区本地 git 命令检测，不走 runtime session 口径。 */
+  getWorkspaceGitStatus(workspaceId: string): Promise<WorkspaceGitStatus>
   getFileDiff(sessionId: string, path: string): Promise<WorkspaceFileDiff>
   listTerminals(sessionId: string): Promise<SessionTerminal[]>
   createTerminal(sessionId: string, size?: { cols: number; rows: number }): Promise<SessionTerminal>

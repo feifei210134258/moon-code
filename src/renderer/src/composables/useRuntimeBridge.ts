@@ -1261,14 +1261,30 @@ export function useRuntimeBridge() {
     await Promise.all([directoryPromise, gitPromise])
   }
 
-  /* 草稿态刷新：目录按工作区本地列举重载；git 状态留空（会话建立后由 runtime 口径覆盖）。 */
+  /* 草稿态刷新：目录按工作区本地列举重载；git 状态按工作区本地 git 命令检测
+     （会话建立后由 runtime 口径覆盖）。 */
   const refreshDraftWorkspaceContext = async (workspaceId: string): Promise<void> => {
     if (window.kimiAgent === undefined || requestedSessionId !== null || workspaceId !== requestedDraftWorkspaceId) return
     const generation = ++workspaceGeneration
     const paths = [fileTree.root, ...Object.keys(fileTree.expanded)]
-    await Promise.all(
-      paths.map((path) => loadDraftDirectory(workspaceId, path, generation))
+    await Promise.all([
+      ...paths.map((path) => loadDraftDirectory(workspaceId, path, generation)),
+      refreshDraftGitStatus(workspaceId, generation)
+    ])
+  }
+
+  /* 草稿态 git 检测：竞态守卫与目录加载一致（generation + 仍是当前草稿工作区）；
+     失败保持 null，TopBar 按「未知」不渲染而不是误报「非 Git 项目」。 */
+  const refreshDraftGitStatus = async (workspaceId: string, generation: number): Promise<void> => {
+    const isCurrent = (): boolean => (
+      generation === workspaceGeneration && requestedSessionId === null && workspaceId === requestedDraftWorkspaceId
     )
+    try {
+      const status = await window.kimiAgent!.getWorkspaceGitStatus(workspaceId)
+      if (isCurrent()) gitStatus.value = status
+    } catch {
+      if (isCurrent()) gitStatus.value = null
+    }
   }
 
   const loadGitBranches = async (sessionId: string): Promise<void> => {
@@ -1372,6 +1388,7 @@ export function useRuntimeBridge() {
       return
     }
     void loadDraftDirectory(workspaceId, '.', workspaceGeneration)
+    void refreshDraftGitStatus(workspaceId, workspaceGeneration)
   }
 
   const resetWorkspaceContext = (): void => {

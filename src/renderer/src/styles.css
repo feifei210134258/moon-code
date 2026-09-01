@@ -3209,6 +3209,12 @@ select:focus-visible {
   box-shadow: var(--focus-ring);
 }
 
+.composer-wrap.is-drop-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--focus-ring);
+}
+
 .composer-wrap.is-disabled {
   min-height: 54px;
   display: grid;
@@ -4103,55 +4109,41 @@ select:focus-visible {
   align-items: flex-start;
 }
 
-.composer-skill-token {
-  flex: none;
-  max-width: min(46%, 280px);
-  min-height: 31px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0 1px 0 -2px;
-  padding: 3px 4px;
-  border: 0;
-  border-radius: 7px;
-  color: var(--accent-strong);
-  background: rgba(0,0,0,.05);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--type-conversation-size);
-  font-weight: 590;
-  line-height: 1.5;
-  white-space: nowrap;
-}
-
-.composer-skill-token > span {
-  min-width: 0;
+/* 镜像高亮层：渲染与 textarea 完全相同的文本，skill token 段加底色；textarea 本身
+   文字透明（caret 仍可见）。几何必须与 .composer-wrap textarea 逐项一致——字体、
+   行高、padding、换行规则——高亮只允许背景/圆角/颜色，禁止图标、水平 padding、
+   border、字重等任何改变水平宽度的装饰，否则两层文字错位。极端长词（无空格长
+   URL）下两层的断词位置可能轻微漂移，可接受。 */
+.composer-mirror {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 4px 6px 1px 4px;
+  color: var(--text);
+  font-size: var(--type-conversation-size);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
 }
 
-.composer-skill-token:hover,
-.composer-skill-token:focus-visible {
+.composer-skill-inline {
+  border-radius: 4px;
+  color: var(--accent);
   background: var(--accent-soft);
 }
 
-.composer-skill-token:focus-visible {
-  outline: 0;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.13);
+.composer-wrap.is-disabled .composer-input-area .composer-mirror {
+  padding: 6px 4px;
 }
 
-.composer-input-area.has-selected-skill {
-  flex-wrap: wrap;
-  row-gap: 4px;
+/* IME 组合期：预编辑串绘制在 textarea 上，恢复其文字颜色并隐藏镜像，避免叠影。 */
+.composer-input-area.is-composing textarea {
+  color: var(--text);
 }
 
-.composer-input-area.has-selected-skill textarea {
-  min-width: 0;
-  flex: 1 1 100%;
-}
-
-.composer-skill-token.is-active {
-  outline: 1px solid var(--accent-strong);
+.composer-input-area.is-composing .composer-mirror {
+  visibility: hidden;
 }
 
 .composer-wrap textarea {
@@ -4164,7 +4156,10 @@ select:focus-visible {
   resize: none;
   border: 0;
   outline: 0;
-  color: var(--text);
+  position: relative;
+  z-index: 1;
+  color: transparent;
+  caret-color: var(--text);
   background: transparent;
   font-size: var(--type-conversation-size);
   line-height: 1.5;

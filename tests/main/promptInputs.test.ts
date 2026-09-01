@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  validateDroppedAttachment,
   validatePromptControls,
   validatePromptInput,
   validateSideChatPromptInput
@@ -102,5 +103,33 @@ describe('prompt inputs', () => {
       text: '不要接受附件', controls,
       attachments: [{ fileId: 'file-1', name: 'secret.txt', mediaType: 'text/plain', size: 1 }]
     })).toThrow('Kimi Side Chat only accepts text prompts')
+  })
+
+  it('accepts dropped files of any media type within the dropped-file limits', () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    expect(validateDroppedAttachment({ name: 'spec.pdf', mediaType: 'application/pdf', bytes })).toEqual({
+      name: 'spec.pdf', mediaType: 'application/pdf', bytes
+    })
+    expect(validateDroppedAttachment({
+      name: 'photo.png', mediaType: 'IMAGE/PNG', bytes
+    })).toEqual({ name: 'photo.png', mediaType: 'image/png', bytes })
+  })
+
+  it('rejects empty, oversized, or malformed dropped attachments', () => {
+    expect(() => validateDroppedAttachment({
+      name: 'empty.pdf', mediaType: 'application/pdf', bytes: new Uint8Array(0)
+    })).toThrow()
+    expect(() => validateDroppedAttachment({
+      name: 'big.bin', mediaType: 'application/octet-stream', bytes: new Uint8Array(50 * 1024 * 1024 + 1)
+    })).toThrow()
+    expect(() => validateDroppedAttachment({
+      name: 'spec.pdf', mediaType: 'not-a-mime', bytes: new Uint8Array([1])
+    })).toThrow()
+    expect(() => validateDroppedAttachment({
+      name: 'x'.repeat(513), mediaType: 'application/pdf', bytes: new Uint8Array([1])
+    })).toThrow()
+    expect(() => validateDroppedAttachment({
+      name: 'spec.pdf', mediaType: 'application/pdf', bytes: [1, 2, 3]
+    })).toThrow()
   })
 })

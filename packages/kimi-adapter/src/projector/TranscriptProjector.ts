@@ -845,7 +845,10 @@ function projectDisplayableMessageContent(message: SessionMessage): TranscriptPa
   if (message.role !== 'user') return message.content.flatMap(projectContentPart)
   const origin = recordValue(message.metadata?.origin)
   const kind = stringValue(origin?.kind)
-  if (kind === null || kind === 'user' || kind === 'cron' || kind === 'compaction') {
+  if (kind === 'user') {
+    return projectBundledSkillContent(message.content, turnSkillActivations(origin))
+  }
+  if (kind === null || kind === 'cron' || kind === 'compaction') {
     return message.content.flatMap(projectContentPart)
   }
   if (origin?.trigger !== 'user-slash') return null
@@ -863,11 +866,34 @@ function projectDisplayableMessageContent(message: SessionMessage): TranscriptPa
   return null
 }
 
+/**
+ * agent-core-v2 注入形态：origin.kind === 'user' 且带非空 skillActivations 时，
+ * content 前 N 个 part（N = skillActivations.length）为 skill 注入全文
+ * （"User activated the skill..." + <skill-loaded> + SKILL.md），剥掉后投影余下
+ * 的用户原文（可能含文本/图片/文件 part）；剩余为空时退化为每个 activation 的
+ * `/name args` 文本。
+ */
+function projectBundledSkillContent(
+  content: MessageContentPart[],
+  activations: SkillActivationInfo[]
+): TranscriptPart[] {
+  if (activations.length === 0) return content.flatMap(projectContentPart)
+  const remaining = content.slice(activations.length)
+  if (remaining.length > 0) return remaining.flatMap(projectContentPart)
+  return activations.map((item) => ({
+    type: 'text',
+    text: slashCommandText(item.skillName, item.skillArgs ?? null)
+  }))
+}
+
 function isSanitizedSlashMessage(message: SessionMessage): boolean {
   if (message.role !== 'user') return false
   const origin = recordValue(message.metadata?.origin)
-  return origin?.trigger === 'user-slash'
-    && (origin.kind === 'skill_activation' || origin.kind === 'plugin_command')
+  if (origin?.trigger === 'user-slash'
+    && (origin.kind === 'skill_activation' || origin.kind === 'plugin_command')) {
+    return true
+  }
+  return stringValue(origin?.kind) === 'user' && turnSkillActivations(origin).length > 0
 }
 
 function slashCommandText(name: string, args: string | null): string {

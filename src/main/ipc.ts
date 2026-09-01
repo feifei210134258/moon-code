@@ -120,6 +120,7 @@ import {
   validateWorkspaceOpenApp
 } from './security/fileSearchInputs.js'
 import {
+  validateDroppedAttachment,
   validateMediaType,
   validatePastedAttachment,
   validatePromptControls,
@@ -599,6 +600,18 @@ export function registerIpc(
       size: uploaded.size
     }
   })
+  /* 拖拽上传与粘贴同一条 uploadFile 管线，只是不限图片（校验见 validateDroppedAttachment）。 */
+  ipcMain.handle(ipcChannels.attachmentsDrop, async (event, input?: unknown): Promise<KimiUploadedFile> => {
+    assertTrustedSender(event)
+    const safe = validateDroppedAttachment(input)
+    const uploaded = await runtime.createRestClient().uploadFile(safe)
+    return {
+      fileId: uploaded.id,
+      name: uploaded.name,
+      mediaType: uploaded.media_type,
+      size: uploaded.size
+    }
+  })
   ipcMain.handle(
     ipcChannels.attachmentsAddWorkspaceFile,
     async (event, sessionId?: unknown, path?: unknown): Promise<KimiUploadedFile> => {
@@ -850,6 +863,14 @@ export function registerIpc(
       assertTrustedSender(event)
       assertSessionId(sessionId)
       return await sessions.listGitBranches(sessionId)
+    }
+  )
+  /* 草稿态（会话尚未创建）：按工作区本地 git 命令检测。 */
+  ipcMain.handle(
+    ipcChannels.workspaceGitStatus,
+    async (event, workspaceId?: unknown): Promise<WorkspaceGitStatus> => {
+      assertTrustedSender(event)
+      return await sessions.getWorkspaceGitStatus(validateWorkspaceId(workspaceId))
     }
   )
   ipcMain.handle(

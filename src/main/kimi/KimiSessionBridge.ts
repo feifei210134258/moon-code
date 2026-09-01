@@ -725,6 +725,32 @@ export class KimiSessionBridge extends EventEmitter {
     }
   }
 
+  /* 草稿态（会话尚未创建）走不了 runtime 的 session git:status，按工作区 root 直接跑
+     本地 git 命令，口径同 listGitBranches；detached HEAD 时 branch 为空串。 */
+  async getWorkspaceGitStatus(workspaceId: string): Promise<WorkspaceGitStatus> {
+    const unavailable: WorkspaceGitStatus = {
+      available: false,
+      branch: '',
+      ahead: 0,
+      behind: 0,
+      entries: {},
+      additions: 0,
+      deletions: 0,
+      pullRequest: null
+    }
+    try {
+      const workspaces = await this.#runtime.createRestClient().listWorkspaces()
+      const root = workspaces.find((workspace) => workspace.id === workspaceId)?.root ?? ''
+      if (root.length === 0) return unavailable
+      const inside = await execFileAsync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: root, timeout: 5_000 })
+      if (inside.stdout.trim() !== 'true') return unavailable
+      const current = await execFileAsync('git', ['branch', '--show-current'], { cwd: root, timeout: 5_000 })
+      return { ...unavailable, available: true, branch: current.stdout.trim() }
+    } catch {
+      return unavailable
+    }
+  }
+
   async getFileDiff(sessionId: string, path: string): Promise<WorkspaceFileDiff> {
     this.#assertActiveSession(sessionId)
     const result = await this.#runtime.createRestClient().getFileDiff(sessionId, await this.#toWorkspaceRelativePathResolved(sessionId, path))

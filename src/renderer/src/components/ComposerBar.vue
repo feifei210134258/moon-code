@@ -2,7 +2,6 @@
 import {
   PhAt,
   PhCaretDown,
-  PhCube,
   PhCursorClick,
   PhFile,
   PhFolderOpen,
@@ -31,6 +30,7 @@ import {
   type SlashMatch,
   type SlashMatchRange
 } from '../utils/slashFuzzy'
+import { findInlineSkillTokens, parseInlineSkillTokens } from '../utils/inlineSkills'
 
 const props = defineProps<{
   disabled?: boolean
@@ -62,16 +62,7 @@ const emit = defineEmits<{
   updateGoalMode: [enabled: boolean]
 }>()
 
-interface SkillSelection {
-  skill: KimiSkill
-  /** 非末尾 skill 已提交的参数；末尾 skill 的参数由 value 直接承载。 */
-  args: string
-}
-
 const value = ref('')
-/* 0.37.2 起一条 prompt 可一次激活多个 skill：菜单里点选会按顺序追加 token，
-   当前输入框永远编辑最后一个 token 的参数；前面 token 的参数在追加/提交时快照。 */
-const selectedSkills = ref<SkillSelection[]>([])
 const attachments = ref<KimiUploadedFile[]>([])
 const webElements = ref<BrowserPickedElement[]>([])
 const webElementsOpen = ref(false)
@@ -97,6 +88,8 @@ const mentionTrigger = ref<HTMLButtonElement | null>(null)
 const deliveryTrigger = ref<HTMLButtonElement | null>(null)
 const webElementTrigger = ref<HTMLButtonElement | null>(null)
 const input = ref<HTMLTextAreaElement | null>(null)
+const mirror = ref<HTMLElement | null>(null)
+const imeComposing = ref(false)
 type PopoverKind = 'options' | 'advanced' | 'command' | 'mention' | 'delivery' | 'webElements'
 const popoverStyles = ref<Record<PopoverKind, Record<string, string>>>({
   options: {},
@@ -126,19 +119,18 @@ const selectedThinkingLabel = computed(() => {
   return effort === null ? null : thinkingLabel(effort)
 })
 const slashQuery = computed(() => {
-  /* 没选任何 skill 时：只有整条输入以 /cmd 开头才打开菜单（保持旧的「/ 命令」语义，
-     普通带 / 的路径如 src/foo 不会触发）。 */
-  if (selectedSkills.value.length === 0) {
-    const match = /^\/([^\s]*)$/.exec(value.value.trim())
-    return match === null ? null : match[1]!.toLocaleLowerCase()
-  }
-  /* 已选 skill 后：尾部（空格后）出现 / 即追加下一个 token；只有空查询（“/ ”）
-     或前缀能匹配到技能时才弹出，避免把参数里的绝对路径误判成技能。 */
+  /* 尾部词元（行首或空白后）以 / 开头即打开技能菜单，文本中间（空格后）输入 /
+     同样触发；query 含 / 且不是任何技能名前缀时视为路径类文本（如 /Users/foo），
+     不触发。未知技能名（如 /missing）仍返回 query，由面板展示空态。 */
   const match = /(?:^|\s)\/([^\s]*)$/.exec(value.value)
   if (match === null) return null
   const query = match[1]!.toLocaleLowerCase()
   if (query === '') return ''
-  return props.skills.some((skill) => skill.name.toLocaleLowerCase().startsWith(query)) ? query : null
+  if (
+    query.includes('/') &&
+    !props.skills.some((skill) => skill.name.toLocaleLowerCase().startsWith(query))
+  ) return null
+  return query
 })
 const visibleSkills = computed<Array<{ candidate: KimiSkill; match: SlashMatch | null }>>(() => {
   const query = slashQuery.value
@@ -160,7 +152,8 @@ const permissionDescription = computed(() => ({
 }[props.controls?.permissionMode ?? 'manual']))
 
 function submit(): void {
-  const hasText = selectedSkills.value.length > 0 || value.value.trim().length > 0
+  const text = value.value.trim()
+  const hasText = text.length > 0
   if (
     props.disabled === true ||
     props.pending === true ||
@@ -169,14 +162,9 @@ function submit(): void {
     (!hasText && attachments.value.length === 0 && webElements.value.length === 0) ||
     (props.goalMode === true && !hasText)
   ) return
-  const activeArgs = value.value.trim()
-  const skills: KimiPromptSkill[] = selectedSkills.value.map((entry, index) => {
-    const args = index === selectedSkills.value.length - 1 ? activeArgs : entry.args.trim()
-    return args.length === 0 ? { name: entry.skill.name } : { name: entry.skill.name, args }
-  })
-  const text = skills.length === 0
-    ? value.value.trim()
-    : skills.map((skill) => `/${skill.name}${skill.args === undefined ? '' : ` ${skill.args}`}`).join(' ')
+  /* 内联模型：text 即用户输入原文（内含 /name args 与穿插文本），skills 为按序
+     解析出的 token（args = 该 token 到下一个 token 之间的文本，空则省略）。 */
+  const skills: KimiPromptSkill[] = parseInlineSkillTokens(value.value, props.skills)
   emit(
     'submit',
     text,
@@ -188,7 +176,6 @@ function submit(): void {
     skills
   )
   value.value = ''
-  selectedSkills.value = []
   attachments.value = []
   webElements.value = []
   webElementsOpen.value = false
@@ -298,7 +285,9 @@ function selectDeliveryMode(mode: 'queue' | 'steer'): void {
   void nextTick(() => input.value?.focus())
 }
 
-function onComposerInput(): void {
+function onComposerInput(event: Event): void {
+  /* IME 组合中的预编辑输入不触发技能面板/文件引用，避免中文输入中途误开菜单。 */
+  if ((event as InputEvent).isComposing === true) return
   if (slashQuery.value !== null && props.disabled !== true) {
     commandOpen.value = true
     commandActiveIndex.value = 0
@@ -314,34 +303,34 @@ function onComposerInput(): void {
 }
 
 function chooseSkill(skill: KimiSkill): void {
-  /* 追加前先把当前输入（去掉尾部用于打开菜单的 /query）快照到上一个 token。 */
-  const last = selectedSkills.value.at(-1)
-  if (last !== undefined && value.value.trim().length > 0) {
-    last.args = value.value.replace(/(?:^|\s)\/\S*$/, '').trim()
-  }
-  if (!selectedSkills.value.some((entry) => entry.skill.name === skill.name)) {
-    selectedSkills.value = [...selectedSkills.value, { skill, args: '' }]
-    value.value = ''
+  /* 内联模型：选中技能 = 把触发菜单的尾部 /query 段替换为 `/规范名 `（带尾随空格）；
+     由工具栏按钮打开（无触发 query）时在光标处插入。纯文本操作，同 insertFileMention。 */
+  const insertion = `/${skill.name} `
+  let caret: number
+  const trigger = slashQuery.value === null ? null : /(?:^|\s)\/[^\s]*$/.exec(value.value)
+  if (trigger !== null) {
+    const start = trigger.index + (trigger[0].startsWith('/') ? 0 : 1)
+    value.value = `${value.value.slice(0, start)}${insertion}`
+    caret = start + insertion.length
+  } else {
+    const start = input.value?.selectionStart ?? value.value.length
+    const end = input.value?.selectionEnd ?? start
+    const leading = start > 0 && !/\s/.test(value.value[start - 1] ?? '') ? ' ' : ''
+    value.value = `${value.value.slice(0, start)}${leading}${insertion}${value.value.slice(end)}`
+    caret = start + leading.length + insertion.length
   }
   commandOpen.value = false
   closeMention()
-  void nextTick(() => input.value?.focus())
-}
-
-function removeSkill(index: number): void {
-  const selections = selectedSkills.value
-  if (index < 0 || index >= selections.length) return
-  const removedLast = index === selections.length - 1
-  selectedSkills.value = selections.filter((_, itemIndex) => itemIndex !== index)
-  if (removedLast) value.value = selectedSkills.value.at(-1)?.args ?? ''
-  void nextTick(() => input.value?.focus())
+  void nextTick(() => {
+    input.value?.setSelectionRange(caret, caret)
+    input.value?.focus()
+  })
 }
 
 async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<void> {
-  /* 草稿恢复支持多条 `/skill args` 段：最后一个段紧跟在 value 里，其余按快照填 args。 */
-  const parsed = parseSlashSkills(text, props.skills)
-  selectedSkills.value = parsed.selections
-  value.value = parsed.selections.at(-1)?.args ?? (parsed.selections.length === 0 ? text : '')
+  /* 草稿恢复：value 直接还原为草稿文本，内含的 /name args 段自动内联高亮。
+     旧的 undo/排队草稿同样以序列化文本形态存储（KimiUndoDraft.text），天然兼容。 */
+  value.value = text
   attachments.value = [...files]
   commandOpen.value = false
   optionsOpen.value = false
@@ -350,26 +339,6 @@ async function loadDraft(text: string, files: KimiUploadedFile[] = []): Promise<
   closeMention()
   await nextTick()
   input.value?.focus()
-}
-
-function parseSlashSkills(text: string, catalog: KimiSkill[]): {
-  selections: SkillSelection[]
-} {
-  const selections: SkillSelection[] = []
-  let cursor = 0
-  while (cursor < text.length) {
-    const head = /^\s*\/([^\s]+)(?:\s|$)/.exec(text.slice(cursor))
-    if (head === null) break
-    const skill = catalog.find((item) => item.name === head[1])
-    if (skill === undefined) break
-    cursor += head[0].length
-    const next = /\s+\/([^\s]+)(?:\s|$)/.exec(text.slice(cursor))
-    const argsEnd = next === null ? text.length : cursor + next.index
-    const args = text.slice(cursor, argsEnd).trim()
-    selections.push({ skill, args })
-    cursor = argsEnd
-  }
-  return { selections }
 }
 
 async function pickAttachments(): Promise<void> {
@@ -414,6 +383,66 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
       const mediaType = file.type || 'image/png'
       const bytes = new Uint8Array(await file.arrayBuffer())
       const uploaded = await api.pasteAttachment({ bytes, name: pastedImageName(mediaType), mediaType })
+      if (!attachments.value.some((existing) => existing.fileId === uploaded.fileId)) {
+        attachments.value = [...attachments.value, uploaded]
+      }
+    }
+  } catch (reason) {
+    attachmentError.value = reason instanceof Error ? reason.message : String(reason)
+  } finally {
+    attachmentPending.value = false
+  }
+}
+
+/* 拖拽上传：从 Finder 等外部来源拖文件进输入框。只在拖文件（types 含 Files）时
+   拦截 dragenter/dragover，文本拖拽保持原生行为；dropDepth 计数抵消子元素间的
+   dragenter/dragleave 抖动。 */
+const dropActive = ref(false)
+let dropDepth = 0
+
+function hasDraggedFiles(event: DragEvent): boolean {
+  return event.dataTransfer?.types?.includes('Files') === true
+}
+
+function onDragEnter(event: DragEvent): void {
+  if (!hasDraggedFiles(event)) return
+  event.preventDefault()
+  dropDepth += 1
+  if (props.disabled !== true) dropActive.value = true
+}
+
+function onDragOver(event: DragEvent): void {
+  /* dragover 上 preventDefault 是 drop 能触发的前提 */
+  if (!hasDraggedFiles(event)) return
+  event.preventDefault()
+}
+
+function onDragLeave(event: DragEvent): void {
+  if (!hasDraggedFiles(event)) return
+  dropDepth = Math.max(0, dropDepth - 1)
+  if (dropDepth === 0) dropActive.value = false
+}
+
+async function onDrop(event: DragEvent): Promise<void> {
+  dropDepth = 0
+  dropActive.value = false
+  if (!hasDraggedFiles(event)) return
+  /* 文件 drop 一律拦截默认行为（否则浏览器会直接打开文件）；框外区域由 App.vue 兜底 */
+  event.preventDefault()
+  if (props.disabled === true) return
+  const files = [...(event.dataTransfer?.files ?? [])]
+  const api = window.kimiAgent
+  if (files.length === 0 || api === undefined) return
+  attachmentPending.value = true
+  attachmentError.value = null
+  try {
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const uploaded = await api.dropAttachment({
+        bytes,
+        name: file.name,
+        mediaType: file.type || 'application/octet-stream'
+      })
       if (!attachments.value.some((existing) => existing.fileId === uploaded.fileId)) {
         attachments.value = [...attachments.value, uploaded]
       }
@@ -621,17 +650,36 @@ function highlightedSegments(text: string, ranges: SlashMatchRange[] | null | un
   return highlightText(text, ranges ?? [])
 }
 
-function skillDisplayName(name: string): string {
-  return name.split(':').map((segment) => segment
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .map((word) => `${word.charAt(0).toLocaleUpperCase()}${word.slice(1)}`)
-    .join(' ')
-  ).join(' · ')
+/* 镜像高亮层：渲染与 textarea 完全相同的文本，skill token 段套高亮 span；textarea
+   文字透明、caret 保持可见。识别与提交解析共用 findInlineSkillTokens。文本以换行
+   结尾时末尾补一个零宽空格占位，保证末行高度与 textarea 一致。 */
+const mirrorSegments = computed<Array<{ text: string; skill: boolean }>>(() => {
+  const tokens = findInlineSkillTokens(value.value, props.skills)
+  const segments: Array<{ text: string; skill: boolean }> = []
+  let cursor = 0
+  for (const token of tokens) {
+    if (token.start > cursor) segments.push({ text: value.value.slice(cursor, token.start), skill: false })
+    segments.push({ text: token.raw, skill: true })
+    cursor = token.end
+  }
+  if (cursor < value.value.length) segments.push({ text: value.value.slice(cursor), skill: false })
+  if (value.value.endsWith('\n')) segments.push({ text: '\u200B', skill: false })
+  return segments
+})
+
+function onComposerScroll(): void {
+  if (mirror.value === null || input.value === null) return
+  mirror.value.scrollTop = input.value.scrollTop
 }
 
-function removeLastSkill(): void {
-  removeSkill(selectedSkills.value.length - 1)
+/* IME 组合期：预编辑串由输入法绘制在 textarea 上，恢复其文字颜色并暂时隐藏镜像，
+   避免透明文字下看不到中文预编辑内容；组合结束后还原。 */
+function onCompositionStart(): void {
+  imeComposing.value = true
+}
+
+function onCompositionEnd(): void {
+  imeComposing.value = false
 }
 
 function positionPopover(kind: PopoverKind): void {
@@ -707,16 +755,6 @@ function onDocumentFocusin(event: FocusEvent): void {
 defineExpose({ loadDraft, insertFileMention, addAttachments, addWebElements })
 
 function onKeydown(event: KeyboardEvent): void {
-  if (
-    event.key === 'Backspace' &&
-    selectedSkills.value.length > 0 &&
-    input.value?.selectionStart === 0 &&
-    input.value.selectionEnd === 0
-  ) {
-    event.preventDefault()
-    removeLastSkill()
-    return
-  }
   if (mentionOpen.value) {
     const count = mentionItems.value.length
     if (event.key === 'Escape') {
@@ -761,7 +799,7 @@ function onKeydown(event: KeyboardEvent): void {
       if (count > 0) commandActiveIndex.value = event.key === 'Home' ? 0 : count - 1
       return
     }
-    if (event.key === 'Enter' || event.key === 'Tab') {
+    if ((event.key === 'Enter' || event.key === 'Tab') && !event.isComposing) {
       const entry = visibleSkills.value[commandActiveIndex.value]
       if (event.key === 'Enter') event.preventDefault()
       if (entry !== undefined && !props.skillsPending) {
@@ -814,7 +852,15 @@ watch(() => props.running, (running) => {
 </script>
 
 <template>
-  <div ref="composerRoot" class="composer-wrap" :class="{ 'is-disabled': disabled }">
+  <div
+    ref="composerRoot"
+    class="composer-wrap"
+    :class="{ 'is-disabled': disabled, 'is-drop-active': dropActive }"
+    @dragenter="onDragEnter"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
+  >
     <div v-if="attachments.length > 0 || attachmentPending || webElements.length > 0" class="composer-attachments" aria-label="待发送附件">
       <div v-for="file in attachments" :key="file.fileId" class="composer-attachment-chip">
         <PhImage v-if="file.mediaType.startsWith('image/')" :size="15" />
@@ -857,29 +903,16 @@ watch(() => props.running, (running) => {
       </div>
     </div>
     <div v-if="attachmentError" class="composer-attachment-error" role="alert">{{ attachmentError }}</div>
-    <div class="composer-input-area" :class="{ 'has-selected-skill': selectedSkills.length > 0 }">
-      <template v-if="selectedSkills.length > 0">
-        <button
-          v-for="(entry, index) in selectedSkills"
-          :key="entry.skill.name"
-          type="button"
-          class="composer-skill-token"
-          :class="{ 'is-active': index === selectedSkills.length - 1 }"
-          :aria-label="`移除已选技能 ${skillDisplayName(entry.skill.name)}`"
-          :title="`已选择 /${entry.skill.name}；点击移除`"
-          @click="removeSkill(index)"
-        >
-          <PhCube :size="18" />
-          <span>{{ skillDisplayName(entry.skill.name) }}</span>
-        </button>
-      </template>
+    <div class="composer-input-area" :class="{ 'is-composing': imeComposing }">
+      <!-- 镜像高亮层：与 textarea 几何完全重合，skill token 段高亮；textarea 文字透明 -->
+      <div ref="mirror" class="composer-mirror" aria-hidden="true"><template v-for="(segment, index) in mirrorSegments" :key="index"><span v-if="segment.skill" class="composer-skill-inline">{{ segment.text }}</span><template v-else>{{ segment.text }}</template></template></div>
       <textarea
         ref="input"
         v-model="value"
         rows="1"
-        :placeholder="disabled ? disabledReason : selectedSkills.length > 0 ? '输入技能参数（可选）…' : goalMode ? '描述需要持续完成的目标…' : controls?.towerMode ? '描述 Tower 目标：主 Agent 会拆分任务并编排并行 worker…' : '描述你的任务或问题…'"
+        :placeholder="disabled ? disabledReason : goalMode ? '描述需要持续完成的目标…' : controls?.towerMode ? '描述 Tower 目标：主 Agent 会拆分任务并编排并行 worker…' : '描述你的任务或问题…'"
         :disabled="disabled"
-        :aria-label="selectedSkills.length === 0 ? '输入任务' : `${skillDisplayName(selectedSkills.at(-1)!.skill.name)} 技能参数`"
+        aria-label="输入任务"
         aria-autocomplete="list"
         :aria-expanded="commandOpen || mentionOpen"
         :aria-controls="activeListboxId"
@@ -887,6 +920,9 @@ watch(() => props.running, (running) => {
         :aria-haspopup="commandOpen || mentionOpen ? 'listbox' : undefined"
         @keydown="onKeydown"
         @input="onComposerInput"
+        @compositionstart="onCompositionStart"
+        @compositionend="onCompositionEnd"
+        @scroll.passive="onComposerScroll"
         @paste="onPaste"
       />
     </div>
@@ -988,7 +1024,7 @@ watch(() => props.running, (running) => {
           class="send-button"
           type="button"
           :aria-label="running ? (deliveryMode === 'steer' ? '发送引导' : '加入队列') : '发送任务'"
-          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (selectedSkills.length === 0 && value.trim().length === 0 && attachments.length === 0 && webElements.length === 0) || (goalMode && selectedSkills.length === 0 && value.trim().length === 0)"
+          :disabled="disabled || pending || activationPending || attachmentPending || controls === null || (value.trim().length === 0 && attachments.length === 0 && webElements.length === 0) || (goalMode && value.trim().length === 0)"
           @click="submit"
         >
           <PhPaperPlaneTilt :size="19" weight="fill" />

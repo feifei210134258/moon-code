@@ -73,6 +73,7 @@ const api: KimiAgentDesktopApi = {
     ipcRenderer.invoke(ipcChannels.questionDismiss, sessionId, questionId),
   pickAttachments: () => ipcRenderer.invoke(ipcChannels.attachmentsPick),
   pasteAttachment: (input) => ipcRenderer.invoke(ipcChannels.attachmentsPaste, input),
+  dropAttachment: (input) => ipcRenderer.invoke(ipcChannels.attachmentsDrop, input),
   attachWorkspaceFile: (sessionId, path) =>
     ipcRenderer.invoke(ipcChannels.attachmentsAddWorkspaceFile, sessionId, path),
   attachWorkspaceFileFromWorkspace: (workspaceId, path) =>
@@ -106,6 +107,7 @@ const api: KimiAgentDesktopApi = {
     ipcRenderer.invoke(ipcChannels.markdownImageRead, sessionId, source),
   getGitStatus: (sessionId) => ipcRenderer.invoke(ipcChannels.gitStatus, sessionId),
   listGitBranches: (sessionId) => ipcRenderer.invoke(ipcChannels.gitBranches, sessionId),
+  getWorkspaceGitStatus: (workspaceId) => ipcRenderer.invoke(ipcChannels.workspaceGitStatus, workspaceId),
   getFileDiff: (sessionId, path) => ipcRenderer.invoke(ipcChannels.fileDiff, sessionId, path),
   listTerminals: (sessionId) => ipcRenderer.invoke(ipcChannels.terminalsList, sessionId),
   createTerminal: (sessionId, size) => ipcRenderer.invoke(ipcChannels.terminalCreate, sessionId, size),

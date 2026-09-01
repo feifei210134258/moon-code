@@ -1,4 +1,5 @@
 import type {
+  KimiAttachmentDropInput,
   KimiAttachmentPasteInput,
   KimiPromptControls,
   KimiPromptInput,
@@ -14,6 +15,7 @@ const MAX_THINKING_ID = 64
 const MAX_ATTACHMENTS = 32
 const MAX_SUBMITTED_SKILLS = 32
 const MAX_PASTED_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_DROPPED_FILE_BYTES = 50 * 1024 * 1024
 
 export function validatePromptControls(value: unknown): KimiPromptControls {
   if (!isRecord(value)) throw new TypeError('Invalid Kimi prompt controls')
@@ -138,6 +140,18 @@ export function validatePastedAttachment(value: unknown): KimiAttachmentPasteInp
   const bytes = value.bytes
   if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_PASTED_IMAGE_BYTES) {
     throw new TypeError('Invalid pasted attachment bytes')
+  }
+  return { name, mediaType, bytes }
+}
+
+/* 拖拽上传不限图片：mediaType 走同一套正则，体积上限放宽到 50MB。 */
+export function validateDroppedAttachment(value: unknown): KimiAttachmentDropInput {
+  if (!isRecord(value)) throw new TypeError('Invalid dropped Kimi attachment')
+  const mediaType = validateMediaType(value.mediaType)
+  const name = shortString(value.name, 512, 'dropped attachment name')
+  const bytes = value.bytes
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_DROPPED_FILE_BYTES) {
+    throw new TypeError('Invalid dropped attachment bytes')
   }
   return { name, mediaType, bytes }
 }

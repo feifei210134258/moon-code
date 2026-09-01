@@ -571,8 +571,15 @@ function onWindowKeydown(event: KeyboardEvent): void {
   }
 }
 
+function onWindowFileDrag(event: DragEvent): void {
+  if (event.dataTransfer?.types?.includes('Files') === true) event.preventDefault()
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onWindowKeydown)
+  /* 全局兜底：文件拖到输入框以外区域时阻止浏览器默认的打开行为（输入框自身走 ComposerBar 的 drop 上传）。 */
+  window.addEventListener('dragover', onWindowFileDrag)
+  window.addEventListener('drop', onWindowFileDrag)
   stopPetOpenListener = window.kimiAgent?.onPetOpenSession((intent) => {
     if (
       intent.serverId.length === 0 ||
@@ -759,6 +766,8 @@ onBeforeUnmount(() => {
   stopPetOpenListener?.()
   void browserBridge.setVisible(false)
   window.removeEventListener('keydown', onWindowKeydown)
+  window.removeEventListener('dragover', onWindowFileDrag)
+  window.removeEventListener('drop', onWindowFileDrag)
 })
 </script>
 
@@ -770,6 +779,7 @@ onBeforeUnmount(() => {
       :runtime-pending="runtimeBridge.pending.value"
       :workspace-name="activeWorkspaceName"
       :git-branch="runtimeBridge.gitStatus.value?.branch ?? null"
+      :git-available="runtimeBridge.gitStatus.value?.available ?? null"
       :git-branches="runtimeBridge.gitBranches.value"
       :branches-open="branchesOpen"
       :branches-pending="runtimeBridge.gitBranchesPending.value"

@@ -291,4 +291,31 @@ describe('TopBar usage', () => {
     expect(items.map((item) => item.text())).toEqual(['fix/topbar', 'main当前分支', 'release/0.2.6'])
     expect(items[1]!.classes()).toContain('is-current')
   })
+
+  it('renders the git readout in three states: branch, confirmed non-git, and unknown', async () => {
+    const wrapper = mount(TopBar, {
+      props: {
+        runtimeLabel: 'Kimi 0.29.0', runtimeStatus: 'running', runtimePending: false,
+        workspaceName: 'Kimi Agent', gitBranch: 'main', gitAvailable: true, gitBranches: null, branchesOpen: false,
+        usage, sessionUsage, contextOpen: false, usageOpen: false, extensionsOpen: true
+      }
+    })
+
+    /* 分支非空 → 分支按钮 */
+    expect(wrapper.get('button[aria-controls="branch-popover"]').text()).toContain('main')
+
+    /* 分支为空串（detached HEAD / 40908 回归）→ 不渲染空按钮，也不误报「非 Git 项目」 */
+    await wrapper.setProps({ gitBranch: '', gitAvailable: true })
+    expect(wrapper.find('button[aria-controls="branch-popover"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('非 Git 项目')
+
+    /* 确认不是 git 仓库 → 「非 Git 项目」 */
+    await wrapper.setProps({ gitBranch: null, gitAvailable: false })
+    expect(wrapper.text()).toContain('非 Git 项目')
+
+    /* 未检测/未知/出错 → 两者都不渲染 */
+    await wrapper.setProps({ gitAvailable: null })
+    expect(wrapper.find('button[aria-controls="branch-popover"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('非 Git 项目')
+  })
 })

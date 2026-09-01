@@ -4,6 +4,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { KimiAgentDesktopApi } from '../../src/shared/contracts.js'
 import ComposerBar from '../../src/renderer/src/components/ComposerBar.vue'
+import { findInlineSkillTokens, parseInlineSkillTokens } from '../../src/renderer/src/utils/inlineSkills.js'
 
 const controls = {
   model: 'kimi-for-coding', thinking: 'high', permissionMode: 'manual' as const,
@@ -19,8 +20,38 @@ afterEach(() => {
   delete window.kimiAgent
 })
 
+describe('inlineSkills parsing', () => {
+  const catalog = [{ name: 'review' }, { name: 'pdf' }]
+
+  it('parses interspersed tokens with args running up to the next token', () => {
+    expect(parseInlineSkillTokens('前文 /review --fix 中段 /pdf 尾', catalog)).toEqual([
+      { name: 'review', args: '--fix 中段' },
+      { name: 'pdf', args: '尾' }
+    ])
+  })
+
+  it('matches skill names case-insensitively and submits the canonical name', () => {
+    expect(parseInlineSkillTokens('/Review 看看', catalog)).toEqual([{ name: 'review', args: '看看' }])
+  })
+
+  it('omits args when the token has no trailing text', () => {
+    expect(parseInlineSkillTokens('/pdf', catalog)).toEqual([{ name: 'pdf' }])
+  })
+
+  it('ignores unknown slash words and path-like text', () => {
+    expect(parseInlineSkillTokens('/missing 和 /Users/feili 都是普通文本', catalog)).toEqual([])
+  })
+
+  it('finds tokens only at line starts or after whitespace', () => {
+    expect(findInlineSkillTokens('看/review 这里', catalog)).toEqual([])
+    const tokens = findInlineSkillTokens('换行\n/review', catalog)
+    expect(tokens).toHaveLength(1)
+    expect(tokens[0]!.raw).toBe('/review')
+  })
+})
+
 describe('ComposerBar Skills menu', () => {
-  it('submits a selected Kimi Skill as a structured skills entry with its arguments', async () => {
+  it('inserts a chosen skill as an inline token and submits the raw input text', async () => {
     const wrapper = mount(ComposerBar, {
       props: {
         models, controls,
@@ -34,12 +65,12 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('.slash-button').trigger('click')
     expect(wrapper.get('.command-popover').text()).toContain('/review')
     await wrapper.get('.command-popover button').trigger('click')
-    const token = wrapper.get('.composer-skill-token')
-    expect(token.text()).toContain('Review')
-    expect(token.find('svg').exists()).toBe(true)
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('')
-    expect(wrapper.get('textarea').attributes('placeholder')).toContain('技能参数')
-    await wrapper.get('textarea').setValue('--fix src')
+    /* 内联模型：选中技能 = 在光标处插入 `/规范名 `，不再有顶部 chip 行 */
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('/review ')
+    expect(wrapper.find('.composer-skill-token').exists()).toBe(false)
+    expect(wrapper.get('.composer-mirror .composer-skill-inline').text()).toBe('/review')
+
+    await wrapper.get('textarea').setValue('/review --fix src')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.emitted('submit')).toEqual([[
@@ -48,7 +79,7 @@ describe('ComposerBar Skills menu', () => {
     expect(wrapper.emitted('activateSkill')).toBeUndefined()
   })
 
-  it('submits a selected skill without arguments and removes its token by click or Backspace', async () => {
+  it('submits a chosen skill without arguments', async () => {
     const wrapper = mount(ComposerBar, {
       props: {
         models, controls,
@@ -61,26 +92,37 @@ describe('ComposerBar Skills menu', () => {
 
     await wrapper.get('.slash-button').trigger('click')
     await wrapper.get('.command-popover button').trigger('click')
-    expect(wrapper.get('.composer-skill-token').text()).toContain('Product Design')
+    expect(wrapper.get('.composer-mirror .composer-skill-inline').text()).toBe('/product-design')
     expect(wrapper.get('.send-button:last-child').attributes('disabled')).toBeUndefined()
-    await wrapper.get('.composer-skill-token').trigger('click')
-    expect(wrapper.find('.composer-skill-token').exists()).toBe(false)
-
-    await wrapper.get('textarea').setValue('/')
-    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.find('.composer-skill-token').exists()).toBe(true)
-    await wrapper.get('textarea').trigger('keydown', { key: 'Backspace' })
-    expect(wrapper.find('.composer-skill-token').exists()).toBe(false)
-
-    await wrapper.get('textarea').setValue('/')
-    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('submit')).toEqual([[
       '/product-design', [], controls, false, 'queue', [], [{ name: 'product-design' }]
     ]])
   })
 
-  it('supports activating multiple skills in one prompt via space + slash', async () => {
+  it('opens the skill menu for a / typed mid-text after a space', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models, controls,
+        skills: [
+          { name: 'review', description: 'Review current changes', source: 'project', type: null, userInvocableOnly: false }
+        ]
+      }
+    })
+
+    await wrapper.get('textarea').setValue('检查 /rev')
+    expect(wrapper.get('.command-popover').text()).toContain('/review')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('检查 /review ')
+
+    await wrapper.get('textarea').setValue('检查 /review 边界')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([[
+      '检查 /review 边界', [], controls, false, 'queue', [], [{ name: 'review', args: '边界' }]
+    ]])
+  })
+
+  it('supports multiple skills interspersed in one prompt via space + slash', async () => {
     const wrapper = mount(ComposerBar, {
       props: {
         models, controls,
@@ -93,16 +135,19 @@ describe('ComposerBar Skills menu', () => {
 
     await wrapper.get('textarea').setValue('/rev')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.findAll('.composer-skill-token')).toHaveLength(1)
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('/review ')
 
-    /* 空格后输入 / 追加下一个 skill token */
-    await wrapper.get('textarea').setValue('--fix src /')
+    /* 空格后输入 / 触发下一个 skill 的选择面板 */
+    await wrapper.get('textarea').setValue('/review --fix src /')
     expect(wrapper.get('.command-popover').text()).toContain('/pdf')
     await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' })
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.findAll('.composer-skill-token')).toHaveLength(2)
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('/review --fix src /pdf ')
+    expect(
+      wrapper.findAll('.composer-mirror .composer-skill-inline').map((node) => node.text())
+    ).toEqual(['/review', '/pdf'])
 
-    await wrapper.get('textarea').setValue('生成PDF')
+    await wrapper.get('textarea').setValue('/review --fix src /pdf 生成PDF')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.emitted('submit')).toEqual([[
@@ -113,7 +158,7 @@ describe('ComposerBar Skills menu', () => {
     ]])
   })
 
-  it('does not treat a path-like tail as a slash command once skills are selected', async () => {
+  it('does not treat a path-like tail as a slash command', async () => {
     const wrapper = mount(ComposerBar, {
       props: {
         models, controls,
@@ -123,10 +168,10 @@ describe('ComposerBar Skills menu', () => {
       }
     })
 
-    await wrapper.get('.slash-button').trigger('click')
-    await wrapper.get('.command-popover button').trigger('click')
-    await wrapper.get('textarea').setValue('--fix /Users/feili')
+    await wrapper.get('textarea').setValue('/review --fix /Users/feili')
     expect(wrapper.find('.command-popover').exists()).toBe(false)
+    /* 路径段不是 token，只有 /review 高亮 */
+    expect(wrapper.findAll('.composer-mirror .composer-skill-inline')).toHaveLength(1)
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('submit')).toEqual([[
       '/review --fix /Users/feili', [], controls, false, 'queue', [], [
@@ -138,11 +183,32 @@ describe('ComposerBar Skills menu', () => {
   it('keeps unknown slash text as a normal Kimi prompt', async () => {
     const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
     await wrapper.get('textarea').setValue('/unknown continue')
+    expect(wrapper.find('.composer-skill-inline').exists()).toBe(false)
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('submit')).toEqual([['/unknown continue', [], controls, false, 'queue', [], []]])
   })
 
-  it('restores multi-skill drafts into their own tokens', async () => {
+  it('treats a manually typed skill name the same as a palette choice', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models, controls,
+        skills: [
+          { name: 'review', description: 'Review', source: 'project', type: null, userInvocableOnly: false }
+        ]
+      }
+    })
+
+    await wrapper.get('textarea').setValue('/review 手动参数')
+    /* 尾部没有 / 触发词元，面板保持关闭 */
+    expect(wrapper.find('.command-popover').exists()).toBe(false)
+    expect(wrapper.get('.composer-mirror .composer-skill-inline').text()).toBe('/review')
+    await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('submit')).toEqual([[
+      '/review 手动参数', [], controls, false, 'queue', [], [{ name: 'review', args: '手动参数' }]
+    ]])
+  })
+
+  it('restores multi-skill drafts as inline tokens', async () => {
     const wrapper = mount(ComposerBar, {
       props: {
         models, controls,
@@ -153,8 +219,10 @@ describe('ComposerBar Skills menu', () => {
       }
     })
     await wrapper.vm.loadDraft('/review a /pdf b')
-    expect(wrapper.findAll('.composer-skill-token')).toHaveLength(2)
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('b')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('/review a /pdf b')
+    expect(
+      wrapper.findAll('.composer-mirror .composer-skill-inline').map((node) => node.text())
+    ).toEqual(['/review', '/pdf'])
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('submit')).toEqual([[
       '/review a /pdf b', [], controls, false, 'queue', [], [
@@ -162,6 +230,93 @@ describe('ComposerBar Skills menu', () => {
         { name: 'pdf', args: 'b' }
       ]
     ]])
+  })
+
+  it('treats skill tokens as plain text: no chip row and no caret-0 Backspace shortcut', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models, controls,
+        skills: [{
+          name: 'review', description: 'Review', source: 'project', type: null, userInvocableOnly: false
+        }]
+      }
+    })
+
+    await wrapper.get('.slash-button').trigger('click')
+    await wrapper.get('.command-popover button').trigger('click')
+    const textarea = wrapper.get('textarea')
+    ;(textarea.element as HTMLTextAreaElement).setSelectionRange(0, 0)
+    await textarea.trigger('keydown', { key: 'Backspace' })
+    /* caret-0 Backspace 不再有特殊删除：token 文本与高亮都原样保留 */
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('/review ')
+    expect(wrapper.get('.composer-mirror .composer-skill-inline').text()).toBe('/review')
+
+    /* 普通文本删除即移除高亮 */
+    await textarea.setValue('')
+    expect(wrapper.find('.composer-skill-inline').exists()).toBe(false)
+  })
+
+  it('does not open the menu or select a skill during IME composition', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models, controls,
+        skills: [{
+          name: 'review', description: 'Review', source: 'project', type: null, userInvocableOnly: false
+        }]
+      }
+    })
+    const textarea = wrapper.get('textarea')
+
+    await textarea.trigger('compositionstart')
+    expect(wrapper.get('.composer-input-area').classes()).toContain('is-composing')
+    /* 组合中的 input（v-model 被 Vue 按住 + isComposing 守卫）不触发面板。
+       注意不能用 setValue：它会补发 change 事件，被 Vue 当作 compositionend。 */
+    ;(textarea.element as HTMLTextAreaElement).value = '/rev'
+    await textarea.trigger('input', { isComposing: true })
+    expect(wrapper.find('.command-popover').exists()).toBe(false)
+    await textarea.trigger('compositionend')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('.composer-input-area').classes()).not.toContain('is-composing')
+    expect(wrapper.find('.command-popover').exists()).toBe(true)
+
+    /* 组合中的 Enter 不误选技能、不提交 */
+    await textarea.trigger('keydown', { key: 'Enter', isComposing: true })
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('/rev')
+    expect(wrapper.find('.command-popover').exists()).toBe(true)
+    expect(wrapper.emitted('submit')).toBeUndefined()
+
+    await textarea.trigger('keydown', { key: 'Enter' })
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('/review ')
+  })
+
+  it('renders the mirror escaped and pads a trailing newline for alignment', async () => {
+    const wrapper = mount(ComposerBar, {
+      props: {
+        models, controls,
+        skills: [{
+          name: 'review', description: 'Review', source: 'project', type: null, userInvocableOnly: false
+        }]
+      }
+    })
+
+    await wrapper.get('textarea').setValue('a <b>bold</b> /review 尾部')
+    const mirror = wrapper.get('.composer-mirror')
+    expect(mirror.attributes('aria-hidden')).toBe('true')
+    expect(mirror.find('b').exists()).toBe(false)
+    expect(mirror.text()).toContain('a <b>bold</b> /review 尾部')
+    expect(mirror.findAll('.composer-skill-inline')).toHaveLength(1)
+
+    await wrapper.get('textarea').setValue('换行\n')
+    expect(wrapper.get('.composer-mirror').element.textContent?.endsWith('\u200B')).toBe(true)
+  })
+
+  it('syncs the mirror scroll position with the textarea', async () => {
+    const wrapper = mount(ComposerBar, { props: { skills: [], models, controls } })
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    const mirror = wrapper.get('.composer-mirror').element as HTMLElement
+    textarea.scrollTop = 24
+    await wrapper.get('textarea').trigger('scroll')
+    expect(mirror.scrollTop).toBe(24)
   })
 
   it('filters slash commands as the user types and shows a Chinese empty state', async () => {
@@ -325,8 +480,8 @@ describe('ComposerBar Skills menu', () => {
     await wrapper.get('textarea').trigger('keydown', { key: 'ArrowDown' })
     expect(wrapper.get('textarea').attributes('aria-activedescendant')).toBe('composer-command-option-1')
     await wrapper.get('textarea').trigger('keydown', { key: 'Enter' })
-    expect(wrapper.get('.composer-skill-token').text()).toContain('Release')
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('')
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('/release ')
+    expect(wrapper.get('.composer-mirror .composer-skill-inline').text()).toBe('/release')
 
     await wrapper.get('.model-summary').trigger('click')
     expect(wrapper.find('.composer-popover').exists()).toBe(true)
