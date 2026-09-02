@@ -589,6 +589,9 @@ export class KimiSessionBridge extends EventEmitter {
     const state = this.#getController().getState(sessionId)
     if (state === null || state.workspaceRoot.length === 0) throw new Error('Kimi Workspace path is unavailable')
     const root = resolve(state.workspaceRoot)
+    /* 根目录 '.' 直接解析为工作区根（「在访达/文件资源管理器中打开项目文件夹」入口）。
+       只有 filesOpenSystem 系列 IPC 用 allowRoot 放行 '.'，下载/删除等文件操作到不了这里。 */
+    if (path === '.') return root
     const target = this.#resolveInsideWorkspace(root, path)
     if (await fileExists(target)) return target
     const fallback = await resolveEntryByName(root, path)
@@ -605,6 +608,8 @@ export class KimiSessionBridge extends EventEmitter {
     const workspaces = await this.#runtime.createRestClient().listWorkspaces()
     const root = workspaces.find((workspace) => workspace.id === workspaceId)?.root ?? ''
     if (root.length === 0) throw new Error('Kimi Workspace path is unavailable')
+    /* 同 workspaceFileSystemPath：根目录 '.' 解析为工作区根本身。 */
+    if (path === '.') return resolve(root)
     const target = this.#resolveInsideWorkspace(root, path)
     if (await fileExists(target)) return target
     const fallback = await resolveEntryByName(resolve(root), path)

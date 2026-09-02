@@ -380,6 +380,8 @@ describe('KimiSessionBridge terminals', () => {
     /* cwd 下没有 src/App.vue；REST/本地解析都回退唯一命中仓库里的 renderer 副本 */
     await expect(bridge.workspaceFileSystemPath('session-1', 'src/App.vue'))
       .resolves.toBe(resolve(process.cwd(), 'src/renderer/src/App.vue'))
+    /* 根目录 '.' 解析为工作区根本身（打开项目文件夹入口）；'..' 仍然拒绝 */
+    await expect(bridge.workspaceFileSystemPath('session-1', '.')).resolves.toBe(resolve(process.cwd()))
     await expect(bridge.workspaceFileSystemPath('session-1', '../outside.txt')).rejects.toThrow('escapes')
 
     expect(runtime.openFile).toHaveBeenCalledWith('session-1', 'src/renderer/src/App.vue', 8)
@@ -887,7 +889,8 @@ describe('KimiSessionBridge draft workspace listing', () => {
       const bridge = new KimiSessionBridge(runtime as unknown as KimiRuntimeManager)
 
       await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-1', 'src/main.ts')).resolves.toBe(join(root, 'src', 'main.ts'))
-      await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-1', '.')).rejects.toThrow('escapes')
+      /* 根目录 '.' 解析为工作区根本身（打开项目文件夹入口）；'..' 仍然拒绝 */
+      await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-1', '.')).resolves.toBe(resolve(root))
       await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-1', '../outside')).rejects.toThrow('escapes')
       await expect(bridge.workspaceFileSystemPathFromWorkspace('workspace-missing', 'src')).rejects.toThrow('unavailable')
 
