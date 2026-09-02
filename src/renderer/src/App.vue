@@ -950,6 +950,7 @@ onBeforeUnmount(() => {
           :width="rightPanelWidth"
           :active-tab="activeExtension"
           :workspace-name="activeWorkspaceName"
+          :platform="runtimeBridge.platform.value"
           :file-tree="runtimeBridge.fileTree"
           :file-tree-reveal="runtimeBridge.fileTreeReveal.value"
           :file-preview="runtimeBridge.filePreview.value"

@@ -165,6 +165,19 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.findAll('.file-row')[1]!.classes()).toContain('is-active')
   })
 
+  it('drops the root path caption and opens the workspace folder in the platform file manager from the toolbar', async () => {
+    const wrapper = mount(ExtensionsPanel, { props: { ...baseProps, activeTab: 'files' } })
+
+    expect(wrapper.find('.files-toolbar > span').exists()).toBe(false)
+    expect(wrapper.get('.files-toolbar strong').text()).toBe('moon-code')
+    await wrapper.get('.files-toolbar [aria-label="在访达中打开项目文件夹"]').trigger('click')
+    expect(wrapper.emitted('openSystem')).toEqual([['.']])
+
+    await wrapper.setProps({ platform: 'win32' })
+    await wrapper.get('.files-toolbar [aria-label="在文件资源管理器中打开项目文件夹"]').trigger('click')
+    expect(wrapper.emitted('openSystem')).toEqual([['.'], ['.']])
+  })
+
   it('renders expanded directories as an indented tree and hides collapsed children', async () => {
     const wrapper = mount(ExtensionsPanel, {
       props: {

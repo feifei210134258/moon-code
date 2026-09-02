@@ -63,6 +63,7 @@ export function useRuntimeBridge() {
   const workbenchStore = useWorkbenchStore()
   const runtime = ref<RuntimePublicState>({ ...stoppedState })
   const discovery = ref<RuntimeDiscovery | null>(null)
+  const platform = ref<string>('darwin')
   const pending = ref(false)
   const workspaceTree = ref<WorkspaceNavigationItem[] | null>(null)
   const workspaceError = ref<string | null>(null)
@@ -192,6 +193,7 @@ export function useRuntimeBridge() {
     const bootstrap = await window.kimiAgent.getBootstrapState()
     runtime.value = bootstrap.runtime
     discovery.value = bootstrap.discovery
+    platform.value = bootstrap.platform
     unsubscribeRuntime = window.kimiAgent.onRuntimeStateChanged((state) => {
       runtime.value = state
       if (state.status === 'running') {
@@ -1746,6 +1748,7 @@ export function useRuntimeBridge() {
   return {
     runtime,
     discovery,
+    platform,
     pending,
     label,
     workspaceTree,

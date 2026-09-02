@@ -28,12 +28,15 @@ import type {
 } from '@shared/contracts'
 import type { ExtensionTab, WorkspaceFileTreeState } from '../types'
 import BrowserPanel from './BrowserPanel.vue'
+import ExplorerIcon from './icons/ExplorerIcon.vue'
 import FileTreeNode from './FileTreeNode.vue'
+import FinderIcon from './icons/FinderIcon.vue'
 
 const props = withDefaults(defineProps<{
   width: number
   activeTab: ExtensionTab
   workspaceName: string
+  platform?: string
   fileTree: WorkspaceFileTreeState
   fileTreeReveal?: string | null
   filePreview: WorkspaceFilePreview | null
@@ -59,6 +62,7 @@ const props = withDefaults(defineProps<{
   tasksError?: string | null
   operationalActionPending?: string | null
 }>(), {
+  platform: 'darwin',
   browserElementPicking: false,
   fileTreeReveal: null,
   fileSearch: null,
@@ -102,6 +106,9 @@ const changedFiles = computed(() => Object.entries(props.gitStatus?.entries ?? {
   .map(([path, status]) => ({ path, status })))
 const rootEntries = computed<WorkspaceFileEntry[]>(() => props.fileTree.children[props.fileTree.root] ?? [])
 const rootLoaded = computed(() => props.fileTree.children[props.fileTree.root] !== undefined)
+/* 打开工作区根目录的入口按平台区分：macOS 访达、Windows 文件资源管理器。 */
+const isMacPlatform = computed(() => props.platform === 'darwin')
+const openRootInFileManagerLabel = computed(() => isMacPlatform.value ? '在访达中打开项目文件夹' : '在文件资源管理器中打开项目文件夹')
 const activeTodo = computed(() => props.todos.at(-1) ?? null)
 const todoItems = computed(() => activeTodo.value?.items ?? [])
 const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
@@ -303,7 +310,14 @@ watch(() => props.fileTreeReveal, (path) => {
     <div v-else-if="activeTab === 'files'" class="extension-content files-view">
       <header class="files-toolbar">
         <strong><PhFolderOpen :size="18" />{{ workspaceName }}</strong>
-        <span>{{ fileTree.root }}</span>
+        <button
+          class="icon-button"
+          type="button"
+          :title="openRootInFileManagerLabel"
+          :aria-label="openRootInFileManagerLabel"
+          :disabled="fileActionPending !== null"
+          @click="emit('openSystem', '.')"
+        ><FinderIcon v-if="isMacPlatform" :size="15" /><ExplorerIcon v-else :size="15" /></button>
       </header>
       <p v-if="fileActionError" class="files-action-message is-error" role="alert">{{ fileActionError }}</p>
       <p v-else-if="fileActionNotice" class="files-action-message">{{ fileActionNotice }}</p>

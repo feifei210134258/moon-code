@@ -802,7 +802,7 @@ export function registerIpc(
     async (event, sessionId?: unknown, path?: unknown): Promise<{ opened: true }> => {
       assertTrustedSender(event)
       assertSessionId(sessionId)
-      const target = await sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path))
+      const target = await sessions.workspaceFileSystemPath(sessionId, validateWorkspacePath(path, { allowRoot: true }))
       const reason = await shell.openPath(target)
       if (reason.length > 0) throw new Error(`系统无法打开该文件：${reason}`)
       return { opened: true }
@@ -814,7 +814,7 @@ export function registerIpc(
     async (event, workspaceId?: unknown, path?: unknown): Promise<{ opened: true }> => {
       assertTrustedSender(event)
       const safeWorkspaceId = validateWorkspaceId(workspaceId)
-      const target = await sessions.workspaceFileSystemPathFromWorkspace(safeWorkspaceId, validateWorkspacePath(path))
+      const target = await sessions.workspaceFileSystemPathFromWorkspace(safeWorkspaceId, validateWorkspacePath(path, { allowRoot: true }))
       const reason = await shell.openPath(target)
       if (reason.length > 0) throw new Error(`系统无法打开该文件：${reason}`)
       return { opened: true }

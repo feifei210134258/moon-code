@@ -5917,9 +5917,11 @@ body.is-panel-resizing {
 
 .files-toolbar {
   min-height: 44px;
-  display: grid;
-  gap: 2px;
-  padding: 5px 8px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -5931,14 +5933,10 @@ body.is-panel-resizing {
   font-size: var(--type-caption-size);
 }
 
-.files-toolbar > span {
-  overflow: hidden;
-  padding-left: 25px;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--type-micro-size);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.files-toolbar .icon-button {
+  flex: none;
+  width: 26px;
+  height: 26px;
 }
 
 .files-action-message {
