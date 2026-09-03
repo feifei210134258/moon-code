@@ -85,8 +85,8 @@ export const useWorkbenchStore = defineStore('workbench', {
     /* 草稿会话：「新建任务」先进入草稿态，发出首条消息时才真正创建会话。 */
     draftActive: false,
     draftWorkspaceId: '',
-    activeExtension: 'changes' as ExtensionTab,
-    rightPanelOpen: true,
+    activeExtension: 'files' as ExtensionTab,
+    rightPanelOpen: false,
     leftPanelWidth: 260,
     rightPanelWidth: 332,
     terminalOpen: false,
@@ -472,6 +472,10 @@ function groupTranscriptTurns(messages: SessionTranscriptMessage[]): ChatTurn[] 
       if (last.author !== 'Kimi' && turn.author === 'Kimi') last.author = 'Kimi'
       if (turn.pending === true) last.pending = true
       else delete last.pending
+      if (turn.writtenFiles !== undefined) {
+        const merged = [...(last.writtenFiles ?? []), ...turn.writtenFiles]
+        last.writtenFiles = merged.filter((path, index) => merged.indexOf(path) === index)
+      }
     } else {
       turns.push(turn)
     }
@@ -514,6 +518,11 @@ function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
   for (const [index, part] of message.content.entries()) {
     projectPart(part, message.id, message.status, index === message.content.length - 1, index, blocks)
   }
+  /* 回合内写入/修改过的文件（writtenPath 聚合，去重保序），供回合末更改摘要卡使用。 */
+  const writtenFiles = message.content
+    .filter((part): part is Extract<SessionTranscriptPart, { type: 'tool' }> =>
+      part.type === 'tool' && typeof part.writtenPath === 'string' && part.writtenPath.length > 0)
+    .map((part) => part.writtenPath as string)
   return {
     id: message.id,
     promptId: message.promptId,
@@ -523,6 +532,7 @@ function mapTranscriptMessage(message: SessionTranscriptMessage): ChatTurn {
     blocks,
     ...(message.originKind === undefined ? {} : { originKind: message.originKind }),
     ...(skillNames !== undefined && skillNames.length > 0 ? { skillNames } : {}),
+    ...(writtenFiles.length > 0 ? { writtenFiles } : {}),
     ...(message.role === 'user' && message.status === 'pending' ? { queued: true } : {}),
     ...(message.role === 'assistant' && message.status === 'pending' ? { pending: true } : {})
   }

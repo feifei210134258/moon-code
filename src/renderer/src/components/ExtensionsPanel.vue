@@ -3,28 +3,23 @@ import {
   PhArrowClockwise,
   PhArrowSquareOut,
   PhChatCircleText,
-  PhCheckCircle,
   PhFile,
   PhFolderOpen,
   PhMagnifyingGlass,
   PhSpinnerGap,
   PhTextT,
   PhTrash,
-  PhWarningCircle,
-  PhX
+  PhWarningCircle
 } from '@phosphor-icons/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type {
   BrowserBounds,
   BrowserViewState,
   BrowserViewport,
-  KimiBackgroundTask,
-  KimiTodoList,
   WorkspaceFileEntry,
   WorkspaceFilePreview,
   WorkspaceFileSearchResult,
-  WorkspaceGrepResult,
-  WorkspaceGitStatus
+  WorkspaceGrepResult
 } from '@shared/contracts'
 import type { ExtensionTab, WorkspaceFileTreeState } from '../types'
 import BrowserPanel from './BrowserPanel.vue'
@@ -43,9 +38,6 @@ const props = withDefaults(defineProps<{
   fileActionPending?: string | null
   fileActionError?: string | null
   fileActionNotice?: string | null
-  gitStatus: WorkspaceGitStatus | null
-  gitStatusPending: boolean
-  gitStatusError: string | null
   fileSearch?: WorkspaceFileSearchResult | null
   fileSearchPending?: boolean
   fileSearchError?: string | null
@@ -56,11 +48,6 @@ const props = withDefaults(defineProps<{
   browserPending: boolean
   browserError: string | null
   browserElementPicking?: boolean
-  todos?: KimiTodoList[]
-  tasks?: KimiBackgroundTask[]
-  tasksPending?: boolean
-  tasksError?: string | null
-  operationalActionPending?: string | null
 }>(), {
   platform: 'darwin',
   browserElementPicking: false,
@@ -73,12 +60,7 @@ const props = withDefaults(defineProps<{
   fileGrepError: null,
   fileActionPending: null,
   fileActionError: null,
-  fileActionNotice: null,
-  todos: () => [],
-  tasks: () => [],
-  tasksPending: false,
-  tasksError: null,
-  operationalActionPending: null
+  fileActionNotice: null
 })
 
 const emit = defineEmits<{
@@ -98,20 +80,13 @@ const emit = defineEmits<{
   browserStopPicking: []
   browserReload: []
   browserOpenExternal: []
-  cancelTask: [taskId: string]
 }>()
 
-const changedFiles = computed(() => Object.entries(props.gitStatus?.entries ?? {})
-  .filter(([, status]) => status !== 'clean' && status !== 'ignored')
-  .map(([path, status]) => ({ path, status })))
 const rootEntries = computed<WorkspaceFileEntry[]>(() => props.fileTree.children[props.fileTree.root] ?? [])
 const rootLoaded = computed(() => props.fileTree.children[props.fileTree.root] !== undefined)
 /* 打开工作区根目录的入口按平台区分：macOS 访达、Windows 文件资源管理器。 */
 const isMacPlatform = computed(() => props.platform === 'darwin')
 const openRootInFileManagerLabel = computed(() => isMacPlatform.value ? '在访达中打开项目文件夹' : '在文件资源管理器中打开项目文件夹')
-const activeTodo = computed(() => props.todos.at(-1) ?? null)
-const todoItems = computed(() => activeTodo.value?.items ?? [])
-const completedTodos = computed(() => todoItems.value.filter((item) => item.status === 'done').length)
 const fileSearchQuery = ref('')
 const grepPattern = ref('')
 const contextEntry = ref<WorkspaceFileEntry | null>(null)
@@ -125,21 +100,6 @@ function submitFileSearch(): void {
 function submitGrep(): void {
   const pattern = grepPattern.value.trim()
   if (pattern.length > 0) emit('grepFiles', pattern)
-}
-
-function todoStatusLabel(status: 'pending' | 'in_progress' | 'done'): string {
-  return status === 'done' ? '完成' : status === 'in_progress' ? '进行中' : '待处理'
-}
-
-function statusLabel(status: string): string {
-  return ({
-    modified: 'M',
-    added: 'A',
-    deleted: 'D',
-    renamed: 'R',
-    untracked: 'U',
-    conflicted: '!'
-  } as Record<string, string>)[status] ?? ''
 }
 
 function openEntryContextMenu(entry: WorkspaceFileEntry, event: MouseEvent): void {
@@ -223,13 +183,6 @@ watch(() => props.fileTreeReveal, (path) => {
 
     <div class="extension-tabs" role="tablist" aria-label="扩展工作区">
       <button
-        :class="{ 'is-active': activeTab === 'changes' }"
-        type="button"
-        role="tab"
-        :aria-selected="activeTab === 'changes'"
-        @click="emit('selectTab', 'changes')"
-      >更改</button>
-      <button
         :class="{ 'is-active': activeTab === 'files' }"
         type="button"
         role="tab"
@@ -245,69 +198,7 @@ watch(() => props.fileTreeReveal, (path) => {
       >浏览器</button>
     </div>
 
-    <div
-      v-if="activeTab === 'changes'"
-      class="extension-content changes-view"
-    >
-      <section class="changed-files-panel">
-        <h2>
-          {{ gitStatus?.available ? `${changedFiles.length} 个文件已更改` : '更改' }}
-          <span v-if="gitStatus?.available" class="git-summary">{{ gitStatus.branch || 'detached' }} · <b class="diff-add">+{{ gitStatus.additions }}</b> <b class="diff-remove">-{{ gitStatus.deletions }}</b></span>
-        </h2>
-        <div v-if="!gitStatus && gitStatusPending" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Git 状态…</div>
-        <div v-else-if="!gitStatus && gitStatusError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ gitStatusError }}</div>
-        <div v-else-if="!gitStatus" class="extension-state">选择一个 Kimi Session 后读取更改。</div>
-        <div v-else-if="!gitStatus.available" class="extension-state">当前工作区未检测到可用的 Git 仓库。</div>
-        <div v-if="changedFiles.length > 0" class="changed-files-list" aria-label="已更改文件">
-          <div v-for="file in changedFiles" :key="file.path" class="changed-file-row">
-            <PhFile :size="16" />
-            <span>{{ file.path }}</span>
-            <strong :class="`git-${file.status}`">{{ statusLabel(file.status) }}</strong>
-          </div>
-        </div>
-        <div v-if="gitStatus?.available && changedFiles.length === 0" class="extension-state">工作区没有未提交更改。</div>
-      </section>
-
-      <section class="todo-panel">
-        <header>
-          <h2>计划</h2>
-          <span v-if="activeTodo">{{ completedTodos }}/{{ todoItems.length }}</span>
-        </header>
-        <ol v-if="todoItems.length > 0" aria-label="Kimi Todo 计划">
-          <li v-for="(todo, index) in todoItems" :key="`${activeTodo?.todoId}:${index}:${todo.title}`" :class="`is-${todo.status}`">
-            <PhCheckCircle v-if="todo.status === 'done'" class="todo-check" :size="14" weight="bold" aria-hidden="true" />
-            <span v-else class="todo-status-dot" aria-hidden="true" />
-            <span>{{ todo.title }}</span>
-            <em v-if="todo.status !== 'done'">{{ todoStatusLabel(todo.status) }}</em>
-          </li>
-        </ol>
-        <p v-else class="plan-empty">Kimi 生成计划后会在这里实时显示。</p>
-      </section>
-
-      <section class="plan-panel">
-        <header><h2>后台任务</h2><span>{{ tasks.length }}</span></header>
-        <div v-if="tasksPending && tasks.length === 0" class="extension-state"><PhSpinnerGap class="spin" :size="17" />正在读取 Kimi Tasks…</div>
-        <div v-else-if="tasksError" class="extension-state is-error"><PhWarningCircle :size="17" />{{ tasksError }}</div>
-        <article v-for="task in tasks" :key="task.id" class="background-task-row" :class="`is-${task.status}`">
-          <span class="task-status-dot" />
-          <div>
-            <header><strong>{{ task.description || task.kind }}</strong><em>{{ task.status }}</em></header>
-            <code v-if="task.command">{{ task.command }}</code>
-            <p v-if="task.outputPreview">{{ task.outputPreview }}</p>
-          </div>
-          <button
-            v-if="task.status === 'running'"
-            type="button"
-            aria-label="取消后台任务"
-            :disabled="operationalActionPending !== null"
-            @click="emit('cancelTask', task.id)"
-          ><PhX :size="14" /></button>
-        </article>
-        <p v-if="!tasksPending && !tasksError && tasks.length === 0" class="plan-empty">当前 Session 没有后台任务。</p>
-      </section>
-    </div>
-
-    <div v-else-if="activeTab === 'files'" class="extension-content files-view">
+    <div v-if="activeTab === 'files'" class="extension-content files-view">
       <header class="files-toolbar">
         <strong><PhFolderOpen :size="18" />{{ workspaceName }}</strong>
         <button

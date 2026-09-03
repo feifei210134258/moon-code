@@ -15,7 +15,7 @@ export interface ProjectItem {
   sessions: SessionItem[]
 }
 
-export type ExtensionTab = 'changes' | 'files' | 'browser'
+export type ExtensionTab = 'files' | 'browser'
 
 /**
  * 右侧栏文件树的渲染层状态。目录按需懒加载（每个目录一次官方 fs:list），
@@ -87,4 +87,6 @@ export interface ChatTurn {
   pending?: boolean
   /** 该条用户消息激活的 skill 显示名（0.37.2+，按 transcription 标注）。 */
   skillNames?: string[]
+  /** 该回合 AI 写入/修改过的文件（tool part 的 writtenPath 聚合，去重保序）；回合末更改摘要卡数据源。 */
+  writtenFiles?: string[]
 }

@@ -4,125 +4,83 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import AgentRoster from '../../src/renderer/src/components/AgentRoster.vue'
 
-describe('AgentRoster', () => {
-  it('reveals name, task and status inline, with track button as the only entry to details', async () => {
-    const wrapper = mount(AgentRoster, {
-      props: {
-        agents: [
-          {
-            id: 'main', role: 'main', name: 'Kimi', description: 'Main', status: 'working',
-            subagentType: null, parentAgentId: null, parentToolCallId: null, swarmIndex: null, towerMode: null,
-              runInBackground: false, model: null, thinkingEffort: null,
-            createdAt: null, startedAt: null, completedAt: null,
-            suspendedReason: null, outputPreview: null, usage: null
-          },
-          {
-            id: 'agent-1', role: 'subagent', name: 'explore', description: 'Inspect auth', status: 'completed',
-            subagentType: 'explore', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0, towerMode: null,
-              runInBackground: false, model: 'kimi-for-coding', thinkingEffort: 'high',
-            createdAt: null, startedAt: null, completedAt: null,
-            suspendedReason: null, outputPreview: 'No credential leak found',
-            usage: { inputTokens: 100, outputTokens: 25, cacheReadTokens: 20, cacheCreationTokens: 5, contextTokens: 256 }
-          },
-          {
-            id: 'agent-2', role: 'subagent', name: 'coder', description: 'Fix the bug', status: 'working',
-            subagentType: 'coder', parentAgentId: 'main', parentToolCallId: 'tool-2', swarmIndex: 1, towerMode: null,
-              runInBackground: false, model: null, thinkingEffort: null,
-            createdAt: null, startedAt: null, completedAt: null,
-            suspendedReason: null, outputPreview: 'Patching store.ts', usage: null
-          }
-        ]
-      }
-    })
+const subagent = {
+  id: 'agent-1', role: 'subagent' as const, name: 'explore', description: 'Inspect', status: 'working' as const,
+  subagentType: 'explore', parentAgentId: null, parentToolCallId: null, swarmIndex: null, towerMode: null,
+  runInBackground: false, model: null, thinkingEffort: null,
+  createdAt: null, startedAt: null, completedAt: null, suspendedReason: null, outputPreview: null, usage: null
+}
 
+const todoList = {
+  todoId: 'todo-1',
+  items: [{ title: '调研', status: 'done' as const }, { title: '实现', status: 'in_progress' as const }],
+  updatedAt: null
+}
+
+const task = {
+  id: 'task-1', sessionId: 's1', kind: 'bash' as const, description: 'build', status: 'running' as const,
+  command: 'pnpm build', createdAt: null, startedAt: null, completedAt: null, outputPreview: null, outputBytes: null
+}
+
+describe('AgentRoster 会话状态条带', () => {
+  it('按 计划 → Agents → 任务 的顺序渲染三个独立芯片', () => {
+    const wrapper = mount(AgentRoster, {
+      props: { agents: [subagent], todos: [todoList], tasks: [task] }
+    })
+    const pills = wrapper.findAll('.roster-pill')
+    expect(pills).toHaveLength(3)
+    expect(pills[0]!.text()).toContain('计划')
+    expect(pills[0]!.text()).toContain('1/2')
+    expect(pills[1]!.text()).toContain('Agents')
+    expect(pills[1]!.text()).toContain('1 个')
+    expect(pills[2]!.text()).toContain('任务')
+    expect(pills[2]!.text()).toContain('1 运行中')
+    /* 纯条带：不再有展开列表与树形渲染 */
     expect(wrapper.find('.agent-roster-list').exists()).toBe(false)
-    expect(wrapper.get('.agent-roster-summary').text()).toContain('2 个')
-    await wrapper.get('.agent-roster-summary').trigger('click')
-
-    const list = wrapper.get('.agent-roster-list')
-    // 名称、任务、状态仍直接渲染
-    expect(list.text()).toContain('explore')
-    expect(list.text()).toContain('Inspect auth')
-    expect(list.text()).toContain('已完成')
-    expect(list.text()).toContain('coder')
-    expect(list.text()).toContain('Fix the bug')
-    expect(list.text()).toContain('工作中')
-    expect(list.text()).toContain('150 tokens')
-    // 模型与思考档位在展开行内展示
-    expect(list.text()).toContain('kimi-for-coding · high')
-    // 任务报告不再内联渲染
-    expect(list.text()).not.toContain('No credential leak found')
-    expect(list.text()).not.toContain('Patching store.ts')
-
-    // 每行有“追踪”按钮，行本身不可点击打开
-    const rows = wrapper.findAll('.agent-row')
-    expect(rows).toHaveLength(2)
-    rows.forEach((row) => expect(row.find('.agent-track-button').exists()).toBe(true))
-    const firstRow = rows[0]!
-    const firstButton = firstRow.get('.agent-track-button')
-    expect(firstButton.attributes('aria-label')).toBe('追踪 explore')
-    await wrapper.get('.agent-row').trigger('click')
-    expect(wrapper.emitted('open')).toBeUndefined()
-
-    // 点击“追踪”按钮打开详情，参数为该 agent
-    await firstButton.trigger('click')
-    expect(wrapper.emitted('open')?.[0]?.[0]).toEqual(expect.objectContaining({ id: 'agent-1' }))
-    await rows[1]!.get('.agent-track-button').trigger('click')
-    expect(wrapper.emitted('open')?.[1]?.[0]).toEqual(expect.objectContaining({ id: 'agent-2' }))
+    expect(wrapper.text()).not.toContain('explore')
   })
 
-  it('groups subagents whose parentAgentId matches another subagent under it, indenting each level', async () => {
-    const base = {
-      role: 'subagent' as const, description: 'task', status: 'working' as const,
-      subagentType: 'explore', runInBackground: false, model: null, thinkingEffort: null,
-      createdAt: null, startedAt: null, completedAt: null,
-      suspendedReason: null, outputPreview: null, usage: null
-    }
+  it('每个胶囊点击发出 select 事件（含重复点击，开关由父层决定）', async () => {
     const wrapper = mount(AgentRoster, {
-      props: {
-        agents: [
-          { ...base, id: 'agent-1', name: 'root-1', parentAgentId: 'main', parentToolCallId: 'tool-1', swarmIndex: 0, towerMode: null },
-          { ...base, id: 'agent-2', name: 'child-1', parentAgentId: 'agent-1', parentToolCallId: 'tool-2', swarmIndex: 0, towerMode: null },
-          { ...base, id: 'agent-3', name: 'grandchild', parentAgentId: 'agent-2', parentToolCallId: 'tool-3', swarmIndex: 0, towerMode: null },
-          { ...base, id: 'agent-4', name: 'orphan', parentAgentId: null, parentToolCallId: null, swarmIndex: 1, towerMode: null }
-        ]
-      }
+      props: { agents: [subagent], todos: [todoList], tasks: [task] }
     })
-    await wrapper.get('.agent-roster-summary').trigger('click')
-
-    // 前序遍历：父节点先于子节点，嵌套层级通过 data-depth 表达
-    const rows = wrapper.findAll('.agent-row').map((row) => ({
-      id: row.find('strong').text(),
-      depth: row.attributes('data-depth'),
-      nested: row.classes().includes('is-nested')
-    }))
-    expect(rows).toEqual([
-      { id: 'root-1', depth: '0', nested: false },
-      { id: 'child-1', depth: '1', nested: true },
-      { id: 'grandchild', depth: '2', nested: true },
-      { id: 'orphan', depth: '0', nested: false }
-    ])
+    const pills = wrapper.findAll('.roster-pill')
+    await pills[0]!.trigger('click')
+    await pills[0]!.trigger('click')
+    await pills[1]!.trigger('click')
+    await pills[2]!.trigger('click')
+    expect(wrapper.emitted('select')).toEqual([['plan'], ['plan'], ['agents'], ['tasks']])
   })
 
-  it('falls back to the main-agent level when parentAgentId does not resolve to a roster node', async () => {
-    const base = {
-      role: 'subagent' as const, description: 'task', status: 'completed' as const,
-      subagentType: 'verify', runInBackground: false, model: null, thinkingEffort: null,
-      createdAt: null, startedAt: null, completedAt: null,
-      suspendedReason: null, outputPreview: null, usage: null
-    }
+  it('激活态 class 随 activeSegment 变化', async () => {
     const wrapper = mount(AgentRoster, {
-      props: {
-        agents: [
-          { ...base, id: 'agent-1', name: 'self-ref', parentAgentId: 'agent-1', parentToolCallId: 'tool-1', swarmIndex: null, towerMode: null },
-          { ...base, id: 'agent-2', name: 'missing-parent', parentAgentId: 'no-such-agent', parentToolCallId: 'tool-2', swarmIndex: null, towerMode: null }
-        ]
-      }
+      props: { agents: [subagent], todos: [todoList], tasks: [task], activeSegment: 'plan' }
     })
-    await wrapper.get('.agent-roster-summary').trigger('click')
-    const rows = wrapper.findAll('.agent-row')
-    expect(rows).toHaveLength(2)
-    // 自指向 / 未知父 ID 都回退到顶层，不进入嵌套
-    rows.forEach((row) => expect(row.attributes('data-depth')).toBe('0'))
+    const pills = wrapper.findAll('.roster-pill')
+    expect(pills[0]!.classes()).toContain('is-active')
+    expect(pills[1]!.classes()).not.toContain('is-active')
+    await wrapper.setProps({ activeSegment: 'agents' })
+    expect(wrapper.findAll('.roster-pill')[0]!.classes()).not.toContain('is-active')
+    expect(wrapper.findAll('.roster-pill')[1]!.classes()).toContain('is-active')
+  })
+
+  it('三类都无内容时整个条带隐藏；各胶囊独立按空态隐藏', () => {
+    const empty = mount(AgentRoster, { props: { agents: [], todos: [], tasks: [] } })
+    expect(empty.find('.roster-strip').exists()).toBe(false)
+
+    const onlyTodos = mount(AgentRoster, {
+      props: { agents: [], todos: [{ ...todoList, items: [{ title: 'a', status: 'done' }] }], tasks: [] }
+    })
+    expect(onlyTodos.findAll('.roster-pill')).toHaveLength(1)
+    expect(onlyTodos.text()).toContain('1/1')
+
+    const onlyAgents = mount(AgentRoster, { props: { agents: [subagent], todos: [], tasks: [] } })
+    expect(onlyAgents.findAll('.roster-pill')).toHaveLength(1)
+    expect(onlyAgents.text()).toContain('Agents')
+
+    const onlyTasks = mount(AgentRoster, { props: { agents: [], todos: [], tasks: [{ ...task, status: 'completed' }] } })
+    expect(onlyTasks.findAll('.roster-pill')).toHaveLength(1)
+    expect(onlyTasks.text()).toContain('任务')
+    expect(onlyTasks.text()).not.toContain('运行中')
   })
 })

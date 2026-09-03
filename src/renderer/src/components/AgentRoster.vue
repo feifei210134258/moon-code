@@ -1,64 +1,22 @@
 <script setup lang="ts">
-import { PhCaretDown, PhCaretRight, PhCirclesThreePlus, PhListMagnifyingGlass } from '@phosphor-icons/vue'
-import { computed, ref } from 'vue'
-import type { SessionAgentView } from '@shared/contracts'
-import { rendererLocale } from '../i18n/rendererLocale'
+import { PhCirclesThreePlus, PhClipboardText, PhTerminalWindow } from '@phosphor-icons/vue'
+import { computed } from 'vue'
+import type { KimiBackgroundTask, KimiTodoList, SessionAgentView } from '@shared/contracts'
 
-const props = defineProps<{ agents: SessionAgentView[] }>()
-const emit = defineEmits<{ open: [agent: SessionAgentView] }>()
-const expanded = ref(false)
-
-// 子 Agent 树：parentAgentId 能在 roster 中命中时归到对应父节点下形成层级，
-// 其余（parentAgentId 缺失、为 null 或指向主 Agent，如快照恢复的 task）作为顶层挂主 Agent 下。
-interface AgentTreeNode {
-  agent: SessionAgentView
-  children: AgentTreeNode[]
-}
-
-interface AgentTreeRow {
-  agent: SessionAgentView
-  depth: number
-}
-
-function sortSiblings(nodes: AgentTreeNode[]): void {
-  nodes.sort((left, right) =>
-    (left.agent.swarmIndex ?? Number.MAX_SAFE_INTEGER) - (right.agent.swarmIndex ?? Number.MAX_SAFE_INTEGER)
-  )
-}
-
-function buildAgentTree(agents: SessionAgentView[]): AgentTreeNode[] {
-  const subagents = agents.filter((agent) => agent.role === 'subagent')
-  const nodes = new Map(subagents.map((agent) => [agent.id, { agent, children: [] } as AgentTreeNode]))
-  const roots: AgentTreeNode[] = []
-  for (const agent of subagents) {
-    const node = nodes.get(agent.id)!
-    const parentId = agent.parentAgentId !== null && agent.parentAgentId !== agent.id && nodes.has(agent.parentAgentId)
-      ? agent.parentAgentId
-      : null
-    if (parentId === null) roots.push(node)
-    else nodes.get(parentId)!.children.push(node)
-  }
-  sortSiblings(roots)
-  for (const node of nodes.values()) sortSiblings(node.children)
-  return roots
-}
-
-const treeRows = computed<AgentTreeRow[]>(() => {
-  // 前序遍历压平：父节点始终先于子节点渲染；visited 兜底防 parentAgentId 成环。
-  const rows: AgentTreeRow[] = []
-  const visited = new Set<string>()
-  const walk = (nodes: AgentTreeNode[], depth: number): void => {
-    for (const node of nodes) {
-      const id = node.agent.id
-      if (visited.has(id)) continue
-      visited.add(id)
-      rows.push({ agent: node.agent, depth })
-      walk(node.children, depth + 1)
-    }
-  }
-  walk(buildAgentTree(props.agents), 0)
-  return rows
+/** 底部会话状态条带：计划 / Agents / 任务 三个独立毛玻璃芯片。
+    芯片即面板切换器——打开中的面板对应芯片为激活态；名册等内容渲染在向上展开的面板里。 */
+const props = withDefaults(defineProps<{
+  agents: SessionAgentView[]
+  todos?: KimiTodoList[]
+  tasks?: KimiBackgroundTask[]
+  activeSegment?: 'plan' | 'agents' | 'tasks' | null
+}>(), {
+  todos: () => [],
+  tasks: () => [],
+  activeSegment: null
 })
+
+const emit = defineEmits<{ select: [segment: 'plan' | 'agents' | 'tasks'] }>()
 
 const subagentCount = computed(() => props.agents.filter((agent) => agent.role === 'subagent').length)
 const activeCount = computed(() => props.agents.filter((agent) =>
@@ -66,72 +24,57 @@ const activeCount = computed(() => props.agents.filter((agent) =>
   (agent.status === 'queued' || agent.status === 'working' || agent.status === 'suspended')
 ).length)
 
-function statusLabel(status: SessionAgentView['status']): string {
-  if (status === 'queued') return '排队中'
-  if (status === 'working') return '工作中'
-  if (status === 'suspended') return '已挂起'
-  if (status === 'completed') return '已完成'
-  if (status === 'failed') return '失败'
-  if (status === 'cancelled') return '已取消'
-  return '空闲'
-}
+/* 计划胶囊：最近一份 todo 清单；无清单或清单为空时整个胶囊隐藏。 */
+const activeTodo = computed(() => props.todos.at(-1) ?? null)
+const todoDone = computed(() => activeTodo.value?.items.filter((item) => item.status === 'done').length ?? 0)
+const todoTotal = computed(() => activeTodo.value?.items.length ?? 0)
+const todoProgress = computed(() => todoTotal.value === 0 ? 0 : Math.round((todoDone.value / todoTotal.value) * 100))
 
-function usageLabel(agent: SessionAgentView): string | null {
-  if (agent.usage === null) return null
-  const total = agent.usage.inputTokens
-    + agent.usage.outputTokens
-    + agent.usage.cacheReadTokens
-    + agent.usage.cacheCreationTokens
-  return total > 0 ? `${total.toLocaleString(rendererLocale())} tokens` : null
-}
+/* 任务胶囊：后台任务总数 + 运行中计数（运行中带呼吸点）；无任务时隐藏。 */
+const runningTaskCount = computed(() => props.tasks.filter((task) => task.status === 'running').length)
+const hasAnyContent = computed(() => todoTotal.value > 0 || subagentCount.value > 0 || props.tasks.length > 0)
 </script>
 
 <template>
-  <section v-if="subagentCount > 0" class="agent-roster" aria-label="Agent roster">
+  <section v-if="hasAnyContent" class="roster-strip" aria-label="会话状态">
     <button
-      class="agent-roster-summary"
+      v-if="todoTotal > 0"
+      class="roster-pill"
+      :class="{ 'is-active': activeSegment === 'plan' }"
       type="button"
-      :aria-expanded="expanded"
-      @click="expanded = !expanded"
+      :title="`计划进度：${todoDone}/${todoTotal}`"
+      @click="emit('select', 'plan')"
     >
-      <component :is="expanded ? PhCaretDown : PhCaretRight" :size="13" />
+      <PhClipboardText :size="15" />
+      <span class="roster-pill-label">计划</span>
+      <strong>{{ todoDone }}/{{ todoTotal }}</strong>
+      <span class="roster-pill-progress" aria-hidden="true"><i :style="{ width: `${todoProgress}%` }" /></span>
+    </button>
+    <button
+      v-if="subagentCount > 0"
+      class="roster-pill"
+      :class="{ 'is-active': activeSegment === 'agents' }"
+      type="button"
+      @click="emit('select', 'agents')"
+    >
       <PhCirclesThreePlus :size="16" />
       <strong>Agents</strong>
       <span>{{ subagentCount }} 个<template v-if="activeCount > 0"> · {{ activeCount }} 个进行中</template></span>
     </button>
-    <div v-if="expanded" class="agent-roster-list">
-      <article
-        v-for="row in treeRows"
-        :key="row.agent.id"
-        class="agent-row"
-        :class="{ 'is-nested': row.depth > 0 }"
-        :data-depth="row.depth"
-        :style="{ '--agent-depth': row.depth }"
-      >
-        <header>
-          <span class="agent-state" :class="`is-${row.agent.status}`" />
-          <strong>{{ row.agent.name }}</strong>
-          <span class="agent-status-label">{{ statusLabel(row.agent.status) }}</span>
-        </header>
-        <p>{{ row.agent.description }}</p>
-        <footer>
-          <span v-if="row.agent.towerMode === true" class="agent-tower-badge">Tower 协调者</span>
-          <span v-if="row.agent.subagentType">{{ row.agent.subagentType }}</span>
-          <span v-if="row.agent.swarmIndex !== null">#{{ row.agent.swarmIndex + 1 }}</span>
-          <span v-if="row.agent.model">{{ row.agent.model }}<template v-if="row.agent.thinkingEffort"> · {{ row.agent.thinkingEffort }}</template></span>
-          <span v-if="usageLabel(row.agent)">{{ usageLabel(row.agent) }}</span>
-          <span v-if="row.agent.suspendedReason">{{ row.agent.suspendedReason }}</span>
-          <button
-            type="button"
-            class="agent-track-button"
-            :aria-label="`追踪 ${row.agent.name}`"
-            @click.stop="emit('open', row.agent)"
-          >
-            <PhListMagnifyingGlass :size="12" />
-            追踪
-          </button>
-        </footer>
-      </article>
-    </div>
+    <button
+      v-if="tasks.length > 0"
+      class="roster-pill"
+      :class="{ 'is-active': activeSegment === 'tasks' }"
+      type="button"
+      title="查看后台任务"
+      @click="emit('select', 'tasks')"
+    >
+      <PhTerminalWindow :size="15" />
+      <span class="roster-pill-label">任务</span>
+      <strong>{{ tasks.length }}</strong>
+      <span v-if="runningTaskCount > 0" class="roster-pill-sub">
+        <i class="roster-pill-dot" aria-hidden="true" />{{ runningTaskCount }} 运行中
+      </span>
+    </button>
   </section>
 </template>

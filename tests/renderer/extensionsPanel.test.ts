@@ -7,7 +7,7 @@ import ExtensionsPanel from '../../src/renderer/src/components/ExtensionsPanel.v
 
 const baseProps = {
   width: 382,
-  activeTab: 'changes' as const,
+  activeTab: 'files' as const,
       workspaceName: 'moon-code',
   fileTree: {
     root: '.',
@@ -35,13 +35,6 @@ const baseProps = {
     path: 'README.md', content: '# Kimi Agent', encoding: 'utf-8' as const, size: 12,
     truncated: false, mime: 'text/markdown', languageId: 'markdown', lineCount: 1, isBinary: false
   },
-  gitStatus: {
-    available: true,
-    branch: 'main', ahead: 0, behind: 0, entries: { 'src/app.ts': 'modified' as const },
-    additions: 2, deletions: 1, pullRequest: null
-  },
-  gitStatusPending: false,
-  gitStatusError: null,
   browserState: {
     url: '', title: '', loading: false, canGoBack: false, canGoForward: false, visible: false,
     viewport: { mode: 'auto' as const, width: null, height: null, deviceScaleFactor: 1 },
@@ -53,7 +46,7 @@ const baseProps = {
 
 describe('ExtensionsPanel', () => {
   it('keeps only refresh in the panel header because the top bar owns expand and collapse', async () => {
-    const wrapper = mount(ExtensionsPanel, { props: baseProps })
+    const wrapper = mount(ExtensionsPanel, { props: { ...baseProps, activeTab: 'files' } })
     const actions = wrapper.findAll('.extensions-header-actions button')
 
     expect(actions).toHaveLength(1)
@@ -63,93 +56,13 @@ describe('ExtensionsPanel', () => {
     expect(wrapper.emitted('refresh')).toEqual([[]])
   })
 
-  it('renders authoritative Git status as a non-interactive scrollable file list', () => {
-    const wrapper = mount(ExtensionsPanel, { props: baseProps })
-
-    expect(wrapper.get('.git-summary').text()).toContain('main')
-    expect(wrapper.find('.changed-files-list').exists()).toBe(true)
-    expect(wrapper.get('.changed-file-row').element.tagName).toBe('DIV')
-    expect(wrapper.find('.diff-panel').exists()).toBe(false)
-    expect(wrapper.emitted('selectDiff')).toBeUndefined()
-  })
-
-  it('uses neutral guidance for a clean Workspace and a missing Git repository', async () => {
-    const wrapper = mount(ExtensionsPanel, {
-      props: {
-        ...baseProps,
-        gitStatus: { ...baseProps.gitStatus, entries: {}, additions: 0, deletions: 0 }
-      }
-    })
-
-    expect(wrapper.get('.changed-files-panel').text()).toContain('工作区没有未提交更改。')
-    expect(wrapper.find('.changed-files-panel .is-error').exists()).toBe(false)
-
-    await wrapper.setProps({
-      gitStatus: {
-        available: false, branch: '', ahead: 0, behind: 0, entries: {},
-        additions: 0, deletions: 0, pullRequest: null
-      }
-    })
-    expect(wrapper.get('.changed-files-panel').text()).toContain('当前工作区未检测到可用的 Git 仓库。')
-    expect(wrapper.find('.changed-files-panel .is-error').exists()).toBe(false)
-    expect(wrapper.find('.git-summary').exists()).toBe(false)
-    wrapper.unmount()
-  })
-
-  it('keeps unexpected Git failures in the real error state', () => {
-    const wrapper = mount(ExtensionsPanel, {
-      props: { ...baseProps, gitStatus: null, gitStatusError: '无法读取 Git 状态' }
-    })
-    expect(wrapper.get('.changed-files-panel .extension-state.is-error').text()).toContain('无法读取 Git 状态')
-    wrapper.unmount()
-  })
-
-  it('keeps the plan expanded without exposing the unfinished Diff viewer', () => {
-    const wrapper = mount(ExtensionsPanel, {
-      props: baseProps
-    })
-
-    expect(wrapper.find('.diff-panel').exists()).toBe(false)
-    expect(wrapper.get('.todo-panel').text()).toContain('计划')
-    expect(wrapper.findAll('.changes-view > section')).toHaveLength(3)
-    expect(wrapper.find('.changed-files-panel').exists()).toBe(true)
-    expect(wrapper.find('.plan-panel').exists()).toBe(true)
-  })
-
-  it('replaces the Plan placeholder with authoritative cancellable Kimi Tasks', async () => {
-    const wrapper = mount(ExtensionsPanel, {
-      props: {
-        ...baseProps,
-        tasks: [{
-          id: 'task-1', sessionId: 'session-1', kind: 'bash', description: '运行测试',
-          status: 'running', command: 'pnpm test', createdAt: null, startedAt: null,
-          completedAt: null, outputPreview: '42 tests passed', outputBytes: 128
-        }]
-      }
-    })
-    expect(wrapper.get('.background-task-row').text()).toContain('运行测试')
-    expect(wrapper.text()).not.toContain('适配切片接入')
-    await wrapper.get('.background-task-row > button').trigger('click')
-    expect(wrapper.emitted('cancelTask')).toEqual([['task-1']])
-  })
-
-  it('renders the latest authoritative Kimi Todo list under Changes', () => {
-    const wrapper = mount(ExtensionsPanel, {
-      props: {
-        ...baseProps,
-        todos: [{
-          todoId: 'todo-1',
-          items: [{ title: '读取 Kimi 状态', status: 'done' as const }, { title: '呈现计划', status: 'in_progress' as const }],
-          updatedAt: '2026-07-24T00:00:00.000Z'
-        }]
-      }
-    })
-
-    expect(wrapper.get('.todo-panel header').text()).toContain('1/2')
-    expect(wrapper.get('.todo-panel').text()).toContain('读取 Kimi 状态')
-    expect(wrapper.get('.todo-panel').text()).toContain('进行中')
-    expect(wrapper.find('.todo-panel li.is-done').exists()).toBe(true)
-    expect(wrapper.find('.todo-panel li.is-in_progress').exists()).toBe(true)
+  it('renders exactly two tabs: 项目文件 and 浏览器（更改视图已迁移到对话区）', async () => {
+    const wrapper = mount(ExtensionsPanel, { props: { ...baseProps, activeTab: 'files' } })
+    const tabs = wrapper.findAll('.extension-tabs button')
+    expect(tabs.map((tab) => tab.text())).toEqual(['项目文件', '浏览器'])
+    expect(wrapper.find('.changes-view').exists()).toBe(false)
+    await tabs[1]!.trigger('click')
+    expect(wrapper.emitted('selectTab')).toEqual([['browser']])
   })
 
   it('routes directories and files through typed entry events without burying a preview below the list', async () => {

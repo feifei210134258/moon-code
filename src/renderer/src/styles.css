@@ -1941,25 +1941,40 @@ select:focus-visible {
 .side-chat-composer button:disabled { opacity: 0.42; cursor: default; }
 .side-chat-error { margin: 0; padding: 7px 10px; border-top: 1px solid var(--red-soft); color: var(--red); background: rgba(255, 245, 245, 0.84); font-size: var(--type-micro-size); }
 
+/* 会话状态 dock：胶囊条带 + 向上滑出的面板共同锚定于此，
+   面板相对条带定位，绝不遮挡胶囊本身。 */
+.status-dock {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 0 0 8px;
+}
+
+/* 面板从胶囊正上方 10px 处向上展开（胶囊固定原位、始终可点）。 */
 .agent-detail-panel {
   position: absolute;
   z-index: 33;
-  top: 46px;
-  right: 18px;
-  bottom: 18px;
-  width: min(410px, calc(100% - 36px));
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 36px));
+  max-height: min(52vh, 480px);
   display: grid;
-  grid-template-rows: 40px auto minmax(0, 1fr);
+  /* header /（agent 转录的 meta 行，其他段无）/ 内容体；单内容体的段跨 2-4 行填满 */
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--card-border);
   border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.14);
 }
 .agent-detail-panel > header {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  min-height: 40px;
   padding: 0 10px 0 12px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
@@ -1967,8 +1982,26 @@ select:focus-visible {
   font-weight: 620;
 }
 .agent-detail-panel > header > span { display: inline-flex; align-items: center; gap: 6px; }
+.agent-detail-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-detail-back {
+  flex: none;
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(120, 120, 128, 0.12);
+  font-size: var(--type-micro-size);
+  cursor: pointer;
+}
+.agent-detail-back:hover { color: var(--text); background: rgba(120, 120, 128, 0.2); }
 .agent-detail-panel > header small { margin-left: auto; color: var(--muted); font-size: var(--type-micro-size); font-weight: 500; }
-.agent-detail-panel > header button {
+/* 27px 图标按钮规则只作用于关闭按钮——文字按钮（返回名册）按内容自适应宽度。 */
+.agent-detail-panel > header button.agent-detail-close {
   width: 27px;
   height: 27px;
   display: inline-flex;
@@ -1980,7 +2013,116 @@ select:focus-visible {
   background: transparent;
   cursor: pointer;
 }
-.agent-detail-panel > header button:hover { background: var(--accent-soft); }
+.agent-detail-panel > header button.agent-detail-close:hover { background: var(--accent-soft); }
+
+/* agents 段：树形名册容器（复用全局 .agent-row 系列行样式，随 --agent-depth 缩进）。 */
+.agent-detail-roster { grid-row: 2 / 4; min-height: 0; overflow: auto; }
+
+/* 计划段：todo 清单（复用全局 .todo-check / .todo-status-dot 点标）。
+   抽屉 grid 行为 40px auto 1fr：计划/任务段只有单个内容元素，跨 2-4 行以撑满剩余高度。 */
+.agent-detail-todos { grid-row: 2 / 4; min-height: 0; overflow: auto; padding: 10px 12px; }
+
+.agent-detail-todos ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 3px;
+}
+
+.agent-detail-todos li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: var(--type-caption-size);
+  line-height: 1.45;
+}
+
+.agent-detail-todos li.is-in_progress { background: var(--accent-soft); }
+
+.agent-detail-todos li em {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(120, 120, 128, 0.12);
+  font-size: var(--type-micro-size);
+  font-style: normal;
+}
+
+.agent-detail-todos li.is-in_progress em { color: var(--accent); background: var(--accent-soft); }
+.agent-detail-todos li.is-in_progress .todo-status-dot { background: var(--accent); }
+.agent-detail-todos li.is-done > span { color: var(--muted); text-decoration: line-through; }
+
+/* 任务段：后台任务行（复用全局 .task-status-dot 状态点）。 */
+.agent-detail-tasks { grid-row: 2 / 4; min-height: 0; overflow: auto; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+
+.detail-task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.detail-task-row > div { min-width: 0; flex: 1; display: grid; gap: 4px; }
+
+.detail-task-row header { display: flex; align-items: center; gap: 8px; }
+
+.detail-task-row header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--type-caption-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-task-row header em { margin-left: auto; color: var(--muted); font-size: var(--type-micro-size); font-style: normal; }
+
+.detail-task-row code {
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.045);
+  color: var(--muted);
+  font-size: var(--type-micro-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-task-row p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--type-micro-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-task-row > button {
+  flex: none;
+  align-self: center;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--red);
+  background: var(--red-soft);
+  font-size: var(--type-micro-size);
+  cursor: pointer;
+}
+
+.detail-task-row > button:hover { filter: brightness(0.96); }
+
+/* 状态点着色与旧更改视图的后台任务行同语义：运行中=accent，完成/失败/取消分色。 */
+.detail-task-row .task-status-dot { margin-top: 5px; }
+.detail-task-row.is-completed .task-status-dot { background: var(--green); }
+.detail-task-row.is-failed .task-status-dot { background: var(--red); }
+.detail-task-row.is-cancelled .task-status-dot { background: var(--faint); }
+
 .agent-detail-meta { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 11px; border-bottom: 1px solid var(--border); }
 .agent-detail-meta span { padding: 3px 6px; border-radius: 5px; color: var(--muted); background: var(--accent-soft); font-size: var(--type-micro-size); }
 .agent-detail-messages { display: grid; align-content: start; gap: 8px; overflow: auto; padding: 12px; }
@@ -2086,11 +2228,8 @@ select:focus-visible {
 .prompt-queue-row {
   display: flex;
   align-items: center;
-}
-
-.goal-strip-actions button,
-.prompt-queue-row button,
-.background-task-row > button {
+}.goal-strip-actions button,
+.prompt-queue-row button {
   width: 27px;
   height: 27px;
   display: inline-flex;
@@ -2101,15 +2240,9 @@ select:focus-visible {
   color: var(--muted);
   background: transparent;
   cursor: pointer;
-}
-
-.goal-strip-actions button:hover,
-.prompt-queue-row button:hover,
-.background-task-row > button:hover { background: var(--accent-soft); }
-
-.goal-strip-actions button:disabled,
-.prompt-queue-row button:disabled,
-.background-task-row > button:disabled { opacity: 0.38; cursor: default; }
+}.goal-strip-actions button:hover,
+.prompt-queue-row button:hover { background: var(--accent-soft); }.goal-strip-actions button:disabled,
+.prompt-queue-row button:disabled { opacity: 0.38; cursor: default; }
 
 .terminal-drawer {
   min-width: 0;
@@ -3187,14 +3320,6 @@ select:focus-visible {
 
 .changed-summary footer svg {
   color: var(--green);
-}
-
-.diff-add {
-  color: var(--green);
-}
-
-.diff-remove {
-  color: var(--red);
 }
 
 .composer-wrap {
@@ -4917,50 +5042,123 @@ select:focus-visible {
   font-size: var(--type-micro-size);
   font-style: normal;
 }
-.agent-roster {
-  width: calc(64% - 18px);
-  min-width: 416px;
-  max-width: 518px;
-  margin: 0 auto 8px;
+/* 会话状态条带：三个独立毛玻璃芯片，靠芯片形块与间距分隔（无分割线、无外层容器）。 */
+.roster-strip {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: calc(100% - 36px);
+  margin: 0 auto;
   overflow: hidden;
   border: 1px solid var(--card-border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
-.agent-roster-summary {
-  width: 100%;
-  min-height: 38px;
-  display: flex;
+/* 单一分段容器内的胶囊：胶囊间用弱权重细线分隔（仅 1px、低透明度）。 */
+.roster-pill {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 11px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 14px;
   border: 0;
+  border-radius: 9px;
   color: var(--text);
   background: transparent;
   cursor: pointer;
-  text-align: left;
-}
-
-.agent-roster-summary:hover {
-  background: var(--accent-soft);
-}
-
-.agent-roster-summary strong {
   font-size: var(--type-caption-size);
+  line-height: 1;
+  transition: background 0.16s ease;
 }
 
-.agent-roster-summary span {
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
+/* 胶囊间弱分隔：伪元素短直线（不能用 border-left——会跟随胶囊圆角变成弧线）。 */
+.roster-pill + .roster-pill::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 16px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.roster-pill:hover {
+  background: rgba(120, 120, 128, 0.1);
+}
+
+.roster-pill:active {
+  background: rgba(120, 120, 128, 0.16);
+}
+
+/* 激活态：对应面板正打开的胶囊——实底白分段高亮，兼作面板与胶囊的视觉锚接。 */
+.roster-pill.is-active {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05), 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.roster-pill strong {
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+.roster-pill-label {
+  color: var(--muted);
+}
+
+.roster-pill > span:not(.roster-pill-progress) {
   color: var(--muted);
   font-size: var(--type-micro-size);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* 计划胶囊的迷你进度条：4px 圆角轨道 + accent 填充。 */
+.roster-pill-progress {
+  display: inline-flex;
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(120, 120, 128, 0.22);
+  overflow: hidden;
+}
+
+.roster-pill-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+.roster-pill-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 任务运行中的呼吸点。 */
+.roster-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: roster-pill-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes roster-pill-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .agent-roster-list {
@@ -5150,7 +5348,9 @@ body.is-panel-resizing {
 
 .extension-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* 按实际 tab 数量平分整行（曾为三个 tab 写死 3 列，导致两个 tab 时空出第三列） */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 2px;
   margin: 0 12px 7px;
   padding: 3px;
@@ -5182,42 +5382,11 @@ body.is-panel-resizing {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-/* 右栏三类事项保持为独立卡片，用半透明浅灰毛玻璃与白色面板区分。
-   卡片只靠底色和细边界分组，不叠加阴影；内部列表保持线性，避免嵌套卡片。 */
-.changes-view {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-}
-
-.changed-files-panel,
-.todo-panel,
-.plan-panel {
-  min-width: 0;
-  padding: 11px 12px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: rgba(236, 236, 236, 0.55);
-  backdrop-filter: blur(18px) saturate(1.05);
-}
-
-.changes-view .extension-state {
-  min-height: 0;
-  padding: 8px 0 2px;
-  justify-content: flex-start;
-  text-align: left;
-}
-
 .diff-panel {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 11px;
   background: #ffffff;
-}
-
-.changed-files-panel {
-  display: flex;
-  flex-direction: column;
 }
 
 .changed-files-list {
@@ -5230,65 +5399,8 @@ body.is-panel-resizing {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-.changed-files-panel h2,
-.todo-panel h2,
-.plan-panel h2 {
-  margin: 0;
-  color: var(--text);
-  font-size: var(--type-ui-small-size);
-  font-weight: 650;
-  letter-spacing: 0.01em;
-}
-
-.changed-files-panel h2 {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 24px;
-  margin-bottom: 2px;
-}
-
-.git-summary {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-  font-weight: 500;
-  letter-spacing: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.changed-file-row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  gap: 5px;
-  min-height: 34px;
-  align-items: center;
-  padding: 0 1px;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  font-size: var(--type-caption-size);
-}
-
-.changed-file-row + .changed-file-row {
-  border-top: 1px solid var(--border);
-}
-
 .file-row.is-active {
   background: var(--accent-soft);
-}
-
-.changed-file-row > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.changed-file-row strong {
-  font-weight: 560;
 }
 
 .diff-panel {
@@ -5380,70 +5492,6 @@ body.is-panel-resizing {
   font-size: var(--type-micro-size);
 }
 
-.todo-panel header,
-.plan-panel header {
-  min-height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0;
-}
-
-.todo-panel header > span,
-.plan-panel header > span {
-  padding: 1px 8px;
-  border-radius: 999px;
-  color: var(--muted);
-  background: rgba(0, 0, 0, 0.06);
-  font-size: var(--type-micro-size);
-  font-weight: 620;
-}
-
-.todo-panel ol,
-.plan-panel ol {
-  display: grid;
-  gap: 7px;
-  padding: 7px 0 0;
-  margin: 0;
-  list-style: none;
-}
-
-.todo-panel li,
-.plan-panel li {
-  display: grid;
-  grid-template-columns: 17px minmax(0, 1fr);
-  gap: 6px;
-  align-items: center;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-}
-
-.plan-panel li svg {
-  color: var(--green);
-}
-
-.todo-panel li {
-  grid-template-columns: 15px minmax(0, 1fr) auto;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: var(--type-caption-size);
-  line-height: 1.45;
-}
-
-.todo-panel li > span:nth-child(2) {
-  overflow: hidden;
-}
-
-.todo-panel li em {
-  padding: 1px 6px;
-  border-radius: 999px;
-  color: var(--muted);
-  background: rgba(0, 0, 0, 0.04);
-  font-size: var(--type-micro-size);
-  font-style: normal;
-  white-space: nowrap;
-}
-
 .todo-status-dot {
   justify-self: center;
   width: 7px;
@@ -5454,23 +5502,6 @@ body.is-panel-resizing {
 
 .todo-check {
   color: var(--green);
-}
-
-.todo-panel li.is-in_progress .todo-status-dot {
-  border-color: var(--accent);
-  background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
-}
-
-.todo-panel li.is-in_progress em { color: var(--accent); background: var(--accent-soft); }
-
-.todo-panel li.is-done > span:nth-child(2) { color: var(--muted); text-decoration: line-through; }
-
-.plan-empty {
-  margin: 5px 0 0;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-  line-height: 1.55;
 }
 
 /* Plan 查看面板（P2-8）：点击工作条里的 plan 条目打开，展示完整计划与审批/反馈历史。 */
@@ -5822,59 +5853,6 @@ body.is-panel-resizing {
   background: var(--accent-soft);
 }
 
-.background-task-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 8px;
-  padding: 9px 0;
-  border-top: 1px solid var(--border);
-}
-
-.background-task-row:first-of-type {
-  border-top: 0;
-  padding-top: 6px;
-}
-
-.background-task-row .task-status-dot { margin-top: 5px; }
-.background-task-row.is-completed .task-status-dot { background: var(--green); }
-.background-task-row.is-failed .task-status-dot { background: var(--red); }
-.background-task-row.is-cancelled .task-status-dot { background: var(--faint); }
-
-.background-task-row > div { min-width: 0; }
-.background-task-row > div > header {
-  min-height: 0;
-  gap: 6px;
-}
-
-.background-task-row strong {
-  overflow: hidden;
-  font-size: var(--type-caption-size);
-  font-weight: 580;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.background-task-row em {
-  flex: none;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-  font-style: normal;
-  text-transform: capitalize;
-}
-
-.background-task-row code,
-.background-task-row p {
-  display: block;
-  margin: 4px 0 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: var(--type-micro-size);
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .extension-state {
   min-height: 72px;
   display: flex;
@@ -5898,21 +5876,6 @@ body.is-panel-resizing {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-.git-modified,
-.git-renamed {
-  color: var(--amber);
-}
-
-.git-added,
-.git-untracked {
-  color: var(--green);
-}
-
-.git-deleted,
-.git-conflicted {
-  color: var(--red);
 }
 
 .files-view {
@@ -8626,4 +8589,68 @@ body.is-panel-resizing {
     --border-strong: rgba(0, 0, 0, 0.45);
     --muted: #55595f;
   }
+}
+
+/* 回合末文件更改摘要卡：AI 回合收尾处的玻璃卡（kimi web 风格）。 */
+.turn-changes {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.turn-changes-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: var(--type-caption-size);
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.turn-changes-summary:hover { background: rgba(120, 120, 128, 0.12); }
+.turn-changes-summary strong { font-weight: 600; }
+
+.turn-changes-list {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.turn-changes-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: var(--type-micro-size);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.turn-changes-file:hover { background: rgba(120, 120, 128, 0.12); }
+.turn-changes-file svg { flex: none; color: var(--muted); }
+.turn-changes-dir { min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.turn-changes-file strong { font-weight: 600; }
+.turn-changes-file em {
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(120, 120, 128, 0.12);
+  font-style: normal;
 }

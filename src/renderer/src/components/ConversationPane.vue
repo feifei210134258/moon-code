@@ -9,7 +9,9 @@ import type {
   BrowserPickedElement,
   KimiModelCatalogItem,
   KimiAgentTranscript,
+  KimiBackgroundTask,
   KimiPromptQueueState,
+  KimiTodoList,
   KimiSideChatView,
   KimiPromptControls,
   KimiPromptSkill,
@@ -39,6 +41,7 @@ import MarkdownBlock from './MarkdownBlock.vue'
 import SessionWarnings from './SessionWarnings.vue'
 import SideChatPanel from './SideChatPanel.vue'
 import AgentDetailPanel from './AgentDetailPanel.vue'
+import TurnChangesCard from './TurnChangesCard.vue'
 import DotMatrixBrand from './DotMatrixBrand.vue'
 import type { LocalPromptDraft } from '../utils/localPromptQueue'
 
@@ -62,6 +65,10 @@ const props = withDefaults(defineProps<{
   interactionPendingKey: string | null
   interactionError: string | null
   agents: SessionAgentView[]
+  todos?: KimiTodoList[]
+  tasks?: KimiBackgroundTask[]
+  tasksPending?: boolean
+  tasksError?: string | null
   skills: KimiSkill[]
   skillsPending: boolean
   skillsError: string | null
@@ -98,6 +105,10 @@ const props = withDefaults(defineProps<{
   draftActive: false,
   draftWorkspaceId: '',
   projects: () => [],
+  todos: () => [],
+  tasks: () => [],
+  tasksPending: false,
+  tasksError: null,
   sideChat: null,
   sideChatPending: false,
   sideChatError: null,
@@ -145,10 +156,30 @@ const emit = defineEmits<{
   closeSideChat: [agentId: string]
   openAgent: [agent: SessionAgentView]
   closeAgent: []
+  cancelAgentTask: [taskId: string]
   openPlan: [plan: import('@shared/contracts').PlanReview]
   undo: []
   retryFailedTurn: [text: string]
 }>()
+
+/* 底部状态面板分段：计划 / Agents / 任务。胶囊即切换器——点击已打开的胶囊关闭面板；
+   null 表示面板关闭。agents 段由胶囊直开名册，点「追踪」后在同一面板内切换到转录视图。 */
+type DetailSegment = 'agents' | 'todos' | 'tasks'
+const detailSegment = ref<DetailSegment | null>(null)
+
+/* 条带胶囊的激活段命名（plan）与面板段命名（todos）对齐。 */
+const stripActiveSegment = computed(() => (detailSegment.value === 'todos' ? 'plan' : detailSegment.value))
+
+function onStripSelect(segment: 'plan' | 'agents' | 'tasks'): void {
+  const next = segment === 'plan' ? 'todos' : segment
+  if (detailSegment.value === next) closeDetail()
+  else detailSegment.value = next
+}
+
+function closeDetail(): void {
+  detailSegment.value = null
+  emit('closeAgent')
+}
 
 /* 失败 Turn 常驻卡片与自动重试 loading 指示：全部判定逻辑在 composable 里，
    组件只负责把 store 已 hydrate 的字段喂进去并渲染结果。 */
@@ -573,7 +604,12 @@ watch(
               />
             </template>
           </div>
-          <div v-if="turn.role === 'user' && turn.id === recallableTurnId" class="turn-recall-action">
+          <TurnChangesCard
+          v-if="turn.role === 'assistant' && turn.writtenFiles !== undefined"
+          :files="turn.writtenFiles"
+          @open-file="emit('openFile', $event)"
+        />
+        <div v-if="turn.role === 'user' && turn.id === recallableTurnId" class="turn-recall-action">
             <button
               type="button"
               aria-label="撤回最后一条消息并放回输入框"
@@ -613,7 +649,14 @@ watch(
       </button>
     </div>
 
-    <AgentRoster :agents="agents" @open="emit('openAgent', $event)" />
+    <div class="status-dock">
+      <AgentRoster
+        :agents="agents"
+        :todos="todos"
+        :tasks="tasks"
+        :active-segment="stripActiveSegment"
+        @select="onStripSelect"
+      />
 
     <SideChatPanel
       :side-chat="sideChat"
@@ -624,12 +667,23 @@ watch(
     />
 
     <AgentDetailPanel
+      v-if="detailSegment !== null"
+      :segment="detailSegment ?? 'agents'"
+      :agents="agents"
       :agent="agentDetail"
       :transcript="agentTranscript"
       :pending="agentTranscriptPending"
       :error="agentTranscriptError"
-      @close="emit('closeAgent')"
-    />
+      :todos="todos"
+      :tasks="tasks"
+      :tasks-pending="tasksPending"
+      :tasks-error="tasksError"
+      @open-agent="emit('openAgent', $event)"
+      @clear-agent="emit('closeAgent')"
+      @cancel-task="emit('cancelAgentTask', $event)"
+      @close="closeDetail"
+      />
+    </div>
 
     <Teleport to="body">
       <div
