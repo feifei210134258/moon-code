@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { access, constants } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { posix } from 'node:path'
 import { promisify } from 'node:util'
 import { createRequire } from 'node:module'
 import type { RuntimeCandidate, RuntimeDiscovery } from '../../shared/contracts.js'
@@ -19,7 +19,9 @@ export function systemKimiFallbackPaths(
   platform = process.platform
 ): string[] {
   if (platform !== 'darwin') return []
-  return [join(homeDirectory, '.kimi-code', 'bin', 'kimi')]
+  // 返回的是 darwin 平台的路径，分隔符不随宿主平台变化：先归一化 home 里的
+  // 分隔符再交给 posix.join（传入 win32 形状的 home 也不会混出反斜杠）。
+  return [posix.join(homeDirectory.replace(/[\\/]+/g, '/'), '.kimi-code', 'bin', 'kimi')]
 }
 
 export async function selectSystemKimiExecutable(

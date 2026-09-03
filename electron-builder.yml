@@ -21,10 +21,24 @@ mac:
   target:
     - dmg
 win:
-  icon: resources/icon.png
+  icon: resources/icon.ico
   target:
     - nsis
-  # 本机（macOS）无 wine，跳过 rcedit：exe 沿用 Electron 默认图标、无版本元数据。
-  # 在 Windows/CI 上打包时可移除该行以获得正式图标与元数据。
-  signAndEditExecutable: false
+  # Windows 本机打包：rcedit 可直接改写 exe 资源（图标 + 版本元数据），
+  # 不需要签名证书；只有 macOS 交叉打包才需要 signAndEditExecutable: false。
+nsis:
+  # 引导式安装向导：欢迎页 → 安装范围（仅我/所有用户）→ 可修改安装目录 → 安装进度 → 完成页。
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Moon Code
+  # 安装界面语言：NSIS 按系统语言精确/主语言匹配（中文系统出中文向导），
+  # 无匹配时回退到列表第一项，故把更通用的 en_US 放在首位。
+  installerLanguages:
+    - en_US
+    - zh_CN
+  deleteAppDataOnUninstall: false
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}

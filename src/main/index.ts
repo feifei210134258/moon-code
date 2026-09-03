@@ -101,6 +101,18 @@ function createMainWindow(): BrowserWindow {
     title: 'Moon Code',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
     trafficLightPosition: { x: 18, y: 18 },
+    // Windows：原生窗口控制按钮覆盖层（最小化/最大化/关闭），配色与顶栏一致，
+    // 按钮宽度等系统行为（悬停、贴靠布局）由 Windows 原生绘制。
+    // color/height 与渲染层 styles.css 的 --window-bg、.topbar 高度手工同步。
+    ...(process.platform === 'win32'
+      ? {
+          titleBarOverlay: {
+            color: '#E0E0DF',
+            symbolColor: '#1d1d1f',
+            height: 56
+          }
+        }
+      : {}),
     backgroundColor: '#F7FAFC',
     ...(process.platform === 'darwin'
       ? { vibrancy: 'under-window', visualEffectState: 'active' as const }

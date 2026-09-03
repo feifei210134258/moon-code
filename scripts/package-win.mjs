@@ -39,13 +39,13 @@ if (!existsSync(zipPath)) {
 
 const cliPath = join(dirname(require.resolve('electron-builder/package.json')), 'cli.js')
 /* -c.npmRebuild=false：node-gyp 不支持从 macOS 交叉编译 win32 原生模块，
-   而 node-pty 各平台 prebuilds 已随包携带（N-API，无需重编），直接跳过 rebuild。 */
-const child = spawn(
-  process.execPath,
-  [
-    cliPath, '--win', '--x64', '--publish', 'never',
-    `-c.electronDist=${zipPath}`, '-c.npmRebuild=false'
-  ],
-  { stdio: 'inherit' }
-)
+   而 node-pty 各平台 prebuilds 已随包携带（N-API，无需重编），直接跳过 rebuild。
+   macOS 交叉打包没有 wine、跑不了 rcedit，需关掉 signAndEditExecutable；
+   Windows 本机打包保持默认开启，以写入正式图标与版本元数据。 */
+const args = [
+  cliPath, '--win', '--x64', '--publish', 'never',
+  `-c.electronDist=${zipPath}`, '-c.npmRebuild=false'
+]
+if (process.platform === 'darwin') args.push('-c.win.signAndEditExecutable=false')
+const child = spawn(process.execPath, args, { stdio: 'inherit' })
 child.on('exit', (code) => process.exit(code ?? 1))

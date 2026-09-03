@@ -113,6 +113,12 @@ select:focus-visible {
   user-select: none;
 }
 
+/* Windows：原生窗口控制按钮覆盖层占据右上角，顶栏改为左侧常规留白、
+   右侧为覆盖层让位（宽度取系统实测 titlebar-area，无该变量时回退 156px）。 */
+.platform-win .topbar {
+  padding: 0 calc(100vw - env(titlebar-area-width, calc(100vw - 156px)) + 12px) 0 18px;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;

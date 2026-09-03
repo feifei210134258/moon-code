@@ -218,8 +218,11 @@ describe('KimiRemoteControlBridge', () => {
 
 describe('remote control file paths', () => {
   it('resolves rc.json and the qr code inside ~/.kimi-code', () => {
-    expect(defaultKimiRcLockPath('/home/user')).toBe('/home/user/.kimi-code/server/rc.json')
-    expect(defaultKimiRcQrPath('/home/user')).toBe('/home/user/.kimi-code/rc-qrcode.png')
+    // 分隔符跟随宿主平台（Windows 为 \）：仅 Windows 归一化，POSIX 保持严格全等
+    const normalize = (value: string): string =>
+      process.platform === 'win32' ? value.split(/[\\/]+/).join('/') : value
+    expect(normalize(defaultKimiRcLockPath('/home/user'))).toBe('/home/user/.kimi-code/server/rc.json')
+    expect(normalize(defaultKimiRcQrPath('/home/user'))).toBe('/home/user/.kimi-code/rc-qrcode.png')
   })
 })
 
