@@ -19,7 +19,11 @@ describe('SecondaryModelPreferencesStore', () => {
 
     await expect(store.load()).resolves.toEqual(preference)
     expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(preference)
-    expect((await stat(path)).mode & 0o777).toBe(0o600)
+    // 私有权限位仅在有 POSIX 权限模型的平台有意义
+    // （Windows 无权限位，mode 由只读属性推导：可写文件为 0o666，断言必假）
+    if (process.platform !== 'win32') {
+      expect((await stat(path)).mode & 0o777).toBe(0o600)
+    }
   })
 
   it('falls back safely for invalid disk data and rejects incomplete configured mode', async () => {

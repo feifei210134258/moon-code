@@ -1,13 +1,32 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
+import { request as httpRequest } from 'node:http'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { WorkspacePreviewServer } from '../../src/main/browser/WorkspacePreviewServer.js'
 
 const servers: WorkspacePreviewServer[] = []
 const execFileAsync = promisify(execFile)
+
+/* Windows 创建符号链接需要特权（管理员或开发者模式），先探测再按实情执行 */
+let supportsFileSymlinks = process.platform !== 'win32'
+
+beforeAll(async () => {
+  if (process.platform !== 'win32') return
+  const dir = await mkdtemp(join(tmpdir(), 'kimi-symlink-probe-'))
+  try {
+    const target = join(dir, 'target.txt')
+    await writeFile(target, 'probe')
+    await symlink(target, join(dir, 'link.txt'), 'file')
+    supportsFileSymlinks = true
+  } catch {
+    supportsFileSymlinks = false
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()))
@@ -24,7 +43,7 @@ describe('WorkspacePreviewServer', () => {
 
     const pageUrl = await server.open(root, 'dist/index.html')
     expect(pageUrl).toMatch(/^http:\/\/[a-f0-9]{16}\.localhost:\d+\/index\.html$/)
-    await expect(fetch(pageUrl)).resolves.toEqual(expect.objectContaining({ status: 403 }))
+    await expect(localFetch(pageUrl)).resolves.toEqual(expect.objectContaining({ status: 403 }))
     await expect(fetchPreview(server, pageUrl)).resolves.toEqual(expect.objectContaining({ status: 200 }))
     const origin = new URL(pageUrl).origin
     await expect((await fetchPreview(server, `${origin}/styles.css`)).text()).resolves.toContain('color: blue')
@@ -69,14 +88,14 @@ describe('WorkspacePreviewServer', () => {
     expect(server.externalUrlFor('http://localhost:1/index.html')).toBeNull()
 
     // 无凭据：403
-    expect((await fetch(pageUrl)).status).toBe(403)
+    expect((await localFetch(pageUrl)).status).toBe(403)
     // 错误票据：403
     const badTicket = new URL(pageUrl)
     badTicket.searchParams.set('kimi-preview-ticket', '0'.repeat(48))
-    expect((await fetch(badTicket)).status).toBe(403)
+    expect((await localFetch(badTicket)).status).toBe(403)
 
-    // 正确票据：302 去参跳转 + HttpOnly cookie
-    const redirect = await fetch(externalUrl!, { redirect: 'manual' })
+    // 正确票据：302 去参跳转 + HttpOnly cookie（node:http 不跟随重定向，等价 manual）
+    const redirect = await localFetch(externalUrl!)
     expect(redirect.status).toBe(302)
     expect(redirect.headers.get('location')).toBe('/index.html')
     const setCookie = redirect.headers.get('set-cookie') ?? ''
@@ -86,8 +105,8 @@ describe('WorkspacePreviewServer', () => {
     const cookie = setCookie.split(';')[0]!
 
     // cookie 会话可加载页面与子资源
-    expect((await fetch(pageUrl, { headers: { cookie } })).status).toBe(200)
-    await expect((await fetch(`${origin}/styles.css`, { headers: { cookie } })).text()).resolves.toContain('color: red')
+    expect((await localFetch(pageUrl, { headers: { cookie } })).status).toBe(200)
+    await expect((await localFetch(`${origin}/styles.css`, { headers: { cookie } })).text()).resolves.toContain('color: red')
   })
 
   it('rejects invalid capabilities, traversal and symlink escapes', async () => {
@@ -95,17 +114,21 @@ describe('WorkspacePreviewServer', () => {
     const outside = await mkdtemp(join(tmpdir(), 'kimi-preview-outside-'))
     await writeFile(join(root, 'index.html'), '<h1>Safe</h1>')
     await writeFile(join(outside, 'secret.txt'), 'secret')
-    await symlink(join(outside, 'secret.txt'), join(root, 'escape.txt'))
+    if (supportsFileSymlinks) {
+      await symlink(join(outside, 'secret.txt'), join(root, 'escape.txt'))
+    }
     const server = new WorkspacePreviewServer()
     servers.push(server)
 
     const pageUrl = await server.open(root, 'index.html')
     const url = new URL(pageUrl)
-    const escaped = await fetchPreview(server, `${url.origin}/escape.txt`)
-    expect(escaped.status).toBe(403)
+    if (supportsFileSymlinks) {
+      const escaped = await fetchPreview(server, `${url.origin}/escape.txt`)
+      expect(escaped.status).toBe(403)
+    }
     const badHost = new URL(pageUrl)
     badHost.hostname = '0000000000000000.localhost'
-    expect((await fetch(badHost, { headers: server.authorizationHeadersFor(pageUrl) ?? {} })).status).toBe(403)
+    expect((await localFetch(badHost, { headers: server.authorizationHeadersFor(pageUrl) ?? undefined })).status).toBe(403)
     await expect(server.open(root, '../secret.txt')).rejects.toThrow('Invalid Kimi workspace path')
   })
 
@@ -116,7 +139,11 @@ describe('WorkspacePreviewServer', () => {
     await writeFile(join(root, 'public', 'apps', 'site', 'index.html'), '<h1>Deep site</h1>')
     await writeFile(join(root, 'public', 'outside.json'), '{"outside":true}')
     await writeFile(join(root, 'secrets', 'index.html'), '<h1>Secret</h1>')
-    await symlink(join(root, 'secrets'), join(root, 'site'))
+    // Windows 用 junction 替代目录符号链接（无需特权），realpath 语义一致
+    await symlink(
+      join(root, 'secrets'), join(root, 'site'),
+      process.platform === 'win32' ? 'junction' : undefined
+    )
     const server = new WorkspacePreviewServer()
     servers.push(server)
 
@@ -235,10 +262,56 @@ describe('WorkspacePreviewServer', () => {
   })
 })
 
-function fetchPreview(server: WorkspacePreviewServer, url: string): Promise<Response> {
+interface PreviewResponse {
+  status: number
+  headers: { get(name: string): string | null }
+  text(): Promise<string>
+}
+
+/* `*.localhost` 在 Windows 上会走系统 DNS 解析，Fake-IP 类代理（198.18.0.0/15）
+   会把它劫持到代理网关，永远到不了绑在 127.0.0.1 的预览服。这里统一直连
+   127.0.0.1，仅以 Host 头保留 `<rootId>.localhost` 域名路由，请求语义等价。 */
+function localFetch(
+  url: string | URL,
+  init?: { headers?: Record<string, string> | undefined }
+): Promise<PreviewResponse> {
+  const target = new URL(url)
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      {
+        host: '127.0.0.1',
+        port: target.port,
+        path: `${target.pathname}${target.search}`,
+        headers: { host: target.host, ...init?.headers }
+      },
+      (response) => {
+        const chunks: Buffer[] = []
+        response.on('data', (chunk: Buffer) => chunks.push(chunk))
+        response.on('end', () => {
+          const headers = response.headers
+          resolve({
+            status: response.statusCode ?? 0,
+            headers: {
+              get: (name: string): string | null => {
+                const value = headers[name.toLowerCase()]
+                if (value === undefined) return null
+                return Array.isArray(value) ? value.join(', ') : value
+              }
+            },
+            text: async (): Promise<string> => Buffer.concat(chunks).toString('utf8')
+          })
+        })
+      }
+    )
+    request.on('error', reject)
+    request.end()
+  })
+}
+
+function fetchPreview(server: WorkspacePreviewServer, url: string): Promise<PreviewResponse> {
   const headers = server.authorizationHeadersFor(url)
   if (headers === null) throw new Error('Preview URL is not authorized by this server')
-  return fetch(url, { headers })
+  return localFetch(url, { headers })
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 1_500): Promise<void> {
