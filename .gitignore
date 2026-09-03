@@ -43,3 +43,5 @@ crash-dumps/
 .impeccable/
 tmp/
 artifacts/
+.cowork-temp/
+.zcode/
