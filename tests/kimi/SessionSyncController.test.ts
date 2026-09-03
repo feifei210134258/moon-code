@@ -77,6 +77,12 @@ describe('SessionSyncController', () => {
       timestamp: '2026-07-24T01:00:01.000Z', payload: { changed_fields: ['default_model'] }
     } satisfies SessionEventFrame)
     socket.emit('session-event', {
+      /* 0.40.1：模型目录增量变更同样走 config 失效，上层经 REST 重读 */
+      type: 'event.model_catalog.changed', seq: 3, epoch: 'global-1', session_id: '__global__',
+      timestamp: '2026-07-24T01:00:01.500Z',
+      payload: { changed: [{ provider_id: 'moonshot', provider_name: 'Moonshot', added: 1, removed: 0 }] }
+    } satisfies SessionEventFrame)
+    socket.emit('session-event', {
       type: 'event.session.work_changed', seq: 11, epoch: 'epoch-1', session_id: 'session-other',
       timestamp: '2026-07-24T01:00:02.000Z', payload: { busy: true, main_turn_active: true }
     } satisfies SessionEventFrame)
@@ -85,6 +91,7 @@ describe('SessionSyncController', () => {
     expect(events).toEqual([
       { scope: 'navigation', eventType: 'event.workspace.updated' },
       { scope: 'config', eventType: 'event.config.changed' },
+      { scope: 'config', eventType: 'event.model_catalog.changed' },
       { scope: 'navigation', eventType: 'event.session.work_changed', sessionId: 'session-other' },
       { scope: 'navigation', eventType: 'resync' },
       { scope: 'config', eventType: 'resync' }

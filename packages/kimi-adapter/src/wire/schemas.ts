@@ -1018,11 +1018,25 @@ export const originUserSchema = z.object({
   skillActivations: z.array(skillActivationInfoSchema).default([])
 }).passthrough()
 
-/** turn.started（0.37.2 起可携带 promptId；0.38.0 起携带 promptAttachments，agentId 必填）。origin 为多分支 oneOf，保持不透明。 */
-export const promptAttachmentSchema = z.object({
-  kind: z.enum(['image', 'video', 'audio']),
-  fileId: z.string().min(1)
-})
+/**
+ * turn.started（0.37.2 起可携带 promptId；0.38.0 起携带 promptAttachments，agentId 必填）。
+ * origin 为多分支 oneOf，保持不透明。
+ */
+export const promptAttachmentSchema = z.union([
+  /* 0.38.0：媒体附件（上传后的 fileId 引用）。 */
+  z.object({
+    kind: z.enum(['image', 'video', 'audio']),
+    fileId: z.string().min(1)
+  }),
+  /* 0.40.1：本地文件附件（按路径引用，name/mediaType/size/path 均必填）。 */
+  z.object({
+    kind: z.literal('file'),
+    name: z.string(),
+    mediaType: z.string(),
+    size: z.number().nonnegative(),
+    path: z.string().min(1)
+  })
+])
 
 export const turnStartedEventSchema = z.object({
   type: z.literal('turn.started'),
@@ -1062,6 +1076,38 @@ export const capabilityChangedEventSchema = z.object({
     error: z.string().optional(),
     note: z.string().optional()
   })
+}).passthrough()
+
+/** 0.40.1：全局配置变更（config.toml 被外部编辑器/其他客户端修改后广播）。config 数据保持不透明——上层约定经 REST /config 重读权威值。 */
+export const configChangedEventSchema = z.object({
+  type: z.literal('event.config.changed'),
+  changedFields: z.array(z.string().min(1)),
+  config: z.unknown().optional()
+}).passthrough()
+
+/** 0.40.1：配置校验告警（如 config.toml 写坏后 daemon 重载失败）。 */
+export const configWarningEventSchema = z.object({
+  type: z.literal('event.config.warning'),
+  warnings: z.array(z.object({
+    domain: z.string().optional(),
+    message: z.string()
+  }))
+}).passthrough()
+
+/** 0.40.1：模型目录变更（provider 增删模型后的增量广播，替代整目录重拉）。 */
+export const modelCatalogChangedEventSchema = z.object({
+  type: z.literal('event.model_catalog.changed'),
+  changed: z.array(z.object({
+    provider_id: z.string().min(1),
+    provider_name: z.string().min(1),
+    added: z.number().int().nonnegative(),
+    removed: z.number().int().nonnegative()
+  })),
+  unchanged: z.array(z.string().min(1)),
+  failed: z.array(z.object({
+    provider: z.string().min(1),
+    reason: z.string().min(1)
+  }))
 }).passthrough()
 
 /**
@@ -1317,6 +1363,9 @@ export type TurnStartedEvent = z.infer<typeof turnStartedEventSchema>
 export type TurnEndedEvent = z.infer<typeof turnEndedEventSchema>
 export type PluginChangedEvent = z.infer<typeof pluginChangedEventSchema>
 export type CapabilityChangedEvent = z.infer<typeof capabilityChangedEventSchema>
+export type ConfigChangedEvent = z.infer<typeof configChangedEventSchema>
+export type ConfigWarningEvent = z.infer<typeof configWarningEventSchema>
+export type ModelCatalogChangedEvent = z.infer<typeof modelCatalogChangedEventSchema>
 export type SessionArchivedEvent = z.infer<typeof sessionArchivedEventSchema>
 export type ProgressUpdate = z.infer<typeof progressUpdateSchema>
 export type ToolProgressEvent = z.infer<typeof toolProgressEventSchema>

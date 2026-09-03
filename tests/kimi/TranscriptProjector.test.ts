@@ -467,6 +467,7 @@ describe('TranscriptProjector', () => {
       sourceKind: 'base64',
       fileId: null,
       sourceUrl: null,
+      sourcePath: null,
       sourceMediaType: 'image/png',
       base64Data: 'QUJDREVGRw==',
       originToolCallId: 'tool-screenshot',
@@ -1430,6 +1431,79 @@ describe('TranscriptProjector turn health projection', () => {
     /* 0.37 响应无该字段：空数组 */
     projector.project(frame('turn.started', { turnId: 11, promptId: 'prompt-none' }))
     expect(projector.getProjection('session-1').promptAttachments).toEqual([])
+  })
+
+  it('stamps the 0.40.1 file-branch promptAttachments onto the user message', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('prompt.submitted', {
+      promptId: 'prompt-file-att',
+      userMessageId: 'user-file-att',
+      content: [{ type: 'text', text: 'Read the report' }]
+    }))
+    projector.project(frame('turn.started', {
+      turnId: 12,
+      promptId: 'prompt-file-att',
+      agentId: 'main',
+      promptAttachments: [
+        { kind: 'file', name: 'report.pdf', mediaType: 'application/pdf', size: 2048, path: '/tmp/report.pdf' }
+      ]
+    }))
+
+    const projection = projector.getProjection('session-1')
+    expect(projection.promptAttachments).toEqual([
+      { kind: 'file', name: 'report.pdf', mediaType: 'application/pdf', size: 2048, path: '/tmp/report.pdf' }
+    ])
+    const userMessage = projection.messages.find((message) => message.id === 'user-file-att')
+    expect(userMessage?.promptAttachments).toEqual([
+      { kind: 'file', name: 'report.pdf', mediaType: 'application/pdf', size: 2048, path: '/tmp/report.pdf' }
+    ])
+  })
+
+  it('projects the 0.40.1 path fields on file parts and path-sourced media parts', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+
+    projector.project(frame('event.message.created', {
+      message: {
+        id: 'msg-path-parts',
+        session_id: 'session-1',
+        role: 'user',
+        created_at: '2026-09-03T00:00:00.000Z',
+        content: [
+          /* file part：0.40.1 起 file_id 可缺失，改为按 path 引用 */
+          { type: 'file', name: 'notes.md', media_type: 'text/markdown', size: 12, path: '/tmp/notes.md' },
+          /* image part 的 source 新增 path 分支 */
+          { type: 'image', source: { kind: 'path', path: '/tmp/shot.png' } }
+        ]
+      }
+    }))
+
+    const parts = projector.getProjection('session-1').messages
+      .find((message) => message.id === 'msg-path-parts')?.content ?? []
+    const filePart = parts.find((part): part is Extract<typeof part, { type: 'file' }> => part.type === 'file')
+    expect(filePart).toEqual({
+      type: 'file', fileId: '', name: 'notes.md', mediaType: 'text/markdown', size: 12, path: '/tmp/notes.md'
+    })
+    const mediaPart = parts.find((part): part is Extract<typeof part, { type: 'media' }> => part.type === 'media')
+    expect(mediaPart).toMatchObject({
+      type: 'media', mediaType: 'image', sourceKind: 'path', sourcePath: '/tmp/shot.png', fileId: null
+    })
+  })
+
+  it('treats the 0.40.1 global config events as known no-op transcript frames', () => {
+    const projector = new TranscriptProjector()
+    projector.reset('session-1')
+    /* 防御带真实 session_id 的形态；__global__ 帧在 sync controller 提前返回 */
+    projector.project(frame('event.config.changed', { changedFields: ['models'] }))
+    projector.project(frame('event.config.warning', { warnings: [{ message: 'bad config' }] }))
+    projector.project(frame('event.model_catalog.changed', {
+      changed: [], unchanged: [], failed: []
+    }))
+    const projection = projector.getProjection('session-1')
+    expect(projection.unknownEventCount).toBe(0)
+    expect(projection.messages).toEqual([])
   })
 
   it('replaces the tool preview when tool.progress carries update.replace (0.38.0)', () => {

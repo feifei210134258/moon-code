@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   backgroundTaskSchema,
   capabilityChangedEventSchema,
+  configChangedEventSchema,
+  configWarningEventSchema,
   kimiSessionErrorCodeSchema,
+  modelCatalogChangedEventSchema,
   oauthRegionResultSchema,
   originUserSchema,
   pluginChangedEventSchema,
+  promptAttachmentSchema,
   promptSkillSchema,
   sessionArchivedEventSchema,
   sessionBatchActionResultSchema,
@@ -319,5 +323,58 @@ describe('Kimi 0.38.0 wire schemas', () => {
     expect(oauthRegionResultSchema.parse({ region: 'global' }).region).toBe('global')
     expect(oauthRegionResultSchema.safeParse({}).success).toBe(false)
     expect(oauthRegionResultSchema.safeParse({ region: 'other' }).success).toBe(false)
+  })
+})
+
+describe('Kimi 0.40.1 wire schemas', () => {
+  it('parses the promptAttachments file branch (path-referenced local files)', () => {
+    const media = promptAttachmentSchema.parse({ kind: 'image', fileId: 'file-1' })
+    expect(media).toEqual({ kind: 'image', fileId: 'file-1' })
+    const file = promptAttachmentSchema.parse({
+      kind: 'file', name: 'report.pdf', mediaType: 'application/pdf', size: 1024, path: '/tmp/report.pdf'
+    })
+    expect(file).toEqual({
+      kind: 'file', name: 'report.pdf', mediaType: 'application/pdf', size: 1024, path: '/tmp/report.pdf'
+    })
+    /* file 分支缺 path 不可解析；媒体分支缺 fileId 同样不可解析 */
+    expect(promptAttachmentSchema.safeParse({
+      kind: 'file', name: 'a.pdf', mediaType: 'application/pdf', size: 1
+    }).success).toBe(false)
+    expect(promptAttachmentSchema.safeParse({ kind: 'file' }).success).toBe(false)
+    /* file 分支可随 turn.started 整体解析 */
+    const turn = turnStartedEventSchema.parse({
+      type: 'turn.started', agentId: 'main', turnId: 4,
+      promptAttachments: [{ kind: 'file', name: 'a.pdf', mediaType: 'application/pdf', size: 1, path: '/a.pdf' }]
+    })
+    expect(turn.promptAttachments?.[0]).toEqual({
+      kind: 'file', name: 'a.pdf', mediaType: 'application/pdf', size: 1, path: '/a.pdf'
+    })
+  })
+
+  it('parses the three new global config events', () => {
+    const changed = configChangedEventSchema.parse({
+      type: 'event.config.changed',
+      changedFields: ['models', 'providers'],
+      config: { providers: {} }
+    })
+    expect(changed.changedFields).toEqual(['models', 'providers'])
+    expect(configChangedEventSchema.safeParse({ type: 'event.config.changed' }).success).toBe(false)
+
+    const warning = configWarningEventSchema.parse({
+      type: 'event.config.warning',
+      warnings: [{ domain: 'config', message: 'invalid provider entry' }]
+    })
+    expect(warning.warnings[0]?.message).toBe('invalid provider entry')
+    expect(configWarningEventSchema.safeParse({ type: 'event.config.warning' }).success).toBe(false)
+
+    const catalog = modelCatalogChangedEventSchema.parse({
+      type: 'event.model_catalog.changed',
+      changed: [{ provider_id: 'moonshot', provider_name: 'Moonshot', added: 2, removed: 0 }],
+      unchanged: ['openrouter'],
+      failed: [{ provider: 'broken', reason: 'fetch failed' }]
+    })
+    expect(catalog.changed[0]?.added).toBe(2)
+    expect(catalog.unchanged).toEqual(['openrouter'])
+    expect(modelCatalogChangedEventSchema.safeParse({ type: 'event.model_catalog.changed' }).success).toBe(false)
   })
 })

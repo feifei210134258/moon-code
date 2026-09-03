@@ -346,13 +346,15 @@ export type SessionTranscriptPart =
       /** 上游 plan review（plan_review display / `/transcript/plan`）投影出的计划详情（0.37.2+）。 */
       plan?: PlanReview
     }
-  | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
+  | { type: 'file'; fileId: string; name: string; mediaType: string; size: number; path: string | null }
   | {
       type: 'media'
       mediaType: 'image' | 'video'
       sourceKind: string
       fileId: string | null
       sourceUrl: string | null
+      /** 0.40.1：source 分支 `{kind:'path', path}` 的本地路径引用。 */
+      sourcePath: string | null
       sourceMediaType: string | null
       base64Data: string | null
     }

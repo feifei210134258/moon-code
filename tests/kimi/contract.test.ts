@@ -270,3 +270,52 @@ function collectConsts(value: unknown, result = new Set<string>()): Set<string> 
   for (const child of Object.values(record)) collectConsts(child, result)
   return result
 }
+
+const openapi040Path = fileURLToPath(
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.40.1-openapi.json', import.meta.url)
+)
+const asyncapi040Path = fileURLToPath(
+  new URL('../../packages/kimi-adapter/contracts/kimi-0.40.1-asyncapi.json', import.meta.url)
+)
+const openapi040 = JSON.parse(readFileSync(openapi040Path, 'utf8')) as OpenApiDocumentLike
+const asyncapi040 = JSON.parse(readFileSync(asyncapi040Path, 'utf8')) as AsyncApiDocumentLike
+
+describe('pinned Kimi 0.40.1 contract', () => {
+  it('contains every route and WebSocket message required by the desktop foundation', () => {
+    expect(() => assertKimiContract(openapi040, asyncapi040)).not.toThrow()
+  })
+
+  it('broadcasts the config/model-catalog global events with their payloads', () => {
+    const variants = sessionEventVariants(asyncapi040)
+    expect(variants['event.config.changed']?.required).toEqual(expect.arrayContaining(['type', 'changedFields', 'config']))
+    expect(variants['event.config.warning']?.required).toEqual(expect.arrayContaining(['type', 'warnings']))
+    expect(variants['event.model_catalog.changed']?.required)
+      .toEqual(expect.arrayContaining(['type', 'changed', 'unchanged', 'failed']))
+  })
+
+  it('widens turn.started promptAttachments with the path-referenced file branch', () => {
+    const variants = sessionEventVariants(asyncapi040)
+    const attachments = (variants['turn.started']?.properties as Record<string, any> | undefined)
+      ?.promptAttachments as Record<string, any> | undefined
+    const branches = attachments?.items?.anyOf ?? []
+    expect(branches.some((branch: any) => branch.properties?.kind?.const === 'file')).toBe(true)
+    const fileBranch = branches.find((branch: any) => branch.properties?.kind?.const === 'file')
+    expect(fileBranch?.required).toEqual(['kind', 'name', 'mediaType', 'size', 'path'])
+  })
+
+  it('renames the auth readiness fields (0.39.1: ready→models_ready, default_model dropped)', () => {
+    const data = (openapi040 as Record<string, any>).paths?.['/api/v1/auth']?.get
+      ?.responses?.['200']?.content?.['application/json']?.schema?.properties?.data
+    expect(data?.properties?.models_ready).toBeTruthy()
+    expect(data?.properties?.managed_provider).toBeTruthy()
+    expect(data?.properties?.ready).toBeUndefined()
+    expect(data?.required).toContain('models_ready')
+  })
+
+  it('adds the path source variant to prompt/message attachments (0.40.1)', () => {
+    const promptBody = JSON.stringify(
+      (openapi040 as Record<string, any>).paths?.['/api/v1/sessions/{session_id}/prompts']?.post?.requestBody
+    )
+    expect(promptBody).toContain('"path"')
+  })
+})

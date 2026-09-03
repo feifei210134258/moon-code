@@ -64,13 +64,15 @@ export type TranscriptPart =
       /** 上游 plan review（`/transcript/plan`）投影出的计划详情（0.37.2+）。 */
       plan?: SessionPlanView
     }
-  | { type: 'file'; fileId: string; name: string; mediaType: string; size: number }
+  | { type: 'file'; fileId: string; name: string; mediaType: string; size: number; path: string | null }
   | {
       type: 'media'
       mediaType: 'image' | 'video'
       sourceKind: string
       fileId: string | null
       sourceUrl: string | null
+      /** 0.40.1：source 分支 `{kind:'path', path}` 的本地路径引用（跨 IPC 非敏感）。 */
+      sourcePath: string | null
       sourceMediaType: string | null
       base64Data: string | null
       originToolCallId?: string
@@ -626,6 +628,11 @@ export class TranscriptProjector {
       case 'event.di.unit_changed':
       case 'event.plugin.changed':
       case 'event.capability.changed':
+      // 0.40.1：全局配置/模型目录事件按 session_id==='__global__' 提前返回，
+      // 这里兜底带真实 session_id 的形态，与 plugin.changed 同为已知无增量事件
+      case 'event.config.changed':
+      case 'event.config.warning':
+      case 'event.model_catalog.changed':
       case 'subagent.spawned':
       case 'subagent.started':
       case 'subagent.suspended':
@@ -949,7 +956,9 @@ function projectContentPart(part: MessageContentPart): TranscriptPart[] {
         fileId: stringValue(part.file_id) ?? '',
         name: stringValue(part.name) ?? '未命名文件',
         mediaType: stringValue(part.media_type) ?? 'application/octet-stream',
-        size: numberValue(part.size) ?? 0
+        size: numberValue(part.size) ?? 0,
+        /* 0.40.1：按路径引用的文件附件（required 放宽后 file_id 可缺失）。 */
+        path: stringValue(part.path)
       }]
     case 'image':
     case 'video': {
@@ -960,6 +969,7 @@ function projectContentPart(part: MessageContentPart): TranscriptPart[] {
         sourceKind: stringValue(source?.kind) ?? 'unknown',
         fileId: stringValue(source?.file_id),
         sourceUrl: stringValue(source?.url),
+        sourcePath: stringValue(source?.path),
         sourceMediaType: stringValue(source?.media_type),
         base64Data: stringValue(source?.data)
       }]
@@ -1000,6 +1010,7 @@ function projectToolOutputMedia(output: unknown, originToolCallId: string): Tran
       sourceKind: 'base64',
       fileId: null,
       sourceUrl: null,
+      sourcePath: null,
       sourceMediaType,
       base64Data,
       originToolCallId,
@@ -1023,6 +1034,7 @@ function mediaFromDataUrl(
     sourceKind: 'base64',
     fileId: null,
     sourceUrl: null,
+    sourcePath: null,
     sourceMediaType: match[1]!,
     base64Data: match[2]!,
     originToolCallId,
